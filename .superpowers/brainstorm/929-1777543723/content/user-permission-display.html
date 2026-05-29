@@ -1,0 +1,57 @@
+<h2>功能 2：USER 角色的表單顯示方式</h2>
+<p class="subtitle">USER 只能編輯「測試報告」與「Completed / Delayed 狀態」，其他欄位不可改。請問不可編輯的欄位應如何呈現？</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="padding:16px; background:#f8fafc; border-radius:8px; font-size:13px;">
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">工作類別 <span style="color:#ef4444">*</span></div>
+          <div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;padding:7px 10px;color:#9ca3af;cursor:not-allowed;">NPI</div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">專案名稱 <span style="color:#ef4444">*</span></div>
+          <div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;padding:7px 10px;color:#9ca3af;cursor:not-allowed;">FooBar 專案</div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">測試報告 <span style="color:#6b7280;font-weight:normal">（可編輯）</span></div>
+          <div style="background:#fff;border:1px solid #3b82f6;border-radius:6px;padding:7px 10px;color:#111827;outline:none;">http://report-link...</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:6px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;"><input type="checkbox" style="width:14px;height:14px;" /> <span style="color:#374151;">Completed（可勾選）</span></label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;"><input type="checkbox" style="width:14px;height:14px;" /> <span style="color:#374151;">Delayed（可勾選）</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A：灰底顯示（Disabled）</h3>
+      <p>不可編輯的欄位仍顯示，但呈灰底、游標禁止，USER 可以<strong>看到所有資料</strong>，只是無法修改。</p>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="padding:16px; background:#f8fafc; border-radius:8px; font-size:13px;">
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;margin-bottom:10px;color:#1d4ed8;font-size:11px;">
+          ℹ️ 以 USER 身份編輯，僅可修改測試報告與排程狀態
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">測試報告</div>
+          <div style="background:#fff;border:1px solid #3b82f6;border-radius:6px;padding:7px 10px;color:#111827;">http://report-link...</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;"><input type="checkbox" style="width:14px;height:14px;" /> <span>Completed</span></label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;"><input type="checkbox" style="width:14px;height:14px;" /> <span>Delayed</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B：僅顯示可編輯欄位</h3>
+      <p>USER 開啟表單時，只呈現「測試報告」及「Completed / Delayed」，其他欄位完全不顯示，版面更簡潔。</p>
+    </div>
+  </div>
+
+</div>

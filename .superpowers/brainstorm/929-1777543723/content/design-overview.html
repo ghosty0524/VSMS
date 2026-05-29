@@ -1,0 +1,85 @@
+<h2>VSMS 四項優化功能設計總覽</h2>
+<p class="subtitle">請確認各功能設計是否符合預期</p>
+
+<div class="section">
+  <h3>功能 1 — Tooltip 智慧定位</h3>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;font-size:13px;margin-top:8px;">
+    <div style="margin-bottom:8px;"><strong>觸發點：</strong>GanttChart.tsx 的 <code>onMouseEnter</code></div>
+    <div style="margin-bottom:8px;"><strong>邏輯：</strong>在 tooltip state 中同時記錄滑鼠座標，render 時計算：</div>
+    <ul style="margin-left:16px;color:#475569;line-height:1.8;">
+      <li>若游標距右側邊框 &lt; 220px → tooltip 向左彈出（offset 改為負值）</li>
+      <li>若游標距底部邊框 &lt; 180px → tooltip 向上彈出</li>
+      <li>其餘情況維持預設（右下偏移 +14px）</li>
+    </ul>
+    <div style="margin-top:8px;color:#64748b;font-size:12px;">📁 修改檔案：<code>src/components/schedule/GanttChart.tsx</code></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>功能 2 — USER 角色欄位限制</h3>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;font-size:13px;margin-top:8px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div>
+        <div style="font-weight:600;color:#16a34a;margin-bottom:6px;">✅ USER 可編輯</div>
+        <ul style="margin-left:16px;color:#374151;line-height:1.8;font-size:12px;">
+          <li>測試報告（testReport）</li>
+          <li>Completed（isCompleted）</li>
+          <li>Delayed（isDelayed）</li>
+          <li>延遲原因（delayReason）*勾選Delayed才出現</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-weight:600;color:#dc2626;margin-bottom:6px;">🚫 USER 唯讀（灰底 disabled）</div>
+        <ul style="margin-left:16px;color:#374151;line-height:1.8;font-size:12px;">
+          <li>工作類別、專案名稱、工作內容</li>
+          <li>測試單位、測試人員</li>
+          <li>時間資源、需求人員</li>
+          <li>起始日期、完成日期</li>
+        </ul>
+      </div>
+    </div>
+    <div style="margin-top:8px;color:#64748b;font-size:12px;">📁 修改檔案：<code>src/components/schedule/ScheduleFormModal.tsx</code></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>功能 3 — 甘特圖左欄拖曳調整</h3>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;font-size:13px;margin-top:8px;">
+    <div style="display:flex;gap:12px;margin-bottom:8px;">
+      <div style="background:#e2e8f0;border-radius:6px;padding:8px 16px;text-align:center;min-width:80px;font-size:12px;">工作排程欄<br><strong style="color:#1d4ed8;">可拖曳</strong></div>
+      <div style="width:6px;background:#94a3b8;border-radius:4px;cursor:col-resize;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;">⋮</div>
+      <div style="flex:1;background:#f1f5f9;border-radius:6px;padding:8px 16px;font-size:12px;color:#64748b;">時間軸區域</div>
+    </div>
+    <ul style="margin-left:16px;color:#475569;line-height:1.8;font-size:12px;">
+      <li>把手寬度 6px，hover 時變藍色，cursor: col-resize</li>
+      <li>寬度範圍：最小 <strong>180px</strong> ～ 最大 <strong>480px</strong>，預設 <strong>248px</strong></li>
+      <li>拖曳結束後寫入 <code>sessionStorage('ganttLeftWidth')</code></li>
+      <li>頁面載入時從 sessionStorage 讀取，沒有值則用預設 248px</li>
+      <li>重新登入後 sessionStorage 清除 → 自動回到 248px</li>
+    </ul>
+    <div style="margin-top:8px;color:#64748b;font-size:12px;">📁 修改檔案：<code>src/components/schedule/GanttChart.tsx</code></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>功能 4 — Excel 覆蓋差異確認對話框</h3>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;font-size:13px;margin-top:8px;">
+    <div style="margin-bottom:8px;"><strong>觸發條件：</strong>mode = 'replace' 且點擊「確認匯入」</div>
+    <div style="margin-bottom:8px;"><strong>流程：</strong></div>
+    <ol style="margin-left:16px;color:#475569;line-height:1.8;font-size:12px;">
+      <li>用 taskDescription 匹配現有排程與 Excel 匯入資料</li>
+      <li>比較四個欄位：testReport、isCompleted、isDelayed、delayReason</li>
+      <li>若有任何差異 → 彈出獨立確認 modal，列出差異表格（專案名稱 + 欄位 + 舊值 + 新值）</li>
+      <li>若無差異（或無配對記錄） → 直接執行覆蓋，不彈出</li>
+    </ol>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:12px;color:#1d4ed8;">
+      ℹ️ 全新記錄（Excel 有但現有無）不納入差異比較，直接新增
+    </div>
+    <div style="margin-top:8px;color:#64748b;font-size:12px;">📁 修改檔案：<code>src/components/schedule/ExcelImportModal.tsx</code>（新增 DiffConfirmModal 元件）</div>
+  </div>
+</div>
+
+<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;margin-top:8px;font-size:13px;">
+  <strong style="color:#16a34a;">✅ 以上設計是否符合預期？</strong><br>
+  <span style="color:#374151;">如有需要調整的地方請告知，確認後我將撰寫設計文件並進入實作計畫。</span>
+</div>

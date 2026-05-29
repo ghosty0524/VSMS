@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"f:/vsms/vsms-export/docs/superpowers/specs\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\MySQL\\\\MySQL Server 8.0\\\\bin\\\\mysql.exe\" -u root -pLanner@123 -e \"CREATE DATABASE IF NOT EXISTS vsms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\" 2>&1)",
+      "PowerShell(& \"C:\\\\Program Files\\\\MySQL\\\\MySQL Server 8.0\\\\bin\\\\mysql.exe\" -u root -pLanner@123 -e \"USE vsms; SHOW TABLES;\" 2>&1)",
+      "Bash(npx prisma *)",
+      "PowerShell(cd f:\\\\vsms\\\\vsms-export; $env:PRISMA_MIGRATE_SKIP_GENERATE = \"true\"; npx prisma migrate dev --name add_indexes_and_constraints --create-only 2>&1)",
+      "PowerShell(cd f:\\\\vsms\\\\vsms-export; $env:CI = \"1\"; npx prisma migrate dev --name add_indexes_and_constraints 2>&1)",
+      "PowerShell(New-Item -ItemType Directory -Path \"f:\\\\vsms\\\\vsms-export\\\\server\\\\src\\\\__tests__\" -Force)",
+      "Bash(npx tsc *)",
+      "Bash(cd /f/vsms/vsms-export/server && cat node_modules/@types/express-serve-static-core/index.d.ts 2>/dev/null | grep -A5 \"ParamsDictionary\" | head -20)",
+      "Read(//f/f/vsms/vsms-export/server/node_modules/@types/express-serve-static-core/**)",
+      "PowerShell(npm show prisma version 2>&1)",
+      "PowerShell(npm show @prisma/client version 2>&1)",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\@prisma\\\\client\\\\scripts\\\\default-index.js\" -Raw; $content.Substring\\(0, [Math]::Min\\(2000, $content.Length\\)\\))",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\.prisma\\\\client\\\\schema.prisma\" -Raw; $content.Substring\\(0, [Math]::Min\\(500, $content.Length\\)\\))",
+      "PowerShell(npm show @prisma/adapter-mysql 2>&1)",
+      "PowerShell(npm show @prisma/adapter-mysql2 2>&1)",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\.prisma\\\\client\\\\client.js\" -Raw; $content.Substring\\(0, 3000\\))",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; \\(Get-Content \"node_modules\\\\.prisma\\\\client\\\\client.js\"\\).Length; Get-Content \"node_modules\\\\.prisma\\\\client\\\\client.js\" -TotalCount 5)",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; Select-String -Pattern \"configOverride|DATABASE_URL\" -Path \"node_modules\\\\@prisma\\\\client\\\\runtime\\\\client.js\" | Select-Object -First 5 | ForEach-Object { $_.Line.Substring\\(0, [Math]::Min\\(300, $_.Line.Length\\)\\) })",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $idx = Get-Content \"node_modules\\\\.prisma\\\\client\\\\index.js\" -Raw; $idx.Length)",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; Select-String -Pattern \"configOverride|__internal|datasource\" -Path \"node_modules\\\\.prisma\\\\client\\\\index.js\" | Select-Object -First 8 | ForEach-Object { $_.Line.Substring\\(0, [Math]::Min\\(400, $_.Line.Length\\)\\) })",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; Select-String -Pattern \"driverAdapter\\\\.\" -Path \"node_modules\\\\@prisma\\\\client\\\\runtime\\\\client.js\" | Select-Object -First 20 | ForEach-Object { $_.Line.Substring\\(0, [Math]::Min\\(400, $_.Line.Length\\)\\) })",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $clientContent = Get-Content \"node_modules\\\\@prisma\\\\client\\\\runtime\\\\client.js\" -Raw; $idx = $clientContent.IndexOf\\(\"driverAdapter\"\\); Write-Host \"Found at index: $idx\"; $clientContent.Substring\\([Math]::Max\\(0,$idx-200\\), [Math]::Min\\(600, $clientContent.Length - [Math]::Max\\(0,$idx-200\\)\\)\\))",
+      "PowerShell(npm search \"prisma adapter mysql\" --json 2>&1 | ConvertFrom-Json | Select-Object -First 5 | ForEach-Object { \"$\\($_.name\\) - $\\($_.version\\)\" })",
+      "PowerShell(npm show @prisma/adapter-mariadb version 2>&1)",
+      "PowerShell(npm show @prisma/adapter-mariadb description 2>&1)",
+      "PowerShell(npm show @prisma/adapter-mariadb peerDependencies 2>&1)",
+      "PowerShell(npm show @prisma/adapter-mariadb dependencies 2>&1)",
+      "PowerShell(node -e \"import\\('@prisma/adapter-mariadb'\\).then\\(m => console.log\\(Object.keys\\(m\\)\\)\\).catch\\(e => console.log\\(e.message\\)\\)\")",
+      "PowerShell($env:DATABASE_URL; echo \"---\"; [System.Environment]::GetEnvironmentVariable\\(\"DATABASE_URL\", \"User\"\\); echo \"---\"; [System.Environment]::GetEnvironmentVariable\\(\"DATABASE_URL\", \"Machine\"\\))",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\@prisma\\\\adapter-mariadb\\\\dist\\\\index.mjs\" -Raw; $content.Substring\\(0, [Math]::Min\\(3000, $content.Length\\)\\))",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; Select-String -Pattern \"createPool\\\\|mariadb\\\\.\" -Path \"node_modules\\\\@prisma\\\\adapter-mariadb\\\\dist\\\\index.mjs\" | Select-Object -First 10 | ForEach-Object { $_.Line.Substring\\(0, [Math]::Min\\(300, $_.Line.Length\\)\\) })",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\@prisma\\\\adapter-mariadb\\\\dist\\\\index.mjs\" -Raw; $startIdx = $content.IndexOf\\(\"startTransaction\"\\); $content.Substring\\([Math]::Max\\(0,$startIdx-100\\), [Math]::Min\\(1500, $content.Length - [Math]::Max\\(0,$startIdx-100\\)\\)\\))",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\@prisma\\\\adapter-mariadb\\\\dist\\\\index.mjs\" -Raw; $startIdx = $content.IndexOf\\(\"PrismaMariaDb\"\\); $content.Substring\\([Math]::Max\\(0,$startIdx-50\\), [Math]::Min\\(2000, $content.Length - [Math]::Max\\(0,$startIdx-50\\)\\)\\))",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\@prisma\\\\adapter-mariadb\\\\dist\\\\index.mjs\" -Raw; $endIdx = $content.LastIndexOf\\(\"PrismaMariaDb\"\\); $content.Substring\\([Math]::Max\\(0,$endIdx-100\\), [Math]::Min\\(1000, $content.Length - [Math]::Max\\(0,$endIdx-100\\)\\)\\))",
+      "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\@prisma\\\\adapter-mariadb\\\\dist\\\\index.mjs\" -Raw; $factoryIdx = $content.IndexOf\\(\"var PrismaMariaDbAdapterFactory\"\\); $content.Substring\\($factoryIdx, [Math]::Min\\(3000, $content.Length - $factoryIdx\\)\\))",
+      "Bash(mysql -u root -pLanner@123 vsms -e ' *)",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"F:\\\\vsms\\\\vsms-export\\\\docs\\\\superpowers\\\\specs\")"
+    ],
+    "additionalDirectories": [
+      "f:\\vsms\\vsms-export\\docs\\superpowers\\specs"
+    ]
+  }
+}

@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Schedule {
+  id                String   @id @default(uuid())
+  category          String   @db.VarChar(100)
+  projectName       String   @db.VarChar(100)
+  taskDescription   String   @db.VarChar(500)
+  testUnit          String   @db.VarChar(100)
+  testEngineer      String   @db.VarChar(100)
+  timeResource      Int
+  startDate         String   @db.VarChar(10)
+  endDate           String   @db.VarChar(10)
+  requiredPersonnel String   @db.VarChar(200)
+  testReport        String   @db.VarChar(500)
+  isCompleted       Boolean  @default(false)
+  isDelayed         Boolean  @default(false)
+  delayReason       String   @db.VarChar(5000)
+  createdBy         String   @db.VarChar(100)
+  updatedBy         String   @db.VarChar(100)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([testUnit])
+  @@index([isCompleted, isDelayed])
+  @@index([startDate, endDate])
+  @@map("schedules")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  username       String    @unique @db.VarChar(100)
+  displayName    String    @db.VarChar(50)
+  passwordHash   String    @db.VarChar(64)
+  role           UserRole
+  isActive       Boolean   @default(true)
+  allowedUnits   Json      @default("[]")
+  linkedEngineer String    @db.VarChar(100) @default("")
+  createdAt      DateTime  @default(now())
+  lastLoginAt    DateTime?
+
+  @@map("users")
+}
+
+enum UserRole {
+  super_admin
+  admin
+  user
+}
+
+model Category {
+  id        String  @id @default(uuid())
+  value     String  @db.VarChar(100) @unique
+  label     String  @db.VarChar(100)
+  isActive  Boolean @default(true)
+  sortOrder Int
+
+  @@map("categories")
+}
+
+model TestUnit {
+  id        String     @id @default(uuid())
+  value     String     @db.VarChar(100) @unique
+  label     String     @db.VarChar(100)
+  isActive  Boolean    @default(true)
+  sortOrder Int
+  engineers Engineer[]
+
+  @@map("test_units")
+}
+
+model Engineer {
+  id         String   @id @default(uuid())
+  value      String   @db.VarChar(100)
+  label      String   @db.VarChar(100)
+  isActive   Boolean  @default(true)
+  sortOrder  Int
+  testUnit   TestUnit @relation(fields: [testUnitId], references: [id], onDelete: Cascade)
+  testUnitId String
+
+  @@map("engineers")
+}
+
+model RestDaysConfig {
+  id            Int     @id @default(1)
+  weekends      Boolean @default(true)
+  specificDates Json    @default("[]")
+
+  @@map("rest_days_config")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  timestamp   DateTime @default(now())
+  username    String   @db.VarChar(100)
+  displayName String   @db.VarChar(100)
+  action      String   @db.VarChar(50)
+  target      String   @db.VarChar(200)
+  fields      Json     @default("[]")
+
+  @@index([timestamp])
+  @@index([username])
+  @@map("audit_logs")
+}
+
+model NotifyConfig {
+  id              Int         @id @default(1)
+  enabled         Boolean     @default(false)
+  teamsWebhookUrl String      @db.VarChar(500) @default("")
+  systemUrl       String      @db.VarChar(200) @default("")
+  recipients      Recipient[]
+
+  @@map("notify_config")
+}
+
+model Recipient {
+  id             String       @id @default(uuid())
+  name           String       @db.VarChar(100)
+  note           String       @db.VarChar(200) @default("")
+  isActive       Boolean      @default(true)
+  notifyConfig   NotifyConfig @relation(fields: [notifyConfigId], references: [id])
+  notifyConfigId Int
+
+  @@map("recipients")
+}
+
+model CalendarConfig {
+  id                 Int      @id @default(1)
+  year               Int
+  nonWeekendHolidays Json     @default("[]")
+  sourceName         String?  @db.VarChar(200)
+  updatedAt          DateTime @updatedAt
+
+  @@map("calendar_config")
+}

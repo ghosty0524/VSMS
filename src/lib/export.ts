@@ -1,0 +1,1 @@
+export { generateDashboardHTML } from '../dashboard/template'
