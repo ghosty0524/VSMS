@@ -28,13 +28,6 @@ export async function initDb(): Promise<void> {
     update: {},
   })
 
-  // Ensure NotifyConfig singleton
-  await prisma.notifyConfig.upsert({
-    where: { id: 1 },
-    create: { id: 1, enabled: false, teamsWebhookUrl: '', systemUrl: '' },
-    update: {},
-  })
-
   // Seed default categories/testUnits only if completely empty (fresh install)
   const catCount = await prisma.category.count()
   if (catCount === 0) {

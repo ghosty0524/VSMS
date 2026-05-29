@@ -22,6 +22,10 @@ export function App() {
   useEffect(() => { checkAuth() }, [checkAuth])
 
   useEffect(() => {
+    if (view === 'teams') setView('main')
+  }, [view, setView])
+
+  useEffect(() => {
     if (role === 'user' && view !== 'main') {
       setView('main')
     }
