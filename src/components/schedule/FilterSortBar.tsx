@@ -135,7 +135,8 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
   const activeCount =
     value.categories.length + value.testUnits.length +
     value.testEngineers.length + value.statuses.length +
-    (value.keyword ? 1 : 0) + (value.ganttStart ? 1 : 0) + (value.ganttEnd ? 1 : 0)
+    (value.keyword ? 1 : 0) + (value.ganttStart ? 1 : 0) + (value.ganttEnd ? 1 : 0) +
+    (role === 'user' && value.showAllUnits ? 1 : 0)
 
   const hasGanttRange = !!(value.ganttStart || value.ganttEnd)
 
@@ -344,6 +345,8 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
             {role === 'user' && (
               <button
                 type="button"
+                aria-pressed={value.showAllUnits}
+                title="切換顯示所有單位"
                 onClick={() => {
                   const next = { ...value, showAllUnits: !value.showAllUnits }
                   localStorage.setItem('vsms-show-all-units', String(next.showAllUnits))
@@ -361,7 +364,10 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
             )}
 
             {/* 清除篩選 */}
-            <button type="button" onClick={() => onChange(EMPTY_FILTER)}
+            <button type="button" onClick={() => {
+              localStorage.setItem('vsms-show-all-units', 'false')
+              onChange(EMPTY_FILTER)
+            }}
               className="inline-flex items-center gap-1 h-7 px-2.5
                          text-xs font-medium rounded-full
                          border border-red-200 text-red-500 bg-white
