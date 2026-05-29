@@ -127,6 +127,8 @@ function applyFilter(
     // ★ 時間篩選：移除與設定範圍無重疊的排程
     if (fs.ganttStart && s.endDate < fs.ganttStart) return false
     if (fs.ganttEnd   && s.startDate > fs.ganttEnd) return false
+    if (fs.showUserFlagged  && !s.userFlag)  return false
+    if (fs.showAdminFlagged && !s.adminFlag) return false
     return true
   })
 

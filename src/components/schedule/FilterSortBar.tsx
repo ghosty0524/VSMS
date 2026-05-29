@@ -4,6 +4,7 @@ import {
   SlidersHorizontal, ChevronUp, ChevronDown,
   ChevronLeft, ChevronRight,
   CalendarRange, RotateCcw,
+  Bookmark, ShieldCheck,
 } from 'lucide-react'
 import { useOptionsStore } from '../../store/optionsStore'
 import { MultiSelectDropdown } from '../shared/MultiSelectDropdown'
@@ -39,15 +40,17 @@ const MAX_SORT_RULES = 4
 
 // ── FilterSortState ──────────────────────────────────
 export interface FilterSortState {
-  categories:    string[]
-  testUnits:     string[]
-  testEngineers: string[]
-  statuses:      ScheduleStatus[]
-  keyword:       string
-  sortRules:     SortRule[]
-  ganttStart:    string
-  ganttEnd:      string
-  showAllUnits:  boolean   // ★ NEW
+  categories:     string[]
+  testUnits:      string[]
+  testEngineers:  string[]
+  statuses:       ScheduleStatus[]
+  keyword:        string
+  sortRules:      SortRule[]
+  ganttStart:     string
+  ganttEnd:       string
+  showAllUnits:   boolean
+  showUserFlagged:  boolean   // ★ only show schedules with userFlag = true
+  showAdminFlagged: boolean   // ★ only show schedules with adminFlag = true (Admin/SA only)
 }
 
 export const EMPTY_FILTER: FilterSortState = {
@@ -55,7 +58,9 @@ export const EMPTY_FILTER: FilterSortState = {
   keyword: '',
   sortRules: [...DEFAULT_SORT_RULES],
   ganttStart: '', ganttEnd: '',
-  showAllUnits: false,   // ★ NEW
+  showAllUnits: false,
+  showUserFlagged: false,
+  showAdminFlagged: false,
 }
 
 const ALL_STATUSES: ScheduleStatus[] = ['Completed', 'Delayed', 'Testing', 'Planned']
@@ -136,7 +141,9 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
     value.categories.length + value.testUnits.length +
     value.testEngineers.length + value.statuses.length +
     (value.keyword ? 1 : 0) + (value.ganttStart ? 1 : 0) + (value.ganttEnd ? 1 : 0) +
-    (role === 'user' && value.showAllUnits ? 1 : 0)
+    (role === 'user' && value.showAllUnits ? 1 : 0) +
+    (value.showUserFlagged ? 1 : 0) +
+    (value.showAdminFlagged ? 1 : 0)
 
   const hasGanttRange = !!(value.ganttStart || value.ganttEnd)
 
@@ -360,6 +367,38 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
               >
                 <span>👁</span>
                 {value.showAllUnits ? '所有單位 ✓' : '顯示所有單位'}
+              </button>
+            )}
+
+            {/* 使用者旗標篩選（全角色） */}
+            <button
+              type="button"
+              aria-pressed={value.showUserFlagged}
+              onClick={() => onChange({ ...value, showUserFlagged: !value.showUserFlagged })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full border transition-colors
+                ${value.showUserFlagged
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                }`}
+            >
+              <Bookmark size={13} />
+              只顯示已標記
+            </button>
+
+            {/* Admin 旗標篩選（Admin/SA 限定） */}
+            {role !== 'user' && (
+              <button
+                type="button"
+                aria-pressed={value.showAdminFlagged}
+                onClick={() => onChange({ ...value, showAdminFlagged: !value.showAdminFlagged })}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full border transition-colors
+                  ${value.showAdminFlagged
+                    ? 'bg-orange-500 text-white border-orange-500'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-orange-400'
+                  }`}
+              >
+                <ShieldCheck size={13} />
+                只顯示 Admin 標記
               </button>
             )}
 
