@@ -9,7 +9,6 @@ import { GanttChart } from './components/schedule/GanttChart'
 import { SettingsPage } from './components/settings/SettingsPage'
 import AnalyticsPage from './components/analytics/AnalyticsPage'
 import AuditPage from './components/audit/AuditPage'
-import TeamsSettingsPage from './components/settings/TeamsSettingsPage'
 
 export function App() {
   const { isLoggedIn, isChecking, checkAuth, role } = useAuthStore()
@@ -68,11 +67,6 @@ export function App() {
           {view === 'settings' && role !== 'user' && (
             <div className="h-full overflow-y-auto">
               <SettingsPage />
-            </div>
-          )}
-          {view === 'teams' && role !== 'user' && (
-            <div className="h-full overflow-y-auto">
-              <TeamsSettingsPage />
             </div>
           )}
           {view === 'audit' && role === 'super_admin' && (

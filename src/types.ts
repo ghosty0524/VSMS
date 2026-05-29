@@ -60,20 +60,6 @@ export interface UserStore {
   users: User[]
 }
 
-export interface NotifyConfig {
-  enabled: boolean
-  teamsWebhookUrl: string
-  systemUrl: string
-  recipients: Recipient[]
-}
-
-export interface Recipient {
-  id: string
-  name: string
-  note: string
-  isActive: boolean
-}
-
 export interface AuditLog {
   id: string
   timestamp: string
@@ -92,14 +78,12 @@ export type AuditAction =
   | 'DELETE_SCHEDULE'
   | 'IMPORT_SCHEDULES'
   | 'EXPORT_DASHBOARD'
-  | 'SEND_NOTIFICATION'
   | 'CREATE_USER'
   | 'UPDATE_USER'
   | 'DISABLE_USER'
   | 'UPDATE_SETTINGS'
 
-// ✅ 新增 teams / audit / accounts 三個 view
-export type View = 'main' | 'analytics' | 'settings' | 'teams' | 'audit' | 'accounts'
+export type View = 'main' | 'analytics' | 'settings' | 'audit' | 'accounts'
 
 export interface ScheduleFormValues {
   category: string

@@ -78,12 +78,6 @@ export const api = {
     return req<AuditLog[]>('GET', `/audit${qs}`)
   },
 
-  // ── Notify ────────────────────────────────────────────
-  sendNotification: (summary: string) =>
-    req<{ ok: boolean }>('POST', '/notify', { summary }),
-  testTeamsWebhook: (webhookUrl: string) =>
-    req<{ ok: boolean }>('POST', '/notify/test', { webhookUrl }),
-
   // ── Dashboard export ──────────────────────────────────
   exportDashboard: () =>
     req<{ html: string }>('GET', '/export/dashboard'),

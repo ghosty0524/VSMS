@@ -9,7 +9,6 @@ import schedulesRouter from './routes/schedules.js'
 import optionsRouter from './routes/options.js'
 import usersRouter from './routes/users.js'
 import auditRouter from './routes/audit.js'
-import notifyRouter from './routes/notify.js'
 import calendarRouter from './routes/calendar.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -31,7 +30,6 @@ app.use('/api/schedules', schedulesRouter)
 app.use('/api/options', optionsRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/audit', auditRouter)
-app.use('/api/notify', notifyRouter)
 app.use('/api/calendar', calendarRouter)
 
 // ── Static (serve SPA in production) ──────────────────

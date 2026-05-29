@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import {
-  LayoutList, BarChart2, Settings, Bell, ClipboardList,
-  Upload, Download, Send, FileSpreadsheet, Plus, LogOut,
+  LayoutList, BarChart2, Settings, ClipboardList,
+  Upload, Download, FileSpreadsheet, Plus, LogOut,
   ChevronDown
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
@@ -11,7 +11,6 @@ import { generateDashboardHTML } from '../../lib/export'
 import { downloadTemplate, exportSchedules, generateAgentExcel } from '../../lib/excel'
 import { ExcelImportModal } from '../schedule/ExcelImportModal'
 import { ExportExcelModal } from '../schedule/ExportExcelModal'
-import { api } from '../../lib/api'
 import type { View } from '../../types'
 
 interface Props {
@@ -62,7 +61,6 @@ const NAV_TABS: {
   { key: 'main',      label: '排程管理',   icon: <LayoutList    size={15} /> },
   { key: 'analytics', label: '統計分析',   icon: <BarChart2     size={15} />, userHidden: true },
   { key: 'settings',  label: '系統設定',   icon: <Settings      size={15} />, userHidden: true },
-  { key: 'teams',     label: 'Teams 設定', icon: <Bell          size={15} />, userHidden: true },
   { key: 'audit',     label: '審計紀錄',   icon: <ClipboardList size={15} />, superAdminOnly: true },
 ]
 
@@ -124,19 +122,6 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
   const handleExportSchedules = () => {
     setShowExportMenu(false)
     setShowExportExcelModal(true)
-  }
-
-  // ── 發佈 Teams 通知 ────────────────────────────────────────
-  const handleNotify = async () => {
-    const completed = schedules.filter(s => s.isCompleted).length
-    const delayed   = schedules.filter(s => s.isDelayed && !s.isCompleted).length
-    const summary   = `• 排程總數：${schedules.length} 筆\n• 已完成：${completed} 筆\n• 延遲中：${delayed} 筆`
-    try {
-      await api.sendNotification(summary)
-      addToast('✅ Teams 通知已發送！', 'success')
-    } catch (err) {
-      addToast(`❌ 發送失敗：${String(err)}`, 'error')
-    }
   }
 
   const visibleTabs = NAV_TABS.filter(tab => {
@@ -264,21 +249,6 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
                 </div>
               )}
             </div>
-            )}
-
-            {/* 發佈通知 */}
-            {role !== 'user' && (
-            <button
-              type="button"
-              onClick={handleNotify}
-              title="發佈 Teams 通知"
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium
-                         bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg
-                         border border-slate-600 transition-all duration-150"
-            >
-              <Send size={14} />
-              發佈
-            </button>
             )}
 
             {/* 下載範本 */}

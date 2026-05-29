@@ -62,20 +62,6 @@ export interface UserStore {
   users: User[]
 }
 
-export interface NotifyConfig {
-  enabled: boolean
-  teamsWebhookUrl: string
-  systemUrl: string
-  recipients: Recipient[]
-}
-
-export interface Recipient {
-  id: string
-  name: string
-  note: string
-  isActive: boolean
-}
-
 export interface AuditLog {
   id: string
   timestamp: string
@@ -94,7 +80,6 @@ export type AuditAction =
   | 'DELETE_SCHEDULE'
   | 'IMPORT_SCHEDULES'
   | 'EXPORT_DASHBOARD'
-  | 'SEND_NOTIFICATION'
   | 'CREATE_USER'
   | 'UPDATE_USER'
   | 'DISABLE_USER'
