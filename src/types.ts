@@ -106,4 +106,5 @@ export interface ScheduleFormValues {
   isCompleted: boolean
   isDelayed: boolean
   delayReason: string
+  device: string          // 設備 value，空字串表示未指定
 }

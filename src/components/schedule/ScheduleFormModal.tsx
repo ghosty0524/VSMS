@@ -19,6 +19,7 @@ const EMPTY: ScheduleFormValues = {
   startDate: null, endDate: null,
   requiredPersonnel: '', testReport: '',
   isCompleted: false, isDelayed: false, delayReason: '',
+  device: '',
 }
 
 function parseDate(s: string): Date | null {
@@ -49,6 +50,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
         requiredPersonnel: schedule.requiredPersonnel, testReport: schedule.testReport,
         isCompleted: schedule.isCompleted, isDelayed: schedule.isDelayed,
         delayReason: schedule.delayReason,
+        device: schedule.device ?? '',
       })
     } else { setForm(EMPTY) }
     setErrors({})
@@ -56,6 +58,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
 
   const activeCategories = options.categories.filter(c => c.isActive)
   const activeUnits = options.testUnits.filter(u => u.isActive)
+  const activeDevices = (options.devices ?? []).filter(d => d.isActive)
   const activeEngineers = form.testUnit
     ? (activeUnits.find(u => u.value === form.testUnit)?.engineers.filter(e => e.isActive) ?? [])
     : []
@@ -100,6 +103,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
       requiredPersonnel: form.requiredPersonnel.trim(), testReport: form.testReport.trim(),
       isCompleted: form.isCompleted, isDelayed: form.isDelayed,
       delayReason: form.isDelayed ? form.delayReason.trim() : '',
+      ...(isUser ? {} : { device: form.device }),
     }
     try {
       if (schedule) await update(schedule.id, data)
@@ -234,6 +238,20 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
               className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
             <label htmlFor="isDelayed" className="text-sm font-medium text-gray-700">Delayed（工作已延遲）</label>
           </div>
+
+          {/* 設備（只在系統中有設備時顯示） */}
+          {activeDevices.length > 0 && field('設備', 'device', (
+            <select
+              value={form.device}
+              onChange={e => setForm(f => ({ ...f, device: e.target.value }))}
+              disabled={isUser}
+              className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
+                ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}
+            >
+              <option value="">（無）</option>
+              {activeDevices.map(d => <option key={d.id} value={d.value}>{d.label}</option>)}
+            </select>
+          ))}
 
           {/* F13 延遲原因 */}
           {form.isDelayed && field('延遲原因', 'delayReason', (
