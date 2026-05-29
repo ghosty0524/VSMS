@@ -1,5 +1,5 @@
 // src/components/schedule/FlagPopover.tsx
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 
 interface Props {
   flagged:   boolean
@@ -20,14 +20,39 @@ export function FlagPopover({ flagged, note, color, anchorEl, onSave, onRemove, 
   const mountedRef = useRef(true)
   useEffect(() => () => { mountedRef.current = false }, [])
 
-  // Close on click outside
+  // Fix 1: sync inputNote when note prop changes (e.g. after successful save)
+  useEffect(() => { setInputNote(note) }, [note])
+
+  // Fix 2: exclude anchorEl from outside-click check so toggle works correctly
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+      if (ref.current && !ref.current.contains(e.target as Node)
+          && !anchorEl?.contains(e.target as Node)) {
+        onClose()
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
+  }, [onClose, anchorEl])
+
+  // Fix 3: compute fixed position in useLayoutEffect to avoid render-time reflow
+  const [pos, setPos] = useState<React.CSSProperties>({ position: 'fixed', top: 0, right: 0, zIndex: 9999 })
+
+  useLayoutEffect(() => {
+    if (!anchorEl) return
+    const rect = anchorEl.getBoundingClientRect()
+    setPos({ position: 'fixed', top: rect.bottom + 4, right: window.innerWidth - rect.right, zIndex: 9999 })
+  }, [anchorEl])
+
+  // Fix 6: restore focus to anchor element when popover unmounts
+  useEffect(() => {
+    return () => {
+      anchorEl?.focus()
+    }
+  }, [anchorEl])
+
+  // Fix 4: if anchorEl is null, render nothing to avoid broken top-right placement
+  if (!anchorEl) return null
 
   const borderColor = color === 'orange' ? 'border-orange-300' : 'border-blue-300'
   const btnColor    = color === 'orange'
@@ -47,16 +72,10 @@ export function FlagPopover({ flagged, note, color, anchorEl, onSave, onRemove, 
     finally { if (mountedRef.current) setSaving(false) }
   }
 
-  // Fix 1: compute fixed position from anchor element
-  const rect = anchorEl?.getBoundingClientRect()
-  const style: React.CSSProperties = rect
-    ? { position: 'fixed', top: rect.bottom + 4, right: window.innerWidth - rect.right, zIndex: 9999 }
-    : { position: 'fixed', top: 0, right: 0, zIndex: 9999 }
-
   return (
     // Fix 7: keyboard accessibility — Escape key, role, tabIndex
     <div ref={ref}
-      style={style}
+      style={pos}
       onKeyDown={e => { if (e.key === 'Escape') onClose() }}
       role="dialog"
       aria-label="旗標設定"

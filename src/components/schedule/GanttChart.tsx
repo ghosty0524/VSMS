@@ -259,6 +259,8 @@ export function GanttChart({
 
   // ── Scroll 同步 ───────────────────────────────────────
   const handleRightBodyScroll = () => {
+    // Fix 5: close flag popover on right panel scroll so it doesn't drift
+    closeFlagPopover()
     if (!rightBodyRef.current) return
     const { scrollLeft, scrollTop } = rightBodyRef.current
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -418,20 +420,20 @@ export function GanttChart({
                   <line x1={0} y1={HEADER_MONTH + HEADER_WEEK} x2={svgWidth} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
                   <line x1={0} y1={HEADER_H - 1} x2={svgWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
 
-                  {monthLabels.map((ml, i) => (
-                    <g key={i}>
+                  {monthLabels.map((ml) => (
+                    <g key={ml.label}>
                       <line x1={ml.x} y1={0} x2={ml.x} y2={HEADER_H} stroke="#cbd5e1" strokeWidth={1} />
                       <text x={ml.x + 5} y={HEADER_MONTH / 2 + 6} fontSize={12} fill="#334155" fontWeight="700">{ml.label}</text>
                     </g>
                   ))}
-                  {weekTicks.map((t, i) => (
-                    <g key={i}>
+                  {weekTicks.map((t) => (
+                    <g key={t.label}>
                       <line x1={t.x} y1={HEADER_MONTH} x2={t.x} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
                       <text x={t.x + 2} y={HEADER_MONTH + HEADER_WEEK / 2 + 5} fontSize={10} fill="#64748b" fontWeight="600">{t.label}</text>
                     </g>
                   ))}
-                  {dayLabelItems.map((d, i) => (
-                    <g key={i}>
+                  {dayLabelItems.map((d) => (
+                    <g key={`day-${d.x}`}>
                       <line x1={d.x} y1={HEADER_MONTH + HEADER_WEEK} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
                       {PX_PER_DAY >= 16 && (
                         <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_WEEK + HEADER_DAY / 2 + 5}
@@ -582,11 +584,11 @@ export function GanttChart({
                 <svg width={svgWidth} height={bodyHeight} className="block">
                   <rect x={0} y={0} width={svgWidth} height={bodyHeight} fill="#ffffff" />
 
-                  {restDayBgs.map(({ x }, i) => (
-                    <rect key={`rd-${i}`} x={x} y={0} width={PX_PER_DAY} height={bodyHeight} fill="rgba(0,0,0,0.085)" />
+                  {restDayBgs.map(({ x }) => (
+                    <rect key={`rd-${x}`} x={x} y={0} width={PX_PER_DAY} height={bodyHeight} fill="rgba(0,0,0,0.085)" />
                   ))}
-                  {monthLabels.map((ml, i) => (
-                    <line key={`ml-${i}`} x1={ml.x} y1={0} x2={ml.x} y2={bodyHeight} stroke="#cbd5e1" strokeWidth={1} />
+                  {monthLabels.map((ml) => (
+                    <line key={`ml-${ml.x}`} x1={ml.x} y1={0} x2={ml.x} y2={bodyHeight} stroke="#cbd5e1" strokeWidth={1} />
                   ))}
 
                   {filtered.map((s, i) => {
