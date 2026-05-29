@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Pencil, Trash2, CalendarRange } from 'lucide-react'
+import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange } from 'lucide-react'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
@@ -9,6 +9,7 @@ import { isRestDay } from '../../lib/restDays'
 import { FilterSortBar, EMPTY_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
 import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
+import { FlagPopover } from './FlagPopover'
 import type { FilterSortState, SortRule, SortableField } from './FilterSortBar'
 import type { Schedule } from '../../types'
 import type { ScheduleStatus } from '../../lib/status'
@@ -158,7 +159,7 @@ export function GanttChart({
   ganttCollapsed, onToggleGantt,
   filterCollapsed, onToggleFilter,
 }: Props) {
-  const { schedules, remove } = useScheduleStore()
+  const { schedules, remove, update } = useScheduleStore()
   const { options }           = useOptionsStore()
   const { role, allowedUnits } = useAuthStore()
   const [filterSort, setFilterSort]     = useState<FilterSortState>(() => ({
@@ -168,6 +169,12 @@ export function GanttChart({
   const [editTarget, setEditTarget]     = useState<Schedule | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null)
   const [tooltip, setTooltip]           = useState<{ x: number; y: number; s: Schedule } | null>(null)
+
+  interface FlagPopoverState {
+    scheduleId: string
+    type: 'admin' | 'user'
+  }
+  const [flagPopover, setFlagPopover] = useState<FlagPopoverState | null>(null)
 
   const [leftWidth, setLeftWidth] = useState<number>(() => {
     const saved = sessionStorage.getItem('ganttLeftWidth')
@@ -464,7 +471,83 @@ export function GanttChart({
                           </div>
                         </div>
                         {s.taskDescription && <div className="text-[11px] text-slate-500 truncate pl-[86px] -mt-[2px]">{s.taskDescription}</div>}
+                        {/* ★ 旗標圖示 + 操作按鈕 */}
                         <div className="absolute right-2 top-[10px] flex gap-1">
+                          {/* Admin 旗標（Admin/SA 限定） */}
+                          {role !== 'user' && (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                title={s.adminFlag ? (s.adminFlagNote || 'Admin 旗標已標記') : '設定 Admin 旗標'}
+                                onClick={() => setFlagPopover(
+                                  flagPopover?.scheduleId === s.id && flagPopover.type === 'admin'
+                                    ? null
+                                    : { scheduleId: s.id, type: 'admin' }
+                                )}
+                                className={`w-[22px] h-[22px] flex items-center justify-center rounded-md transition-colors duration-100
+                                  ${s.adminFlag
+                                    ? 'bg-orange-100 text-orange-500 hover:bg-orange-200'
+                                    : 'bg-gray-50 text-gray-300 hover:text-orange-400 hover:bg-orange-50'
+                                  }`}
+                              >
+                                <ShieldCheck size={12} strokeWidth={2} />
+                              </button>
+                              {flagPopover?.scheduleId === s.id && flagPopover.type === 'admin' && (
+                                <FlagPopover
+                                  flagged={s.adminFlag ?? false}
+                                  note={s.adminFlagNote ?? ''}
+                                  color="orange"
+                                  onClose={() => setFlagPopover(null)}
+                                  onSave={async (note) => {
+                                    await update(s.id, { adminFlag: true, adminFlagNote: note })
+                                    setFlagPopover(null)
+                                  }}
+                                  onRemove={async () => {
+                                    await update(s.id, { adminFlag: false, adminFlagNote: '' })
+                                    setFlagPopover(null)
+                                  }}
+                                />
+                              )}
+                            </div>
+                          )}
+
+                          {/* 使用者旗標（全角色可見） */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              title={s.userFlag ? (s.userFlagNote || '旗標已標記') : '設定旗標'}
+                              onClick={() => setFlagPopover(
+                                flagPopover?.scheduleId === s.id && flagPopover.type === 'user'
+                                  ? null
+                                  : { scheduleId: s.id, type: 'user' }
+                              )}
+                              className={`w-[22px] h-[22px] flex items-center justify-center rounded-md transition-colors duration-100
+                                ${s.userFlag
+                                  ? 'bg-blue-100 text-blue-500 hover:bg-blue-200'
+                                  : 'bg-gray-50 text-gray-300 hover:text-blue-400 hover:bg-blue-50'
+                                }`}
+                            >
+                              <Bookmark size={12} strokeWidth={2} />
+                            </button>
+                            {flagPopover?.scheduleId === s.id && flagPopover.type === 'user' && (
+                              <FlagPopover
+                                flagged={s.userFlag ?? false}
+                                note={s.userFlagNote ?? ''}
+                                color="blue"
+                                onClose={() => setFlagPopover(null)}
+                                onSave={async (note) => {
+                                  await update(s.id, { userFlag: true, userFlagNote: note })
+                                  setFlagPopover(null)
+                                }}
+                                onRemove={async () => {
+                                  await update(s.id, { userFlag: false, userFlagNote: '' })
+                                  setFlagPopover(null)
+                                }}
+                              />
+                            )}
+                          </div>
+
+                          {/* 現有編輯按鈕 */}
                           <button type="button" title="編輯" onClick={() => setEditTarget(s)}
                             className="w-[22px] h-[22px] flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors duration-100">
                             <Pencil size={12} strokeWidth={2.5} />
