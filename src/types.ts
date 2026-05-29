@@ -18,6 +18,11 @@ export interface Schedule {
   updatedBy: string
   createdAt: string        // ISO 8601
   updatedAt: string        // ISO 8601
+  adminFlag:     boolean
+  adminFlagNote: string
+  userFlag:      boolean
+  userFlagNote:  string
+  device:        string
 }
 
 export interface Option {
@@ -82,6 +87,7 @@ export type AuditAction =
   | 'UPDATE_USER'
   | 'DISABLE_USER'
   | 'UPDATE_SETTINGS'
+  | 'FLAG_SCHEDULE'
 
 export type View = 'main' | 'analytics' | 'settings' | 'audit' | 'accounts'
 

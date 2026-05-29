@@ -18,6 +18,9 @@ function toSchedule(s: {
   testReport: string; isCompleted: boolean; isDelayed: boolean;
   delayReason: string; createdBy: string; updatedBy: string;
   createdAt: Date; updatedAt: Date;
+  adminFlag: boolean; adminFlagNote: string;
+  userFlag: boolean; userFlagNote: string;
+  device: string;
 }): Schedule {
   return { ...s, createdAt: s.createdAt.toISOString(), updatedAt: s.updatedAt.toISOString() }
 }
@@ -39,6 +42,14 @@ function canAccessUnit(allowedUnits: string[] | null, testUnit: string): boolean
 router.get('/', async (req, res) => {
   const schedules = await prisma.schedule.findMany({ orderBy: { createdAt: 'asc' } })
   const mapped = schedules.map(toSchedule)
+  // User 角色不可見 adminFlag / adminFlagNote
+  if (req.session.role === 'user') {
+    res.json(mapped.map(s => {
+      const { adminFlag: _af, adminFlagNote: _afn, ...rest } = s
+      return rest
+    }))
+    return
+  }
   res.json(mapped)
 })
 
@@ -152,16 +163,25 @@ router.put('/:id', validateSchedule, async (req, res) => {
       return
     }
 
+    // ★ User 不可修改 adminFlag / adminFlagNote
+    const { adminFlag: _af, adminFlagNote: _afn, ...safeBody } = body
+
     const beforeRecord = existing as unknown as Record<string, unknown>
-    const changedFields = Object.keys(body).filter(
-      k => JSON.stringify(beforeRecord[k]) !== JSON.stringify((body as Record<string, unknown>)[k])
+    const changedFields = Object.keys(safeBody).filter(
+      k => JSON.stringify(beforeRecord[k]) !== JSON.stringify((safeBody as Record<string, unknown>)[k])
     )
 
     const updated = await prisma.schedule.update({
       where: { id: scheduleId },
-      data: { ...body, testEngineer: engineer, updatedBy: username, updatedAt: new Date() },
+      data: { ...safeBody, testEngineer: engineer, updatedBy: username, updatedAt: new Date() },
     })
-    await appendAudit(username, displayName, 'UPDATE_SCHEDULE', scheduleId, changedFields)
+    const flagChanged = changedFields.some(f => ['userFlag', 'userFlagNote'].includes(f))
+    if (flagChanged) {
+      await appendAudit(username, displayName, 'FLAG_SCHEDULE', existing.projectName,
+        changedFields.filter(f => ['userFlag', 'userFlagNote'].includes(f)))
+    } else {
+      await appendAudit(username, displayName, 'UPDATE_SCHEDULE', scheduleId, changedFields)
+    }
     res.json(toSchedule(updated))
     return
   }
@@ -186,7 +206,13 @@ router.put('/:id', validateSchedule, async (req, res) => {
     where: { id: scheduleId },
     data: { ...body, updatedBy: username, updatedAt: new Date() },
   })
-  await appendAudit(username, displayName, 'UPDATE_SCHEDULE', scheduleId, changedFields)
+  const flagFields = ['adminFlag', 'adminFlagNote', 'userFlag', 'userFlagNote']
+  const isFlagOnly = changedFields.length > 0 && changedFields.every(f => flagFields.includes(f))
+  if (isFlagOnly) {
+    await appendAudit(username, displayName, 'FLAG_SCHEDULE', existing.projectName, changedFields)
+  } else {
+    await appendAudit(username, displayName, 'UPDATE_SCHEDULE', scheduleId, changedFields)
+  }
   res.json(toSchedule(updated))
 })
 
