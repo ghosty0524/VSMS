@@ -2,18 +2,23 @@
 import { useState, useRef, useEffect } from 'react'
 
 interface Props {
-  flagged:  boolean
-  note:     string
-  color:    'orange' | 'blue'
-  onSave:   (note: string) => Promise<void>
-  onRemove: () => Promise<void>
-  onClose:  () => void
+  flagged:   boolean
+  note:      string
+  color:     'orange' | 'blue'
+  anchorEl:  HTMLButtonElement | null   // Fix 1: anchor for fixed positioning
+  onSave:    (note: string) => Promise<void>
+  onRemove:  () => Promise<void>
+  onClose:   () => void
 }
 
-export function FlagPopover({ flagged, note, color, onSave, onRemove, onClose }: Props) {
+export function FlagPopover({ flagged, note, color, anchorEl, onSave, onRemove, onClose }: Props) {
   const [inputNote, setInputNote] = useState(note)
   const [saving, setSaving] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  // Fix 3: mounted ref guard to prevent setState on unmounted component
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
 
   // Close on click outside
   useEffect(() => {
@@ -29,24 +34,38 @@ export function FlagPopover({ flagged, note, color, onSave, onRemove, onClose }:
     ? 'bg-orange-500 hover:bg-orange-600 text-white'
     : 'bg-blue-500 hover:bg-blue-600 text-white'
 
+  // Fix 3: guard setSaving in finally blocks
   const handleSave = async () => {
     setSaving(true)
     try { await onSave(inputNote) }
-    finally { setSaving(false) }
+    finally { if (mountedRef.current) setSaving(false) }
   }
 
   const handleRemove = async () => {
     setSaving(true)
     try { await onRemove() }
-    finally { setSaving(false) }
+    finally { if (mountedRef.current) setSaving(false) }
   }
 
+  // Fix 1: compute fixed position from anchor element
+  const rect = anchorEl?.getBoundingClientRect()
+  const style: React.CSSProperties = rect
+    ? { position: 'fixed', top: rect.bottom + 4, right: window.innerWidth - rect.right, zIndex: 9999 }
+    : { position: 'fixed', top: 0, right: 0, zIndex: 9999 }
+
   return (
+    // Fix 7: keyboard accessibility — Escape key, role, tabIndex
     <div ref={ref}
-      className={`absolute z-50 bg-white rounded-lg shadow-xl border ${borderColor} p-3 w-56`}
-      style={{ top: '100%', right: 0, marginTop: 4 }}
+      style={style}
+      onKeyDown={e => { if (e.key === 'Escape') onClose() }}
+      role="dialog"
+      aria-label="旗標設定"
+      tabIndex={-1}
+      className={`bg-white rounded-lg shadow-xl border ${borderColor} p-3 w-56`}
     >
+      {/* Fix 7: autoFocus on textarea */}
       <textarea
+        autoFocus
         className="w-full border border-gray-300 rounded px-2 py-1 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
         rows={3}
         maxLength={500}
@@ -73,8 +92,9 @@ export function FlagPopover({ flagged, note, color, onSave, onRemove, onClose }:
             標記
           </button>
         )}
-        <button type="button" disabled={saving} onClick={onClose}
-          className="text-xs px-2.5 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+        {/* Fix 6: removed disabled={saving} from Cancel so users can always close */}
+        <button type="button" onClick={onClose}
+          className="text-xs px-2.5 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-50">
           取消
         </button>
       </div>

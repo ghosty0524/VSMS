@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange } from 'lucide-react'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
@@ -145,6 +145,14 @@ function applyFilter(
   return result
 }
 
+// Fix 5: moved FlagPopoverState to module scope
+// Fix 1: added anchorEl for fixed positioning
+interface FlagPopoverState {
+  scheduleId: string
+  type: 'admin' | 'user'
+  anchorEl: HTMLButtonElement
+}
+
 interface Props {
   showAddModal:    boolean
   onCloseAddModal: () => void
@@ -170,11 +178,9 @@ export function GanttChart({
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null)
   const [tooltip, setTooltip]           = useState<{ x: number; y: number; s: Schedule } | null>(null)
 
-  interface FlagPopoverState {
-    scheduleId: string
-    type: 'admin' | 'user'
-  }
   const [flagPopover, setFlagPopover] = useState<FlagPopoverState | null>(null)
+  // Fix 4: stable close handler to avoid re-registering mousedown listener
+  const closeFlagPopover = useCallback(() => setFlagPopover(null), [])
 
   const [leftWidth, setLeftWidth] = useState<number>(() => {
     const saved = sessionStorage.getItem('ganttLeftWidth')
@@ -466,7 +472,7 @@ export function GanttChart({
                             style={{ background: statusColor.bg, color: statusColor.text, letterSpacing: '0.02em' }}>
                             {status}
                           </div>
-                          <div className="min-w-0 text-[13px] font-semibold text-slate-800 truncate pr-14">
+                          <div className="min-w-0 text-[13px] font-semibold text-slate-800 truncate pr-28">
                             {s.projectName}
                           </div>
                         </div>
@@ -479,11 +485,13 @@ export function GanttChart({
                               <button
                                 type="button"
                                 title={s.adminFlag ? (s.adminFlagNote || 'Admin 旗標已標記') : '設定 Admin 旗標'}
-                                onClick={() => setFlagPopover(
-                                  flagPopover?.scheduleId === s.id && flagPopover.type === 'admin'
-                                    ? null
-                                    : { scheduleId: s.id, type: 'admin' }
-                                )}
+                                onClick={(e) => {
+                                  if (flagPopover?.scheduleId === s.id && flagPopover.type === 'admin') {
+                                    setFlagPopover(null)
+                                  } else {
+                                    setFlagPopover({ scheduleId: s.id, type: 'admin', anchorEl: e.currentTarget })
+                                  }
+                                }}
                                 className={`w-[22px] h-[22px] flex items-center justify-center rounded-md transition-colors duration-100
                                   ${s.adminFlag
                                     ? 'bg-orange-100 text-orange-500 hover:bg-orange-200'
@@ -497,7 +505,8 @@ export function GanttChart({
                                   flagged={s.adminFlag ?? false}
                                   note={s.adminFlagNote ?? ''}
                                   color="orange"
-                                  onClose={() => setFlagPopover(null)}
+                                  anchorEl={flagPopover.anchorEl}
+                                  onClose={closeFlagPopover}
                                   onSave={async (note) => {
                                     await update(s.id, { adminFlag: true, adminFlagNote: note })
                                     setFlagPopover(null)
@@ -516,11 +525,13 @@ export function GanttChart({
                             <button
                               type="button"
                               title={s.userFlag ? (s.userFlagNote || '旗標已標記') : '設定旗標'}
-                              onClick={() => setFlagPopover(
-                                flagPopover?.scheduleId === s.id && flagPopover.type === 'user'
-                                  ? null
-                                  : { scheduleId: s.id, type: 'user' }
-                              )}
+                              onClick={(e) => {
+                                if (flagPopover?.scheduleId === s.id && flagPopover.type === 'user') {
+                                  setFlagPopover(null)
+                                } else {
+                                  setFlagPopover({ scheduleId: s.id, type: 'user', anchorEl: e.currentTarget })
+                                }
+                              }}
                               className={`w-[22px] h-[22px] flex items-center justify-center rounded-md transition-colors duration-100
                                 ${s.userFlag
                                   ? 'bg-blue-100 text-blue-500 hover:bg-blue-200'
@@ -534,7 +545,8 @@ export function GanttChart({
                                 flagged={s.userFlag ?? false}
                                 note={s.userFlagNote ?? ''}
                                 color="blue"
-                                onClose={() => setFlagPopover(null)}
+                                anchorEl={flagPopover.anchorEl}
+                                onClose={closeFlagPopover}
                                 onSave={async (note) => {
                                   await update(s.id, { userFlag: true, userFlagNote: note })
                                   setFlagPopover(null)
