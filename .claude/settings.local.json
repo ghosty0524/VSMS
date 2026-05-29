@@ -38,7 +38,9 @@
       "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\@prisma\\\\adapter-mariadb\\\\dist\\\\index.mjs\" -Raw; $endIdx = $content.LastIndexOf\\(\"PrismaMariaDb\"\\); $content.Substring\\([Math]::Max\\(0,$endIdx-100\\), [Math]::Min\\(1000, $content.Length - [Math]::Max\\(0,$endIdx-100\\)\\)\\))",
       "PowerShell(Set-Location \"f:\\\\vsms\\\\vsms-export\"; $content = Get-Content \"node_modules\\\\@prisma\\\\adapter-mariadb\\\\dist\\\\index.mjs\" -Raw; $factoryIdx = $content.IndexOf\\(\"var PrismaMariaDbAdapterFactory\"\\); $content.Substring\\($factoryIdx, [Math]::Min\\(3000, $content.Length - $factoryIdx\\)\\))",
       "Bash(mysql -u root -pLanner@123 vsms -e ' *)",
-      "PowerShell(New-Item -ItemType Directory -Force -Path \"F:\\\\vsms\\\\vsms-export\\\\docs\\\\superpowers\\\\specs\")"
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"F:\\\\vsms\\\\vsms-export\\\\docs\\\\superpowers\\\\specs\")",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ],
     "additionalDirectories": [
       "f:\\vsms\\vsms-export\\docs\\superpowers\\specs"

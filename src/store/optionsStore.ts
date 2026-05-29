@@ -20,6 +20,10 @@ interface OptionsState {
   addEngineer: (unitId: string, name: string) => Promise<void>
   updateEngineer: (unitId: string, engId: string, name: string) => Promise<void>
   removeEngineer: (unitId: string, engId: string) => Promise<void>
+  addDevice:    (value: string) => Promise<void>
+  updateDevice: (id: string, label: string) => Promise<void>
+  toggleDevice: (id: string, isActive: boolean) => Promise<void>
+  deleteDevice: (id: string) => Promise<void>
 }
 
 async function persistOptions(options: OptionsMap): Promise<void> {
@@ -145,5 +149,43 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
     }
     await persistOptions(next)
     set({ options: next })
+  },
+
+  addDevice: async (value) => {
+    const devices = get().options.devices ?? []
+    const newDevice = await api.createDevice({ value, label: value, sortOrder: devices.length })
+    set({ options: { ...get().options, devices: [...devices, newDevice] } })
+  },
+
+  updateDevice: async (id, label) => {
+    await api.updateDevice(id, { label })
+    set({
+      options: {
+        ...get().options,
+        devices: (get().options.devices ?? []).map(d =>
+          d.id === id ? { ...d, label, value: label } : d
+        ),
+      },
+    })
+  },
+
+  toggleDevice: async (id, isActive) => {
+    await api.updateDevice(id, { isActive })
+    set({
+      options: {
+        ...get().options,
+        devices: (get().options.devices ?? []).map(d => d.id === id ? { ...d, isActive } : d),
+      },
+    })
+  },
+
+  deleteDevice: async (id) => {
+    await api.deleteDevice(id)
+    set({
+      options: {
+        ...get().options,
+        devices: (get().options.devices ?? []).filter(d => d.id !== id),
+      },
+    })
   },
 }))

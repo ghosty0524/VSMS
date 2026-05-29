@@ -5,9 +5,10 @@ import { TestUnitManager } from './TestUnitManager'
 import { EngineerManager } from './EngineerManager'
 import { RestDaysManager } from './RestDaysManager'
 import { UserManager } from './UserManager'
+import { DeviceManager } from './DeviceManager'
 import CalendarImport from './CalendarImport'
 
-type SettingsTab = 'categories' | 'units' | 'engineers' | 'restdays' | 'users'
+type SettingsTab = 'categories' | 'units' | 'engineers' | 'restdays' | 'users' | 'devices'
 
 export function SettingsPage() {
   const { role } = useAuthStore()
@@ -19,6 +20,7 @@ export function SettingsPage() {
     { key: 'units',      label: '測試單位' },
     { key: 'engineers',  label: '測試人員' },
     { key: 'restdays',   label: '休息日設定' },
+    { key: 'devices',    label: '設備管理' },
     { key: 'users',      label: '帳號管理', superAdminOnly: true },
   ]
 
@@ -83,6 +85,7 @@ export function SettingsPage() {
           </div>
         )}
 
+        {activeTab === 'devices' && <DeviceManager />}
         {activeTab === 'users' && isSuperAdmin && <UserManager />}
       </div>
     </div>

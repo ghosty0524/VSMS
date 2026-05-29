@@ -1,4 +1,4 @@
-import type { Schedule, OptionsMap, User, AuditLog } from '../types'
+import type { Schedule, OptionsMap, Option, User, AuditLog } from '../types'
 
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -77,6 +77,14 @@ export const api = {
       : ''
     return req<AuditLog[]>('GET', `/audit${qs}`)
   },
+
+  // ── Devices ───────────────────────────────────────────
+  createDevice: (data: { value: string; label: string; sortOrder: number }) =>
+    req<Option>('POST', '/options/devices', data),
+  updateDevice: (id: string, data: { label?: string; isActive?: boolean; sortOrder?: number }) =>
+    req<Option>('PUT', `/options/devices/${id}`, data),
+  deleteDevice: (id: string) =>
+    req<{ ok: boolean }>('DELETE', `/options/devices/${id}`),
 
   // ── Dashboard export ──────────────────────────────────
   exportDashboard: () =>

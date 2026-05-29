@@ -47,6 +47,7 @@ export interface OptionsMap {
   categories: Option[]
   testUnits: TestUnitOption[]
   restDays: RestDaysConfig
+  devices: Option[]
 }
 
 export interface User {

@@ -72,4 +72,5 @@ export const DEFAULT_OPTIONS: OptionsMap = {
     },
   ] as TestUnitOption[],
   restDays: { weekends: true, specificDates: [] },
+  devices: [],
 }
