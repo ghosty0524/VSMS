@@ -39,14 +39,6 @@ function canAccessUnit(allowedUnits: string[] | null, testUnit: string): boolean
 router.get('/', async (req, res) => {
   const schedules = await prisma.schedule.findMany({ orderBy: { createdAt: 'asc' } })
   const mapped = schedules.map(toSchedule)
-
-  if (req.session.role === 'user') {
-    const user = await prisma.user.findUnique({ where: { username: req.session.username ?? '' } })
-    const engineer = user?.linkedEngineer ?? ''
-    res.json(mapped.filter(s => s.testEngineer === engineer))
-    return
-  }
-
   res.json(mapped)
 })
 

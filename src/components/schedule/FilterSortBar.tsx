@@ -47,6 +47,7 @@ export interface FilterSortState {
   sortRules:     SortRule[]
   ganttStart:    string
   ganttEnd:      string
+  showAllUnits:  boolean   // ★ NEW
 }
 
 export const EMPTY_FILTER: FilterSortState = {
@@ -54,6 +55,7 @@ export const EMPTY_FILTER: FilterSortState = {
   keyword: '',
   sortRules: [...DEFAULT_SORT_RULES],
   ganttStart: '', ganttEnd: '',
+  showAllUnits: false,   // ★ NEW
 }
 
 const ALL_STATUSES: ScheduleStatus[] = ['Completed', 'Delayed', 'Testing', 'Planned']
@@ -69,9 +71,10 @@ interface Props {
   onChange:         (v: FilterSortState) => void
   collapsed:        boolean
   onToggleCollapse: () => void
+  role:             'super_admin' | 'admin' | 'user' | null   // ★ NEW
 }
 
-export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse }: Props) {
+export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, role }: Props) {
   const { options } = useOptionsStore()
   const [addOpen, setAddOpen] = useState(false)
   const addRef = useRef<HTMLDivElement>(null)
@@ -336,6 +339,26 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse }: 
 
             {/* 分隔線 */}
             <div className="w-px h-5 bg-stone-300 hidden sm:block" />
+
+            {/* ★ 顯示所有單位切換 (User 專屬) */}
+            {role === 'user' && (
+              <button
+                type="button"
+                onClick={() => {
+                  const next = { ...value, showAllUnits: !value.showAllUnits }
+                  localStorage.setItem('vsms-show-all-units', String(next.showAllUnits))
+                  onChange(next)
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full border transition-colors
+                  ${value.showAllUnits
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                  }`}
+              >
+                <span>👁</span>
+                {value.showAllUnits ? '所有單位 ✓' : '顯示所有單位'}
+              </button>
+            )}
 
             {/* 清除篩選 */}
             <button type="button" onClick={() => onChange(EMPTY_FILTER)}

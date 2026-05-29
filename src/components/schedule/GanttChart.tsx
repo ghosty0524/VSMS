@@ -102,8 +102,17 @@ function getWorkDayOffset(
 }
 
 // ★ 多層排序
-function applyFilter(schedules: Schedule[], fs: FilterSortState): Schedule[] {
+function applyFilter(
+  schedules: Schedule[],
+  fs: FilterSortState,
+  role: 'super_admin' | 'admin' | 'user' | null,
+  allowedUnits: string[],
+): Schedule[] {
   let result = schedules.filter(s => {
+    // ★ User allowedUnits filter (when showAllUnits is false and allowedUnits is non-empty)
+    if (role === 'user' && !fs.showAllUnits && allowedUnits.length > 0) {
+      if (!allowedUnits.includes(s.testUnit)) return false
+    }
     if (fs.categories.length    && !fs.categories.includes(s.category))       return false
     if (fs.testUnits.length     && !fs.testUnits.includes(s.testUnit))         return false
     if (fs.testEngineers.length && !fs.testEngineers.includes(s.testEngineer)) return false
@@ -151,8 +160,11 @@ export function GanttChart({
 }: Props) {
   const { schedules, remove } = useScheduleStore()
   const { options }           = useOptionsStore()
-  const { role }              = useAuthStore()
-  const [filterSort, setFilterSort]     = useState<FilterSortState>(EMPTY_FILTER)
+  const { role, allowedUnits } = useAuthStore()
+  const [filterSort, setFilterSort]     = useState<FilterSortState>(() => ({
+    ...EMPTY_FILTER,
+    showAllUnits: localStorage.getItem('vsms-show-all-units') === 'true',
+  }))
   const [editTarget, setEditTarget]     = useState<Schedule | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null)
   const [tooltip, setTooltip]           = useState<{ x: number; y: number; s: Schedule } | null>(null)
@@ -207,7 +219,7 @@ export function GanttChart({
   const rafRef         = useRef<number | null>(null)
 
   const allUnits  = options.testUnits.map(u => u.value)
-  const filtered  = applyFilter(schedules, filterSort)
+  const filtered  = applyFilter(schedules, filterSort, role, allowedUnits)
 
   // ── 時間軸範圍計算 ────────────────────────────────────
   const allScheduleDates = schedules.flatMap(s => [parseDate(s.startDate), parseDate(s.endDate)])
@@ -267,7 +279,8 @@ export function GanttChart({
     return (
       <>
         <FilterSortBar value={filterSort} onChange={setFilterSort}
-          collapsed={filterCollapsed} onToggleCollapse={onToggleFilter} />
+          collapsed={filterCollapsed} onToggleCollapse={onToggleFilter}
+          role={role} />
         <div className="flex-1 flex items-center justify-center bg-white rounded-lg shadow m-4">
           <div className="text-center text-gray-400">
             <div className="text-5xl mb-4">📋</div>
@@ -323,7 +336,8 @@ export function GanttChart({
   return (
     <div className="h-full flex flex-col bg-white rounded-lg shadow overflow-hidden">
       <FilterSortBar value={filterSort} onChange={setFilterSort}
-        collapsed={filterCollapsed} onToggleCollapse={onToggleFilter} />
+        collapsed={filterCollapsed} onToggleCollapse={onToggleFilter}
+        role={role} />
 
       {/* ── 圖例 ── */}
       <div className="flex-shrink-0 flex flex-wrap gap-4 px-4 py-2.5 border-b bg-white">
