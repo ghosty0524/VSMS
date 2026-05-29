@@ -51,6 +51,7 @@ export interface FilterSortState {
   showAllUnits:   boolean
   showUserFlagged:  boolean   // ★ only show schedules with userFlag = true
   showAdminFlagged: boolean   // ★ only show schedules with adminFlag = true (Admin/SA only)
+  devices:          string[]  // ★ 設備視角的設備篩選（未勾選 = 顯示全部）
 }
 
 export const EMPTY_FILTER: FilterSortState = {
@@ -61,6 +62,7 @@ export const EMPTY_FILTER: FilterSortState = {
   showAllUnits: false,
   showUserFlagged: false,
   showAdminFlagged: false,
+  devices: [],
 }
 
 const ALL_STATUSES: ScheduleStatus[] = ['Completed', 'Delayed', 'Testing', 'Planned']
@@ -76,10 +78,11 @@ interface Props {
   onChange:         (v: FilterSortState) => void
   collapsed:        boolean
   onToggleCollapse: () => void
-  role:             'super_admin' | 'admin' | 'user' | null   // ★ NEW
+  role:             'super_admin' | 'admin' | 'user' | null
+  groupBy?:         'engineer' | 'device'
 }
 
-export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, role }: Props) {
+export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, role, groupBy = 'engineer' }: Props) {
   const { options } = useOptionsStore()
   const [addOpen, setAddOpen] = useState(false)
   const addRef = useRef<HTMLDivElement>(null)
@@ -143,7 +146,8 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
     (value.keyword ? 1 : 0) + (value.ganttStart ? 1 : 0) + (value.ganttEnd ? 1 : 0) +
     (role === 'user' && value.showAllUnits ? 1 : 0) +
     (value.showUserFlagged ? 1 : 0) +
-    (value.showAdminFlagged ? 1 : 0)
+    (value.showAdminFlagged ? 1 : 0) +
+    (value.devices.length)
 
   const hasGanttRange = !!(value.ganttStart || value.ganttEnd)
 
@@ -190,6 +194,16 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
               selected={value.testEngineers} onChange={testEngineers => set({ testEngineers })} />
             <MultiSelectDropdown label="狀態" options={ALL_STATUSES}
               selected={value.statuses} onChange={statuses => set({ statuses: statuses as ScheduleStatus[] })} />
+
+            {/* 設備篩選（只在設備視角顯示） */}
+            {groupBy === 'device' && (options.devices ?? []).filter(d => d.isActive).length > 0 && (
+              <MultiSelectDropdown
+                label="設備"
+                options={(options.devices ?? []).filter(d => d.isActive).map(d => d.value)}
+                selected={value.devices}
+                onChange={devices => set({ devices })}
+              />
+            )}
 
             {/* 關鍵字 */}
             <div className="flex flex-col gap-1">

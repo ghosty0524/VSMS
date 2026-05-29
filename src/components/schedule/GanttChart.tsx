@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange } from 'lucide-react'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
@@ -184,6 +184,10 @@ export function GanttChart({
   // Fix 4: stable close handler to avoid re-registering mousedown listener
   const closeFlagPopover = useCallback(() => setFlagPopover(null), [])
 
+  const [groupBy, setGroupBy] = useState<'engineer' | 'device'>(() =>
+    (localStorage.getItem('vsms-gantt-group-by') as 'engineer' | 'device') ?? 'engineer'
+  )
+
   const [leftWidth, setLeftWidth] = useState<number>(() => {
     const saved = sessionStorage.getItem('ganttLeftWidth')
     const n = Number(saved)
@@ -235,6 +239,23 @@ export function GanttChart({
 
   const allUnits  = options.testUnits.map(u => u.value)
   const filtered  = applyFilter(schedules, filterSort, role, allowedUnits)
+
+  // ── 設備視角 rows ──────────────────────────────────────
+  const deviceRows = useMemo(() => {
+    if (groupBy !== 'device') return []
+    const allDevices = (options.devices ?? [])
+      .filter(d => d.isActive)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+    const activeDeviceValues = filterSort.devices.length > 0
+      ? filterSort.devices
+      : allDevices.map(d => d.value)
+    return allDevices
+      .filter(d => activeDeviceValues.includes(d.value))
+      .map(d => ({
+        device: d,
+        schedules: filtered.filter(s => s.device === d.value),
+      }))
+  }, [groupBy, options.devices, filtered, filterSort.devices])
 
   // ── 時間軸範圍計算 ────────────────────────────────────
   const allScheduleDates = schedules.flatMap(s => [parseDate(s.startDate), parseDate(s.endDate)])
@@ -297,7 +318,7 @@ export function GanttChart({
       <>
         <FilterSortBar value={filterSort} onChange={setFilterSort}
           collapsed={filterCollapsed} onToggleCollapse={onToggleFilter}
-          role={role} />
+          role={role} groupBy={groupBy} />
         <div className="flex-1 flex items-center justify-center bg-white rounded-lg shadow m-4">
           <div className="text-center text-gray-400">
             <div className="text-5xl mb-4">📋</div>
@@ -354,7 +375,7 @@ export function GanttChart({
     <div className="h-full flex flex-col bg-white rounded-lg shadow overflow-hidden">
       <FilterSortBar value={filterSort} onChange={setFilterSort}
         collapsed={filterCollapsed} onToggleCollapse={onToggleFilter}
-        role={role} />
+        role={role} groupBy={groupBy} />
 
       {/* ── 圖例 ── */}
       <div className="flex-shrink-0 flex flex-wrap gap-4 px-4 py-2.5 border-b bg-white">
@@ -390,13 +411,203 @@ export function GanttChart({
             </span>
           )}
         </div>
-        <span className="text-slate-400 text-sm">
-          {ganttCollapsed ? '▼ 展開' : '▲ 收合'}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* ★ 分組切換按鈕 */}
+          <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-medium"
+            onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => {
+                setGroupBy('engineer')
+                localStorage.setItem('vsms-gantt-group-by', 'engineer')
+              }}
+              className={`px-2.5 py-1 transition-colors ${
+                groupBy === 'engineer'
+                  ? 'bg-slate-600 text-white'
+                  : 'bg-white text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              按工程師
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGroupBy('device')
+                localStorage.setItem('vsms-gantt-group-by', 'device')
+              }}
+              className={`px-2.5 py-1 transition-colors border-l border-slate-300 ${
+                groupBy === 'device'
+                  ? 'bg-slate-600 text-white'
+                  : 'bg-white text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              按設備
+            </button>
+          </div>
+          <span className="text-slate-400 text-sm">
+            {ganttCollapsed ? '▼ 展開' : '▲ 收合'}
+          </span>
+        </div>
       </div>
 
       {/* ══ 甘特圖主體（四象限凍結窗格） ══ */}
       {!ganttCollapsed && (
+        groupBy === 'device' ? (
+          // ── 設備視角 ──────────────────────────────────────────
+          deviceRows.length === 0 ? (
+            <div className="p-10 text-center text-gray-400 text-sm">尚無設備，請至設定頁新增</div>
+          ) : (
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
+              {/* 上排 Header */}
+              <div className="flex-shrink-0 flex" style={{ height: HEADER_H }}>
+                <div className="shrink-0 border-r relative"
+                  style={{ width: leftWidth, height: HEADER_H }} onWheel={forwardWheelToBody}>
+                  <svg width={leftWidth} height={HEADER_H} className="block">
+                    <rect x={0} y={0} width={leftWidth} height={HEADER_H} fill="#e2e8f0" />
+                    <text x={12} y={HEADER_MONTH / 2 + 6} fontSize={13} fill="#334155" fontWeight="700">設備視角</text>
+                    <line x1={0} y1={HEADER_MONTH} x2={leftWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
+                    <line x1={0} y1={HEADER_MONTH + HEADER_WEEK} x2={leftWidth} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
+                    <line x1={0} y1={HEADER_H - 1} x2={leftWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
+                  </svg>
+                </div>
+                <div ref={rightHeaderRef} className="flex-1 overflow-hidden" onWheel={forwardWheelToBody}>
+                  <svg width={svgWidth} height={HEADER_H} className="block">
+                    <rect x={0} y={0} width={svgWidth} height={HEADER_H} fill="#f1f5f9" />
+                    <line x1={0} y1={HEADER_MONTH} x2={svgWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
+                    <line x1={0} y1={HEADER_MONTH + HEADER_WEEK} x2={svgWidth} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
+                    <line x1={0} y1={HEADER_H - 1} x2={svgWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
+                    {monthLabels.map((ml) => (
+                      <g key={ml.label}>
+                        <line x1={ml.x} y1={0} x2={ml.x} y2={HEADER_H} stroke="#cbd5e1" strokeWidth={1} />
+                        <text x={ml.x + 5} y={HEADER_MONTH / 2 + 6} fontSize={12} fill="#334155" fontWeight="700">{ml.label}</text>
+                      </g>
+                    ))}
+                    {weekTicks.map((t) => (
+                      <g key={t.label}>
+                        <line x1={t.x} y1={HEADER_MONTH} x2={t.x} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
+                        <text x={t.x + 2} y={HEADER_MONTH + HEADER_WEEK / 2 + 5} fontSize={10} fill="#64748b" fontWeight="600">{t.label}</text>
+                      </g>
+                    ))}
+                    {dayLabelItems.map((d) => (
+                      <g key={`day-${d.x}`}>
+                        <line x1={d.x} y1={HEADER_MONTH + HEADER_WEEK} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
+                        {PX_PER_DAY >= 16 && (
+                          <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_WEEK + HEADER_DAY / 2 + 5}
+                            fontSize={10} fill={d.isRest ? '#ef4444' : '#64748b'} textAnchor="middle"
+                            fontWeight={d.isRest ? '700' : '400'}>{d.label}</text>
+                        )}
+                      </g>
+                    ))}
+                    {today >= timelineStart && today <= timelineEnd && (
+                      <>
+                        <line x1={todayX} y1={0} x2={todayX} y2={HEADER_H} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4 3" />
+                        <rect x={todayX - 1} y={4} width={28} height={14} rx={3} fill="#ef4444" />
+                        <text x={todayX + 3} y={14} fontSize={10} fill="#ffffff" fontWeight="600">今日</text>
+                      </>
+                    )}
+                  </svg>
+                </div>
+              </div>
+
+              {/* 下排 */}
+              <div className="flex-1 min-h-0 flex overflow-hidden">
+                {/* 左下：設備名稱列 */}
+                <div className="shrink-0 border-r bg-white overflow-hidden"
+                  style={{ width: leftWidth }} onWheel={forwardWheelToBody}>
+                  <div ref={leftBodyRef} style={{ willChange: 'transform' }}>
+                    {deviceRows.map(({ device: dev, schedules: devSchedules }, i) => {
+                      const evenFill = i % 2 === 0 ? '#ffffff' : '#f8fafc'
+                      return (
+                        <div key={dev.id} className="relative border-b flex items-center px-3"
+                          style={{ height: ROW_H, background: evenFill }}>
+                          <span className="text-[13px] font-semibold text-slate-800">{dev.label}</span>
+                          <span className="ml-2 text-xs text-gray-400">
+                            {devSchedules.length > 0 ? `${devSchedules.length} 筆` : '（空）'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* 右下：Bar 區 */}
+                <div ref={rightBodyRef} className="flex-1 overflow-auto" onScroll={handleRightBodyScroll}>
+                  <svg width={svgWidth} height={deviceRows.length * ROW_H} className="block">
+                    <rect x={0} y={0} width={svgWidth} height={deviceRows.length * ROW_H} fill="#ffffff" />
+                    {restDayBgs.map(({ x }) => (
+                      <rect key={`rd-${x}`} x={x} y={0} width={PX_PER_DAY} height={deviceRows.length * ROW_H} fill="rgba(0,0,0,0.085)" />
+                    ))}
+                    {monthLabels.map((ml) => (
+                      <line key={`ml-${ml.x}`} x1={ml.x} y1={0} x2={ml.x} y2={deviceRows.length * ROW_H} stroke="#cbd5e1" strokeWidth={1} />
+                    ))}
+                    {deviceRows.map(({ device: dev, schedules: devSchedules }, rowIdx) => {
+                      const y = rowIdx * ROW_H
+                      const evenFillAlpha = rowIdx % 2 === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(248,250,252,0.5)'
+                      return (
+                        <g key={dev.id}>
+                          <rect x={0} y={y} width={svgWidth} height={ROW_H} fill={evenFillAlpha} />
+                          <line x1={0} y1={y + ROW_H} x2={svgWidth} y2={y + ROW_H} stroke="#e2e8f0" strokeWidth={1} />
+                          {devSchedules.map((s) => {
+                            const sDate = parseDate(s.startDate)
+                            const eDate = parseDate(s.endDate)
+                            const barX = daysBetween(timelineStart, sDate) * PX_PER_DAY
+                            const totalBarDays = daysBetween(sDate, eDate) + 1
+                            const barW = Math.max(totalBarDays * PX_PER_DAY, 6)
+                            const color = getUnitColor(s.testUnit, allUnits)
+                            const barY = y + Math.floor((ROW_H - 22) / 2)
+                            const workDayOffset = getWorkDayOffset(sDate, s.timeResource, restDayConfig)
+                            const hasOverflow = totalBarDays > workDayOffset && workDayOffset > 0
+                            const overflowX = barX + workDayOffset * PX_PER_DAY
+                            return (
+                              <g key={s.id}>
+                                {hasOverflow ? (
+                                  <>
+                                    <rect x={barX} y={barY} width={workDayOffset * PX_PER_DAY} height={22} rx={4} fill={color} opacity={0.85}
+                                      style={{ cursor: 'pointer' }}
+                                      onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
+                                      onMouseLeave={() => setTooltip(null)} />
+                                    <rect x={overflowX} y={barY} width={barW - workDayOffset * PX_PER_DAY} height={22} rx={4} fill={OVERFLOW_COLOR} opacity={0.85}
+                                      style={{ cursor: 'pointer' }}
+                                      onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
+                                      onMouseLeave={() => setTooltip(null)} />
+                                  </>
+                                ) : (
+                                  <rect x={barX} y={barY} width={barW} height={22} rx={4} fill={color} opacity={0.85}
+                                    style={{ cursor: 'pointer' }}
+                                    onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
+                                    onMouseLeave={() => setTooltip(null)} />
+                                )}
+                                {barW > 30 && (
+                                  <text x={barX + 5} y={barY + 15} fontSize={10} fill="#ffffff" fontWeight="600"
+                                    style={{ pointerEvents: 'none' }}>
+                                    {s.testEngineer}
+                                  </text>
+                                )}
+                              </g>
+                            )
+                          })}
+                          {today >= timelineStart && today <= timelineEnd && (
+                            <line x1={todayX} y1={y} x2={todayX} y2={y + ROW_H} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4 3" />
+                          )}
+                        </g>
+                      )
+                    })}
+                  </svg>
+                </div>
+              </div>
+
+              {/* ── 拖曳把手 ── */}
+              <div
+                className="absolute top-0 bottom-0 z-10 cursor-col-resize group"
+                style={{ left: leftWidth - 3, width: 6 }}
+                onMouseDown={handleResizeStart}
+              >
+                <div className="w-full h-full bg-slate-200 group-hover:bg-blue-400 transition-colors duration-150" />
+              </div>
+            </div>
+          )
+        ) : (
+        // ── 工程師視角 ──────────────────────────────────────────
         filtered.length === 0 ? (
           <div className="p-10 text-center text-gray-400 text-sm">無符合篩選條件的排程</div>
         ) : (
@@ -657,6 +868,7 @@ export function GanttChart({
               <div className="w-full h-full bg-slate-200 group-hover:bg-blue-400 transition-colors duration-150" />
             </div>
           </div>
+        )
         )
       )}
 
