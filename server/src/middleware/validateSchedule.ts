@@ -20,6 +20,12 @@ export function validateSchedule(req: Request, res: Response, next: NextFunction
   const body = req.body as Record<string, unknown>
   const errors: Record<string, string> = {}
 
+  // ★ Flag/device-only updates bypass required-field validation
+  const coreFields = ['projectName', 'taskDescription', 'testUnit', 'testEngineer',
+    'timeResource', 'startDate', 'endDate', 'requiredPersonnel', 'category']
+  const hasCoreField = Object.keys(body).some(k => coreFields.includes(k))
+  if (!hasCoreField) { next(); return }
+
   // projectName: required, max 100
   if (!body.projectName || typeof body.projectName !== 'string' || body.projectName.trim() === '') {
     errors.projectName = '專案名稱為必填'

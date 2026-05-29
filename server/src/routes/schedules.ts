@@ -175,14 +175,15 @@ router.put('/:id', validateSchedule, async (req, res) => {
       where: { id: scheduleId },
       data: { ...safeBody, testEngineer: engineer, updatedBy: username, updatedAt: new Date() },
     })
-    const flagChanged = changedFields.some(f => ['userFlag', 'userFlagNote'].includes(f))
-    if (flagChanged) {
-      await appendAudit(username, displayName, 'FLAG_SCHEDULE', existing.projectName,
-        changedFields.filter(f => ['userFlag', 'userFlagNote'].includes(f)))
+    const userFlagFields = ['userFlag', 'userFlagNote']
+    const isFlagOnly = changedFields.length > 0 && changedFields.every(f => userFlagFields.includes(f))
+    if (isFlagOnly) {
+      await appendAudit(username, displayName, 'FLAG_SCHEDULE', existing.projectName, changedFields)
     } else {
       await appendAudit(username, displayName, 'UPDATE_SCHEDULE', scheduleId, changedFields)
     }
-    res.json(toSchedule(updated))
+    const { adminFlag: _af2, adminFlagNote: _afn2, ...safeResp } = toSchedule(updated)
+    res.json(safeResp)
     return
   }
 
