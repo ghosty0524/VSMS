@@ -114,6 +114,9 @@ function applyFilter(schedules: Schedule[], fs: FilterSortState): Schedule[] {
         .join(' ').toLowerCase()
       if (!target.includes(kw)) return false
     }
+    // ★ 時間篩選：移除與設定範圍無重疊的排程
+    if (fs.ganttStart && s.endDate < fs.ganttStart) return false
+    if (fs.ganttEnd   && s.startDate > fs.ganttEnd) return false
     return true
   })
 
