@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 model Schedule {
@@ -26,6 +25,11 @@ model Schedule {
   updatedBy         String   @db.VarChar(100)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  adminFlag         Boolean  @default(false)
+  adminFlagNote     String   @db.VarChar(500) @default("")
+  userFlag          Boolean  @default(false)
+  userFlagNote      String   @db.VarChar(500) @default("")
+  device            String   @db.VarChar(100) @default("")
 
   @@index([testUnit])
   @@index([isCompleted, isDelayed])
@@ -138,4 +142,14 @@ model CalendarConfig {
   updatedAt          DateTime @updatedAt
 
   @@map("calendar_config")
+}
+
+model Device {
+  id        String  @id @default(uuid())
+  value     String  @db.VarChar(100) @unique
+  label     String  @db.VarChar(100)
+  isActive  Boolean @default(true)
+  sortOrder Int
+
+  @@map("devices")
 }
