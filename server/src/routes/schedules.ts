@@ -18,11 +18,17 @@ function toSchedule(s: {
   testReport: string; isCompleted: boolean; isDelayed: boolean;
   delayReason: string; createdBy: string; updatedBy: string;
   createdAt: Date; updatedAt: Date;
-  adminFlag: boolean; adminFlagNote: string;
-  userFlag: boolean; userFlagNote: string;
+  adminFlag: boolean; adminFlagNote: string | null;
+  userFlag: boolean; userFlagNote: string | null;
   device: string;
 }): Schedule {
-  return { ...s, createdAt: s.createdAt.toISOString(), updatedAt: s.updatedAt.toISOString() }
+  return {
+    ...s,
+    adminFlagNote: s.adminFlagNote ?? '',
+    userFlagNote:  s.userFlagNote  ?? '',
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+  }
 }
 
 async function getAllowedUnits(username: string): Promise<string[] | null> {

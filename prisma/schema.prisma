@@ -26,9 +26,9 @@ model Schedule {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   adminFlag         Boolean  @default(false)
-  adminFlagNote     String   @db.VarChar(500) @default("")
+  adminFlagNote     String?  @db.Text
   userFlag          Boolean  @default(false)
-  userFlagNote      String   @db.VarChar(500) @default("")
+  userFlagNote      String?  @db.Text
   device            String   @db.VarChar(100) @default("")
 
   @@index([testUnit])

@@ -848,6 +848,12 @@ export function GanttChart({
                             onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
                             onMouseLeave={() => setTooltip(null)} />
                         )}
+                        {barW > 30 && (
+                          <text x={barX + 5} y={barY + 15} fontSize={10} fill="#ffffff" fontWeight="600"
+                            style={{ pointerEvents: 'none' }}>
+                            {s.testEngineer}
+                          </text>
+                        )}
                       </g>
                     )
                   })}
@@ -873,7 +879,7 @@ export function GanttChart({
       )}
 
       {/* ── Tooltip ── */}
-      {tooltip && (
+      {tooltip && !flagPopover && (
         <div className="fixed z-50 pointer-events-none" style={getTooltipPosition(tooltip.x, tooltip.y)}>
           <div className="bg-slate-800 text-white rounded-xl shadow-2xl px-4 py-3 max-w-xs text-sm leading-relaxed">
             <div className="font-bold text-base mb-1.5 text-white">{tooltip.s.projectName}</div>

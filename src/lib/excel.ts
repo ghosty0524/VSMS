@@ -18,6 +18,11 @@ export interface ImportRow {
   isCompleted?: unknown
   isDelayed?: unknown
   delayReason?: unknown
+  device?: unknown
+  adminFlag?: unknown
+  adminFlagNote?: unknown
+  userFlag?: unknown
+  userFlagNote?: unknown
 }
 
 export interface ImportError { row: number; messages: string[] }
@@ -64,6 +69,11 @@ export function parseImportRows(rows: ImportRow[]): ImportResult {
     const isCompleted = parseBool(r.isCompleted)
     const isDelayed = parseBool(r.isDelayed)
     const delayReason = str(r.delayReason)
+    const device = str(r.device)
+    const adminFlag = parseBool(r.adminFlag)
+    const adminFlagNote = str(r.adminFlagNote)
+    const userFlag = parseBool(r.userFlag)
+    const userFlagNote = str(r.userFlagNote)
     if (!category) msgs.push('category 為必填')
     if (!projectName) msgs.push('projectName 為必填')
     if (!testUnit) msgs.push('testUnit 為必填')
@@ -80,7 +90,8 @@ export function parseImportRows(rows: ImportRow[]): ImportResult {
     if (msgs.length > 0) { errors.push({ row: rowNum, messages: msgs }); return }
     valid.push({ category, projectName, taskDescription, testUnit, testEngineer,
       timeResource: trNum, startDate, endDate, requiredPersonnel, testReport,
-      isCompleted, isDelayed, delayReason })
+      isCompleted, isDelayed, delayReason,
+      device, adminFlag, adminFlagNote, userFlag, userFlagNote })
   })
   return { valid, errors }
 }
@@ -105,20 +116,13 @@ export function parseImportFile(file: File): Promise<ImportResult> {
 // ─── 匯出範本 & 排程 ─────────────────────────────────────────
 const HEADERS = ['category','projectName','taskDescription','testUnit','testEngineer',
   'timeResource','startDate','endDate','requiredPersonnel','testReport',
-  'isCompleted','isDelayed','delayReason']
-
-function applyDateFmt(ws: XLSX.WorkSheet, rowCount: number) {
-  for (let row = 1; row <= rowCount; row++) {
-    for (const col of [6, 7]) {
-      const addr = XLSX.utils.encode_cell({ r: row, c: col })
-      if (ws[addr]) ws[addr].z = 'yyyy/mm/dd'
-    }
-  }
-}
+  'isCompleted','isDelayed','delayReason',
+  'device','adminFlag','adminFlagNote','userFlag','userFlagNote']
 
 export function downloadTemplate(): void {
   const example = ['NPI','示範專案','工作內容說明','SIT-HW','Eric',5,
-    '2026/05/01', '2026/05/31','需求人員名稱','測試報告連結','FALSE','FALSE','']
+    '2026/05/01', '2026/05/31','需求人員名稱','測試報告連結','FALSE','FALSE','',
+    '','FALSE','','FALSE','']
   const ws = XLSX.utils.aoa_to_sheet([HEADERS, example])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Schedule')
@@ -137,6 +141,9 @@ export function exportSchedules(schedules: Schedule[], selectedUnits?: string[])
     s.endDate,
     s.requiredPersonnel, s.testReport,
     s.isCompleted ? 'TRUE' : 'FALSE', s.isDelayed ? 'TRUE' : 'FALSE', s.delayReason,
+    s.device ?? '',
+    s.adminFlag ? 'TRUE' : 'FALSE', s.adminFlagNote ?? '',
+    s.userFlag ? 'TRUE' : 'FALSE', s.userFlagNote ?? '',
   ])
   const ws = XLSX.utils.aoa_to_sheet([HEADERS, ...rows])
   const wb = XLSX.utils.book_new()
@@ -224,18 +231,23 @@ export async function generateAgentExcel(schedules: Schedule[]): Promise<void> {
   })
 
   ws1.columns = [
-    { key: 'status',            header: '狀態',          width: 12 },
-    { key: 'category',          header: '工作類別',      width: 14 },
-    { key: 'projectName',       header: '專案名稱',      width: 28 },
-    { key: 'taskDescription',   header: '工作內容',      width: 36 },
-    { key: 'testUnit',          header: '測試單位',      width: 12 },
-    { key: 'testEngineer',      header: '測試人員',      width: 12 },
-    { key: 'startDate',         header: '起始日期',      width: 14 },
-    { key: 'endDate',           header: '完成日期',      width: 14 },
-    { key: 'requiredPersonnel', header: '需求人員',      width: 20 },
-    { key: 'testReport',        header: '測試報告',      width: 30 },
-    { key: 'delayReason',       header: '延遲原因',      width: 30 },
-    { key: 'timeResource',      header: '時間資源(Day)', width: 16 },
+    { key: 'status',            header: '狀態',            width: 12 },
+    { key: 'category',          header: '工作類別',        width: 14 },
+    { key: 'projectName',       header: '專案名稱',        width: 28 },
+    { key: 'taskDescription',   header: '工作內容',        width: 36 },
+    { key: 'testUnit',          header: '測試單位',        width: 12 },
+    { key: 'testEngineer',      header: '測試人員',        width: 12 },
+    { key: 'startDate',         header: '起始日期',        width: 14 },
+    { key: 'endDate',           header: '完成日期',        width: 14 },
+    { key: 'requiredPersonnel', header: '需求人員',        width: 20 },
+    { key: 'testReport',        header: '測試報告',        width: 30 },
+    { key: 'delayReason',       header: '延遲原因',        width: 30 },
+    { key: 'timeResource',      header: '時間資源(Day)',   width: 16 },
+    { key: 'device',            header: '設備',            width: 14 },
+    { key: 'adminFlag',         header: 'Admin 旗標',     width: 12 },
+    { key: 'adminFlagNote',     header: 'Admin 旗標備註', width: 24 },
+    { key: 'userFlag',          header: '用戶旗標',       width: 12 },
+    { key: 'userFlagNote',      header: '用戶旗標備註',   width: 24 },
   ]
 
   styleHeader(ws1.getRow(1))
@@ -254,6 +266,11 @@ export async function generateAgentExcel(schedules: Schedule[]): Promise<void> {
       testReport:        s.testReport,
       delayReason:       s.delayReason || '',
       timeResource:      s.timeResource,
+      device:            s.device || '',
+      adminFlag:         s.adminFlag ? '是' : '否',
+      adminFlagNote:     s.adminFlagNote || '',
+      userFlag:          s.userFlag ? '是' : '否',
+      userFlagNote:      s.userFlagNote || '',
     })
     styleDataRow(row, i % 2 === 0)
   })

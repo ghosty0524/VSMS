@@ -162,8 +162,9 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
     set({
       options: {
         ...get().options,
+        // ★ 只更新 label，不動 value（value 是識別碼，改名不應影響排程參照）
         devices: (get().options.devices ?? []).map(d =>
-          d.id === id ? { ...d, label, value: label } : d
+          d.id === id ? { ...d, label } : d
         ),
       },
     })

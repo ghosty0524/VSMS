@@ -1,5 +1,6 @@
 // src/components/schedule/FlagPopover.tsx
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface Props {
   flagged:   boolean
@@ -41,7 +42,9 @@ export function FlagPopover({ flagged, note, color, anchorEl, onSave, onRemove, 
   useLayoutEffect(() => {
     if (!anchorEl) return
     const rect = anchorEl.getBoundingClientRect()
-    setPos({ position: 'fixed', top: rect.bottom + 4, right: window.innerWidth - rect.right, zIndex: 9999 })
+    const POPOVER_W = 224 // w-56 = 14rem
+    const clampedLeft = Math.min(rect.left, window.innerWidth - POPOVER_W - 8)
+    setPos({ position: 'fixed', top: rect.bottom + 4, left: Math.max(8, clampedLeft), zIndex: 9999 })
   }, [anchorEl])
 
   // Fix 6: restore focus to anchor element when popover unmounts
@@ -72,8 +75,9 @@ export function FlagPopover({ flagged, note, color, anchorEl, onSave, onRemove, 
     finally { if (mountedRef.current) setSaving(false) }
   }
 
-  return (
-    // Fix 7: keyboard accessibility — Escape key, role, tabIndex
+  // Portal to document.body: bypasses any CSS-transform ancestors (willChange/translateY)
+  // that would otherwise hijack position:fixed and cause the popover to appear off-screen.
+  return createPortal(
     <div ref={ref}
       style={pos}
       onKeyDown={e => { if (e.key === 'Escape') onClose() }}
@@ -82,12 +86,11 @@ export function FlagPopover({ flagged, note, color, anchorEl, onSave, onRemove, 
       tabIndex={-1}
       className={`bg-white rounded-lg shadow-xl border ${borderColor} p-3 w-56`}
     >
-      {/* Fix 7: autoFocus on textarea */}
       <textarea
         autoFocus
         className="w-full border border-gray-300 rounded px-2 py-1 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
         rows={3}
-        maxLength={500}
+        maxLength={5000}
         placeholder="附註（選填）"
         value={inputNote}
         onChange={e => setInputNote(e.target.value)}
@@ -111,12 +114,12 @@ export function FlagPopover({ flagged, note, color, anchorEl, onSave, onRemove, 
             標記
           </button>
         )}
-        {/* Fix 6: removed disabled={saving} from Cancel so users can always close */}
         <button type="button" onClick={onClose}
           className="text-xs px-2.5 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-50">
           取消
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

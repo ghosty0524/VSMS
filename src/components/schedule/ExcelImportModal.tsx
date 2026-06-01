@@ -5,7 +5,7 @@ import type { ImportResult } from '../../lib/excel'
 import type { Schedule } from '../../types'
 
 interface FieldDiff {
-  field: 'testReport' | 'isCompleted' | 'isDelayed' | 'delayReason'
+  field: 'testReport' | 'isCompleted' | 'isDelayed' | 'delayReason' | 'device' | 'adminFlag' | 'adminFlagNote' | 'userFlag' | 'userFlagNote'
   label: string
   oldVal: string
   newVal: string
@@ -17,7 +17,14 @@ interface RecordDiff {
 }
 
 function computeDiffs(
-  incoming: Array<{ projectName: string; taskDescription: string; testEngineer: string; startDate: string; endDate: string; testReport: string; isCompleted: boolean; isDelayed: boolean; delayReason: string }>,
+  incoming: Array<{
+    projectName: string; taskDescription: string; testEngineer: string
+    startDate: string; endDate: string; testReport: string
+    isCompleted: boolean; isDelayed: boolean; delayReason: string
+    device: string
+    adminFlag: boolean; adminFlagNote: string
+    userFlag: boolean; userFlagNote: string
+  }>,
   existing: Schedule[]
 ): RecordDiff[] {
   const boolStr = (v: boolean) => (v ? '是' : '否')
@@ -40,6 +47,16 @@ function computeDiffs(
       diffs.push({ field: 'isDelayed', label: 'Delayed', oldVal: boolStr(match.isDelayed), newVal: boolStr(row.isDelayed) })
     if (row.delayReason !== match.delayReason)
       diffs.push({ field: 'delayReason', label: '延遲原因', oldVal: match.delayReason || '（空白）', newVal: row.delayReason || '（空白）' })
+    if (row.device !== (match.device ?? ''))
+      diffs.push({ field: 'device', label: '設備', oldVal: match.device || '（無）', newVal: row.device || '（無）' })
+    if (row.adminFlag !== (match.adminFlag ?? false))
+      diffs.push({ field: 'adminFlag', label: 'Admin 旗標', oldVal: boolStr(match.adminFlag ?? false), newVal: boolStr(row.adminFlag) })
+    if (row.adminFlagNote !== (match.adminFlagNote ?? ''))
+      diffs.push({ field: 'adminFlagNote', label: 'Admin 旗標備註', oldVal: match.adminFlagNote || '（空白）', newVal: row.adminFlagNote || '（空白）' })
+    if (row.userFlag !== (match.userFlag ?? false))
+      diffs.push({ field: 'userFlag', label: '用戶旗標', oldVal: boolStr(match.userFlag ?? false), newVal: boolStr(row.userFlag) })
+    if (row.userFlagNote !== (match.userFlagNote ?? ''))
+      diffs.push({ field: 'userFlagNote', label: '用戶旗標備註', oldVal: match.userFlagNote || '（空白）', newVal: row.userFlagNote || '（空白）' })
     if (diffs.length > 0)
       result.push({ projectName: match.projectName, taskDescription: row.taskDescription, diffs })
   }

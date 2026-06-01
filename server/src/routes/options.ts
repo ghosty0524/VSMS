@@ -129,7 +129,8 @@ router.put('/devices/:id', async (req, res) => {
   const updated = await prisma.device.update({
     where: { id },
     data: {
-      ...(label !== undefined && { label: label.trim(), value: label.trim() }),
+      // ★ 只更新 label，value 為識別碼保持不動（避免破壞 Schedule.device 參照）
+      ...(label !== undefined && { label: label.trim() }),
       ...(isActive !== undefined && { isActive }),
       ...(sortOrder !== undefined && { sortOrder }),
     },

@@ -157,6 +157,20 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
                 ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`} />
           ), true)}
 
+          {/* 設備（只在系統中有設備時顯示） */}
+          {activeDevices.length > 0 && field('設備', 'device', (
+            <select
+              value={form.device}
+              onChange={e => setForm(f => ({ ...f, device: e.target.value }))}
+              disabled={isUser}
+              className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
+                ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}
+            >
+              <option value="">（無）</option>
+              {activeDevices.map(d => <option key={d.id} value={d.value}>{d.label}</option>)}
+            </select>
+          ))}
+
           <div className="grid grid-cols-2 gap-4">
             {field('測試單位', 'testUnit', (
               <select value={form.testUnit} onChange={e => setForm(f => ({ ...f, testUnit: e.target.value, testEngineer: '' }))}
@@ -238,20 +252,6 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
               className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
             <label htmlFor="isDelayed" className="text-sm font-medium text-gray-700">Delayed（工作已延遲）</label>
           </div>
-
-          {/* 設備（只在系統中有設備時顯示） */}
-          {activeDevices.length > 0 && field('設備', 'device', (
-            <select
-              value={form.device}
-              onChange={e => setForm(f => ({ ...f, device: e.target.value }))}
-              disabled={isUser}
-              className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}
-            >
-              <option value="">（無）</option>
-              {activeDevices.map(d => <option key={d.id} value={d.value}>{d.label}</option>)}
-            </select>
-          ))}
 
           {/* F13 延遲原因 */}
           {form.isDelayed && field('延遲原因', 'delayReason', (
