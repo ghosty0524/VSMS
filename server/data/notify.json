@@ -1,6 +1,0 @@
-{
-  "enabled": false,
-  "teamsWebhookUrl": "",
-  "systemUrl": "http://localhost:3001",
-  "recipients": []
-}

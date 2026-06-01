@@ -28,3 +28,6 @@ dist-ssr
 # Environment files
 .env
 .env.local
+
+# Runtime data (generated at server startup, not source)
+server/data/
