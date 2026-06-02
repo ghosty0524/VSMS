@@ -108,11 +108,13 @@ function applyFilter(
   fs: FilterSortState,
   role: 'super_admin' | 'admin' | 'user' | null,
   allowedUnits: string[],
+  linkedEngineer: string,
 ): Schedule[] {
   let result = schedules.filter(s => {
-    // ★ User allowedUnits filter (when showAllUnits is false and allowedUnits is non-empty)
-    if (role === 'user' && !fs.showAllUnits && allowedUnits.length > 0) {
-      if (!allowedUnits.includes(s.testUnit)) return false
+    // ★ User 預設只看自己的排程（testEngineer === linkedEngineer）
+    //   按下「顯示所有」後才看全部；linkedEngineer 未設定時不過濾
+    if (role === 'user' && !fs.showAllUnits) {
+      if (linkedEngineer && s.testEngineer !== linkedEngineer) return false
     }
     if (fs.categories.length    && !fs.categories.includes(s.category))       return false
     if (fs.testUnits.length     && !fs.testUnits.includes(s.testUnit))         return false
@@ -171,11 +173,8 @@ export function GanttChart({
 }: Props) {
   const { schedules, remove, update } = useScheduleStore()
   const { options }           = useOptionsStore()
-  const { role, allowedUnits } = useAuthStore()
-  const [filterSort, setFilterSort]     = useState<FilterSortState>(() => ({
-    ...EMPTY_FILTER,
-    showAllUnits: localStorage.getItem('vsms-show-all-units') === 'true',
-  }))
+  const { role, allowedUnits, linkedEngineer } = useAuthStore()
+  const [filterSort, setFilterSort]     = useState<FilterSortState>(EMPTY_FILTER)
   const [editTarget, setEditTarget]     = useState<Schedule | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null)
   const [tooltip, setTooltip]           = useState<{ x: number; y: number; s: Schedule } | null>(null)
@@ -238,7 +237,7 @@ export function GanttChart({
   const rafRef         = useRef<number | null>(null)
 
   const allUnits  = options.testUnits.map(u => u.value)
-  const filtered  = applyFilter(schedules, filterSort, role, allowedUnits)
+  const filtered  = applyFilter(schedules, filterSort, role, allowedUnits, linkedEngineer)
 
   // ── 設備視角 rows ──────────────────────────────────────
   const deviceRows = useMemo(() => {
@@ -774,11 +773,13 @@ export function GanttChart({
                             )}
                           </div>
 
-                          {/* 現有編輯按鈕 */}
-                          <button type="button" title="編輯" onClick={() => setEditTarget(s)}
-                            className="w-[22px] h-[22px] flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors duration-100">
-                            <Pencil size={12} strokeWidth={2.5} />
-                          </button>
+                          {/* 編輯按鈕：user 只能編輯指派給自己的排程 */}
+                          {(role !== 'user' || s.testEngineer === linkedEngineer) && (
+                            <button type="button" title="編輯" onClick={() => setEditTarget(s)}
+                              className="w-[22px] h-[22px] flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors duration-100">
+                              <Pencil size={12} strokeWidth={2.5} />
+                            </button>
+                          )}
                           {role !== 'user' && (
                             <button type="button" title="刪除" onClick={() => setDeleteTarget(s)}
                               className="w-[22px] h-[22px] flex items-center justify-center rounded-md bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 transition-colors duration-100">

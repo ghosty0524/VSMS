@@ -368,11 +368,7 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
                 type="button"
                 aria-pressed={value.showAllUnits}
                 title="切換顯示所有單位"
-                onClick={() => {
-                  const next = { ...value, showAllUnits: !value.showAllUnits }
-                  localStorage.setItem('vsms-show-all-units', String(next.showAllUnits))
-                  onChange(next)
-                }}
+                onClick={() => onChange({ ...value, showAllUnits: !value.showAllUnits })}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full border transition-colors
                   ${value.showAllUnits
                     ? 'bg-blue-500 text-white border-blue-500'
@@ -417,10 +413,7 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
             )}
 
             {/* 清除篩選 */}
-            <button type="button" onClick={() => {
-              localStorage.setItem('vsms-show-all-units', 'false')
-              onChange(EMPTY_FILTER)
-            }}
+            <button type="button" onClick={() => onChange(EMPTY_FILTER)}
               className="inline-flex items-center gap-1 h-7 px-2.5
                          text-xs font-medium rounded-full
                          border border-red-200 text-red-500 bg-white

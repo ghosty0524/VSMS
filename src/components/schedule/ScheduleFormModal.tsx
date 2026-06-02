@@ -4,6 +4,7 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
+import { ApiError } from '../../lib/api'
 import { MIN_DATE, FIELD_LIMITS } from '../../constants'
 import type { Schedule, ScheduleFormValues } from '../../types'
 
@@ -39,8 +40,10 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
   const [form, setForm] = useState<ScheduleFormValues>(EMPTY)
   const [errors, setErrors] = useState<Partial<Record<keyof ScheduleFormValues, string>>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   useEffect(() => {
+    setSubmitError('')
     if (schedule) {
       setForm({
         category: schedule.category, projectName: schedule.projectName,
@@ -109,6 +112,12 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
       if (schedule) await update(schedule.id, data)
       else await add(data)
       onClose()
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setSubmitError('您只能編輯指派給自己的排程')
+      } else {
+        setSubmitError('儲存失敗，請稍後再試')
+      }
     } finally { setSubmitting(false) }
   }
 
@@ -261,12 +270,18 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
           ), true)}
         </div>
-        <div className="flex justify-end gap-2 p-4 border-t">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
-          <button type="button" onClick={handleSave} disabled={submitting}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-            {submitting ? '儲存中…' : '儲存'}
-          </button>
+        <div className="flex items-center justify-between gap-2 p-4 border-t">
+          {submitError
+            ? <p className="text-sm text-red-600 flex-1">{submitError}</p>
+            : <span />
+          }
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
+            <button type="button" onClick={handleSave} disabled={submitting}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {submitting ? '儲存中…' : '儲存'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -41,7 +41,11 @@
       "PowerShell(New-Item -ItemType Directory -Force -Path \"F:\\\\vsms\\\\vsms-export\\\\docs\\\\superpowers\\\\specs\")",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(grep -n \"拖曳把手\\\\|\\\\/\\\\/ ── Tooltip\\\\|\\)$\" src/components/schedule/GanttChart.tsx)"
+      "Bash(grep -n \"拖曳把手\\\\|\\\\/\\\\/ ── Tooltip\\\\|\\)$\" src/components/schedule/GanttChart.tsx)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(git rm *)",
+      "Bash(git config *)"
     ],
     "additionalDirectories": [
       "f:\\vsms\\vsms-export\\docs\\superpowers\\specs"
