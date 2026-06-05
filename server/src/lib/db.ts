@@ -16,7 +16,11 @@ function parseDbUrl(raw: string) {
 
 function createPrisma() {
   // PrismaMariaDb is a factory — pass connection config (not a pre-built pool)
-  const adapter = new PrismaMariaDb(parseDbUrl(process.env.DATABASE_URL!))
+  // allowPublicKeyRetrieval: MySQL 8+ uses caching_sha2_password which requires RSA key exchange
+  const adapter = new PrismaMariaDb({
+    ...parseDbUrl(process.env.DATABASE_URL!),
+    allowPublicKeyRetrieval: true,
+  })
   return new PrismaClient({ adapter })
 }
 
