@@ -3,6 +3,7 @@ import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange } from 'lucide-rea
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
+import { api } from '../../lib/api'
 import { getUnitColor, STATUS_COLORS, OVERFLOW_COLOR } from '../../constants'
 import { computeStatus } from '../../lib/status'
 import { isRestDay } from '../../lib/restDays'
@@ -11,7 +12,7 @@ import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { FlagPopover } from './FlagPopover'
 import type { FilterSortState, SortRule, SortableField } from './FilterSortBar'
-import type { Schedule } from '../../types'
+import type { Schedule, VtmsProgress } from '../../types'
 import type { ScheduleStatus } from '../../lib/status'
 
 // ── 尺寸常數 ──────────────────────────────────────────
@@ -173,11 +174,12 @@ export function GanttChart({
 }: Props) {
   const { schedules, remove, update } = useScheduleStore()
   const { options }           = useOptionsStore()
-  const { role, allowedUnits, linkedEngineer } = useAuthStore()
+  const { role, allowedUnits, linkedEngineer, canViewVtmsProgress } = useAuthStore()
   const [filterSort, setFilterSort]     = useState<FilterSortState>(EMPTY_FILTER)
   const [editTarget, setEditTarget]     = useState<Schedule | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null)
   const [tooltip, setTooltip]           = useState<{ x: number; y: number; s: Schedule } | null>(null)
+  const [progressMap, setProgressMap]   = useState<Record<string, VtmsProgress | null>>({})
 
   const [flagPopover, setFlagPopover] = useState<FlagPopoverState | null>(null)
   // Fix 4: stable close handler to avoid re-registering mousedown listener
@@ -230,6 +232,25 @@ export function GanttChart({
       }
     }
   }, [])
+
+  // ── VTMS progress fetching ────────────────────────────
+  useEffect(() => {
+    if (!canViewVtmsProgress) return
+    const linked = schedules.filter(s => s.vtmsPlanId)
+    if (linked.length === 0) return
+
+    Promise.all(
+      linked.map(s =>
+        api.getScheduleVtmsProgress(s.id)
+          .then(data => ({ id: s.id, data }))
+          .catch(() => ({ id: s.id, data: null }))
+      )
+    ).then(results => {
+      const map: Record<string, VtmsProgress | null> = {}
+      for (const r of results) map[r.id] = r.data
+      setProgressMap(map)
+    })
+  }, [canViewVtmsProgress, schedules])
 
   const rightBodyRef   = useRef<HTMLDivElement>(null)
   const rightHeaderRef = useRef<HTMLDivElement>(null)
@@ -691,6 +712,17 @@ export function GanttChart({
                           </div>
                         </div>
                         {s.taskDescription && <div className="text-[11px] text-slate-500 truncate pl-[86px] -mt-[2px]">{s.taskDescription}</div>}
+                        {/* ★ VTMS 測試進度徽章 */}
+                        {canViewVtmsProgress && s.vtmsPlanId && progressMap[s.id] && (
+                          <div className="flex items-center gap-1 text-xs text-gray-600 pl-[86px] -mt-[2px]">
+                            <span className="font-medium">{progressMap[s.id]!.completionPct}%</span>
+                            <span className="text-green-600">✓{progressMap[s.id]!.results.pass}</span>
+                            <span className="text-red-500">✗{progressMap[s.id]!.results.fail}</span>
+                            {progressMap[s.id]!.results.blocked > 0 && (
+                              <span className="text-orange-500">⊘{progressMap[s.id]!.results.blocked}</span>
+                            )}
+                          </div>
+                        )}
                         {/* ★ 旗標圖示 + 操作按鈕 */}
                         <div className="absolute right-2 top-[10px] flex gap-1">
                           {/* Admin 旗標（Admin/SA 限定） */}
@@ -853,6 +885,9 @@ export function GanttChart({
                           <text x={barX + 5} y={barY + 15} fontSize={10} fill="#ffffff" fontWeight="600"
                             style={{ pointerEvents: 'none' }}>
                             {s.testEngineer}
+                            {canViewVtmsProgress && s.vtmsPlanId && progressMap[s.id] && barW > 80
+                              ? ` ${progressMap[s.id]!.completionPct}%`
+                              : ''}
                           </text>
                         )}
                       </g>

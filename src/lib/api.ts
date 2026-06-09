@@ -1,4 +1,4 @@
-import type { Schedule, OptionsMap, Option, User, AuditLog } from '../types'
+import type { Schedule, OptionsMap, Option, User, AuditLog, VtmsProgress } from '../types'
 
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -89,4 +89,8 @@ export const api = {
   // ── Dashboard export ──────────────────────────────────
   exportDashboard: () =>
     req<{ html: string }>('GET', '/export/dashboard'),
+
+  // ── VTMS progress ─────────────────────────────────────
+  getScheduleVtmsProgress: (scheduleId: string) =>
+    req<VtmsProgress>('GET', `/schedules/${scheduleId}/vtms-progress`),
 }
