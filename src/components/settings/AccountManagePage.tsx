@@ -18,6 +18,8 @@ const AccountManagePage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [pwError, setPwError] = useState('')
   const [actionError, setActionError] = useState('')
+  const [canLinkVtms, setCanLinkVtms] = useState(false)
+  const [canViewVtmsProgress, setCanViewVtmsProgress] = useState(false)
 
   const fetchUsers = async () => {
     try {
@@ -39,6 +41,8 @@ const AccountManagePage: React.FC = () => {
     setConfirmPassword('')
     setPwError('')
     setActionError('')
+    setCanLinkVtms(u.canLinkVtms ?? false)
+    setCanViewVtmsProgress(u.canViewVtmsProgress ?? false)
   }
 
   const handleSave = async (u: SafeUser) => {
@@ -51,8 +55,10 @@ const AccountManagePage: React.FC = () => {
       return
     }
     try {
-      const updates: { displayName?: string; password?: string } = {
+      const updates: { displayName?: string; password?: string; canLinkVtms?: boolean; canViewVtmsProgress?: boolean } = {
         displayName: displayNameInput,
+        canLinkVtms,
+        canViewVtmsProgress,
       }
       if (newPassword) updates.password = newPassword
       await api.updateUser(u.id, updates)
@@ -206,6 +212,25 @@ const AccountManagePage: React.FC = () => {
                             <p className="text-red-500 text-xs mt-1">{pwError}</p>
                           )}
                         </div>
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-sm font-medium text-gray-700 mb-2">VTMS 整合權限</p>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={canLinkVtms}
+                            onChange={e => setCanLinkVtms(e.target.checked)}
+                          />
+                          可連結排程至 VTMS 測試計畫
+                        </label>
+                        <label className="flex items-center gap-2 text-sm mt-1">
+                          <input
+                            type="checkbox"
+                            checked={canViewVtmsProgress}
+                            onChange={e => setCanViewVtmsProgress(e.target.checked)}
+                          />
+                          可檢視 VTMS 測試進度統計
+                        </label>
                       </div>
                       <div className="flex gap-2 mt-4">
                         <button
