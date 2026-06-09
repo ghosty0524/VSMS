@@ -1,0 +1,202 @@
+openapi: 3.0.3
+info:
+  title: VSMS Integration API
+  description: Integration endpoints for cross-system queries. Authenticated via X-Api-Key header.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3001/api/integration
+    description: Local development
+
+security:
+  - apiKey: []
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+
+  schemas:
+    ProgressResults:
+      type: object
+      properties:
+        pass:             { type: integer }
+        fail:             { type: integer }
+        conditional_pass: { type: integer }
+        blocked:          { type: integer }
+        not_tested:       { type: integer }
+        not_applicable:   { type: integer }
+
+    VtmsProgress:
+      type: object
+      nullable: true
+      properties:
+        planId:          { type: string }
+        planName:        { type: string }
+        planStatus:      { type: string }
+        totalItems:      { type: integer }
+        latestRunStatus: { type: string, nullable: true }
+        results:         { $ref: '#/components/schemas/ProgressResults' }
+        completionPct:   { type: integer }
+
+    Schedule:
+      type: object
+      properties:
+        id:              { type: string }
+        projectName:     { type: string }
+        taskDescription: { type: string }
+        testEngineer:    { type: string }
+        testUnit:        { type: string, nullable: true }
+        startDate:       { type: string }
+        endDate:         { type: string }
+        isCompleted:     { type: boolean }
+        isDelayed:       { type: boolean }
+        delayReason:     { type: string, nullable: true }
+        vtmsPlanId:      { type: string, nullable: true }
+
+    ScheduleWithProgress:
+      allOf:
+        - $ref: '#/components/schemas/Schedule'
+        - type: object
+          properties:
+            vtmsProgress:
+              $ref: '#/components/schemas/VtmsProgress'
+
+paths:
+  /schedules:
+    get:
+      summary: List schedules with optional filters
+      parameters:
+        - { in: query, name: testUnit,     schema: { type: string } }
+        - { in: query, name: isCompleted,  schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: isDelayed,    schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: dateFrom,     schema: { type: string, description: 'YYYY-MM-DD' } }
+        - { in: query, name: dateTo,       schema: { type: string, description: 'YYYY-MM-DD' } }
+      responses:
+        '200':
+          description: Schedule array
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Schedule'
+        '401':
+          description: Unauthorized
+
+  /schedules/summary:
+    get:
+      summary: Schedule health summary by unit
+      responses:
+        '200':
+          description: Summary statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:       { type: integer }
+                  completed:   { type: integer }
+                  delayed:     { type: integer }
+                  inProgress:  { type: integer }
+                  notStarted:  { type: integer }
+                  byUnit:
+                    type: object
+                    additionalProperties: { type: integer }
+        '401':
+          description: Unauthorized
+
+  /schedules/by-plan/{planId}:
+    get:
+      summary: Find schedule linked to a VTMS test plan
+      parameters:
+        - in: path
+          name: planId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Linked schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '404':
+          description: No schedule linked to this plan
+        '401':
+          description: Unauthorized
+
+  /schedules-with-progress:
+    get:
+      summary: Schedules with VTMS progress data (Copilot cross-system query)
+      parameters:
+        - { in: query, name: testUnit,    schema: { type: string } }
+        - { in: query, name: isCompleted, schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: isDelayed,   schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: dateFrom,    schema: { type: string } }
+        - { in: query, name: dateTo,      schema: { type: string } }
+      responses:
+        '200':
+          description: Schedules with embedded VTMS progress (null if not linked or VTMS unavailable)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScheduleWithProgress'
+        '401':
+          description: Unauthorized
+
+  /schedules/{id}/delay:
+    patch:
+      summary: Mark schedule as delayed (called by VTMS on Delay log)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, content]
+              properties:
+                date:    { type: string, description: 'YYYY-MM-DD' }
+                content: { type: string }
+      responses:
+        '200':
+          description: Updated schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          description: Missing date or content
+        '404':
+          description: Schedule not found
+        '401':
+          description: Unauthorized
+
+  /schedules/{id}/complete:
+    patch:
+      summary: Mark schedule as completed (called by VTMS when all tasks done)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Updated schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '404':
+          description: Schedule not found
+        '401':
+          description: Unauthorized
