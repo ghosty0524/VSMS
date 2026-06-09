@@ -23,6 +23,7 @@ export interface Schedule {
   userFlag:      boolean
   userFlagNote:  string
   device:        string
+  vtmsPlanId?: string
 }
 
 export interface Option {
@@ -60,6 +61,8 @@ export interface User {
   linkedEngineer: string
   createdAt: string
   lastLoginAt: string
+  canLinkVtms: boolean
+  canViewVtmsProgress: boolean
 }
 
 export interface UserStore {
@@ -107,4 +110,33 @@ export interface ScheduleFormValues {
   isDelayed: boolean
   delayReason: string
   device: string          // 設備 value，空字串表示未指定
+}
+
+export interface VtmsProgressResults {
+  pass: number
+  fail: number
+  conditional_pass: number
+  blocked: number
+  not_tested: number
+  not_applicable: number
+}
+
+export interface VtmsProgress {
+  planId: string
+  planName: string
+  planStatus: string
+  totalItems: number
+  latestRunStatus: string | null
+  results: VtmsProgressResults
+  completionPct: number
+}
+
+export interface VtmsTestPlan {
+  id: string
+  name: string
+  projectId: string
+  projectName: string
+  status: string
+  plannedStartDate: string | null
+  plannedEndDate: string | null
 }
