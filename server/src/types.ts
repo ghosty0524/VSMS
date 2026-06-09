@@ -61,6 +61,8 @@ export interface User {
   // ✅ 新增：管轄測試單位（空陣列 = 無限制，僅 super_admin 預設如此）
   allowedUnits: string[]
   linkedEngineer: string
+  canLinkVtms: boolean
+  canViewVtmsProgress: boolean
   createdAt: string
   lastLoginAt: string
 }

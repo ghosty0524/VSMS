@@ -13,6 +13,7 @@ router.use(requireAuth, requireSuperAdmin)
 function safeUser(u: {
   id: string; username: string; displayName: string; role: string;
   isActive: boolean; allowedUnits: unknown; linkedEngineer: string;
+  canLinkVtms: boolean; canViewVtmsProgress: boolean;
   createdAt: Date; lastLoginAt: Date | null
 }) {
   return {
@@ -23,6 +24,8 @@ function safeUser(u: {
     isActive: u.isActive,
     allowedUnits: (u.allowedUnits as string[]) ?? [],
     linkedEngineer: u.linkedEngineer,
+    canLinkVtms: u.canLinkVtms,
+    canViewVtmsProgress: u.canViewVtmsProgress,
     createdAt: u.createdAt.toISOString(),
     lastLoginAt: u.lastLoginAt?.toISOString() ?? '',
   }
@@ -84,12 +87,14 @@ router.put('/:id', async (req, res) => {
     return
   }
 
-  const { displayName, password, isActive, allowedUnits, linkedEngineer } = req.body as {
+  const { displayName, password, isActive, allowedUnits, linkedEngineer, canLinkVtms, canViewVtmsProgress } = req.body as {
     displayName?: string
     password?: string
     isActive?: boolean
     allowedUnits?: string[]
     linkedEngineer?: string
+    canLinkVtms?: boolean
+    canViewVtmsProgress?: boolean
   }
   const changedFields: string[] = []
   const updates: Record<string, unknown> = {}
@@ -129,6 +134,16 @@ router.put('/:id', async (req, res) => {
     }
     updates.linkedEngineer = linkedEngineer.trim()
     changedFields.push('linkedEngineer')
+  }
+
+  if (canLinkVtms !== undefined) {
+    updates.canLinkVtms = Boolean(canLinkVtms)
+    changedFields.push('canLinkVtms')
+  }
+
+  if (canViewVtmsProgress !== undefined) {
+    updates.canViewVtmsProgress = Boolean(canViewVtmsProgress)
+    changedFields.push('canViewVtmsProgress')
   }
 
   if (changedFields.length === 0) {

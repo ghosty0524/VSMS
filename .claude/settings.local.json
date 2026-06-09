@@ -45,7 +45,12 @@
       "Bash(git remote *)",
       "Bash(git push *)",
       "Bash(git rm *)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(powershell -command \"Get-Service -Name '*mariadb*','*mysql*' -ErrorAction SilentlyContinue | Select-Object Name,Status,DisplayName\")",
+      "Bash(powershell -command \"netstat -an | Select-String ':3306'\")",
+      "Bash(powershell -command \"Get-Process -Id \\(Get-NetTCPConnection -LocalPort 3306 -State Listen | Select-Object -First 1 -ExpandProperty OwningProcess\\) | Select-Object Id,Name,Description\")",
+      "Bash(node -e ' *)",
+      "PowerShell($client = New-Object System.Net.Sockets.TcpClient; $result = $client.BeginConnect\\('127.0.0.1', 3306, $null, $null\\); $success = $result.AsyncWaitHandle.WaitOne\\(3000, $false\\); if \\($success\\) { Write-Host 'TCP OK' } else { Write-Host 'TCP TIMEOUT' }; $client.Close\\(\\))"
     ],
     "additionalDirectories": [
       "f:\\vsms\\vsms-export\\docs\\superpowers\\specs"

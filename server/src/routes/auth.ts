@@ -46,6 +46,7 @@ function touchSession(sessionId: string): void {
 function toUser(u: {
   id: string; username: string; displayName: string; passwordHash: string;
   role: string; isActive: boolean; allowedUnits: unknown; linkedEngineer: string;
+  canLinkVtms: boolean; canViewVtmsProgress: boolean;
   createdAt: Date; lastLoginAt: Date | null
 }): User {
   return {
@@ -57,6 +58,8 @@ function toUser(u: {
     isActive: u.isActive,
     allowedUnits: (u.allowedUnits as string[]) ?? [],
     linkedEngineer: u.linkedEngineer,
+    canLinkVtms: u.canLinkVtms,
+    canViewVtmsProgress: u.canViewVtmsProgress,
     createdAt: u.createdAt.toISOString(),
     lastLoginAt: u.lastLoginAt?.toISOString() ?? '',
   }
@@ -196,6 +199,8 @@ router.get('/me', requireAuth, async (req, res) => {
     role: dbUser.role,
     allowedUnits: (dbUser.allowedUnits as string[]) ?? [],
     linkedEngineer: dbUser.linkedEngineer ?? '',
+    canLinkVtms: dbUser.canLinkVtms,
+    canViewVtmsProgress: dbUser.canViewVtmsProgress,
   })
 })
 
