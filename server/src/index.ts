@@ -10,6 +10,7 @@ import optionsRouter from './routes/options.js'
 import usersRouter from './routes/users.js'
 import auditRouter from './routes/audit.js'
 import calendarRouter from './routes/calendar.js'
+import integrationRouter from './routes/integration.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -31,6 +32,7 @@ app.use('/api/options', optionsRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/audit', auditRouter)
 app.use('/api/calendar', calendarRouter)
+app.use('/api/integration', integrationRouter)
 
 // ── Static (serve SPA in production) ──────────────────
 const isProd = !process.argv[1]?.includes('tsx')
