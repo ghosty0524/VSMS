@@ -30,7 +30,7 @@ export const api = {
   logout: () =>
     req<{ ok: boolean }>('POST', '/logout'),
   me: () =>
-    req<{ ok: boolean; role: string; username: string; displayName: string; allowedUnits?: string[]; linkedEngineer?: string }>('GET', '/me'),
+    req<{ ok: boolean; role: string; username: string; displayName: string; allowedUnits?: string[]; linkedEngineer?: string; canLinkVtms?: boolean; canViewVtmsProgress?: boolean }>('GET', '/me'),
   changePassword: (oldPassword: string, newPassword: string) =>
     req<{ ok: boolean }>('POST', '/change-password', { oldPassword, newPassword }),
 

@@ -22,6 +22,8 @@ interface AuthState {
   displayName: string
   allowedUnits: string[]
   linkedEngineer: string
+  canLinkVtms: boolean
+  canViewVtmsProgress: boolean
   loginError: string
   loginWarning: string
   accounts: Account[]
@@ -42,6 +44,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   displayName: '',
   allowedUnits: [],
   linkedEngineer: '',
+  canLinkVtms: false,
+  canViewVtmsProgress: false,
   loginError: '',
   loginWarning: '',
   accounts: [],
@@ -57,6 +61,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         displayName: res.displayName,
         allowedUnits: res.allowedUnits ?? [],
         linkedEngineer: res.linkedEngineer ?? '',
+        canLinkVtms: res.canLinkVtms ?? false,
+        canViewVtmsProgress: res.canViewVtmsProgress ?? false,
       })
     } catch {
       set({ isLoggedIn: false, isChecking: false })
@@ -79,6 +85,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           displayName: me.displayName,
           allowedUnits: me.allowedUnits ?? [],
           linkedEngineer: me.linkedEngineer ?? '',
+          canLinkVtms: me.canLinkVtms ?? false,
+          canViewVtmsProgress: me.canViewVtmsProgress ?? false,
         })
         // ★ 審計：首次啟動登入
         useAuditStore.getState().addLog({
@@ -107,6 +115,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         displayName: me.displayName,
         allowedUnits: me.allowedUnits ?? [],
         linkedEngineer: me.linkedEngineer ?? '',
+        canLinkVtms: me.canLinkVtms ?? false,
+        canViewVtmsProgress: me.canViewVtmsProgress ?? false,
       })
       // ★ 審計：一般登入
       useAuditStore.getState().addLog({
@@ -148,6 +158,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       displayName: '',
       allowedUnits: [],
       linkedEngineer: '',
+      canLinkVtms: false,
+      canViewVtmsProgress: false,
       loginWarning: '',
       accounts: [],
     })

@@ -6,7 +6,7 @@ import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
 import { ApiError } from '../../lib/api'
 import { MIN_DATE, FIELD_LIMITS } from '../../constants'
-import type { Schedule, ScheduleFormValues } from '../../types'
+import type { Schedule, ScheduleFormValues, VtmsTestPlan } from '../../types'
 
 interface Props {
   isOpen: boolean
@@ -35,12 +35,22 @@ function formatDate(d: Date): string {
 export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
   const { add, update } = useScheduleStore()
   const { options } = useOptionsStore()
-  const { role } = useAuthStore()
+  const { role, canLinkVtms } = useAuthStore()
   const isUser = role === 'user'
   const [form, setForm] = useState<ScheduleFormValues>(EMPTY)
   const [errors, setErrors] = useState<Partial<Record<keyof ScheduleFormValues, string>>>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [vtmsPlans, setVtmsPlans] = useState<VtmsTestPlan[]>([])
+  const [vtmsPlanId, setVtmsPlanId] = useState<string>('')
+
+  useEffect(() => {
+    if (!canLinkVtms) return
+    fetch('/api/schedules/vtms-plans', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then(setVtmsPlans)
+      .catch(() => {})
+  }, [canLinkVtms])
 
   useEffect(() => {
     setSubmitError('')
@@ -55,7 +65,11 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
         delayReason: schedule.delayReason,
         device: schedule.device ?? '',
       })
-    } else { setForm(EMPTY) }
+      setVtmsPlanId(schedule.vtmsPlanId ?? '')
+    } else {
+      setForm(EMPTY)
+      setVtmsPlanId('')
+    }
     setErrors({})
   }, [schedule, isOpen])
 
@@ -107,6 +121,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
       isCompleted: form.isCompleted, isDelayed: form.isDelayed,
       delayReason: form.isDelayed ? form.delayReason.trim() : '',
       ...(isUser ? {} : { device: form.device }),
+      ...(canLinkVtms ? { vtmsPlanId: vtmsPlanId || null } : {}),
     }
     try {
       if (schedule) await update(schedule.id, data)
@@ -246,28 +261,56 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           ))}
 
+          {/* VTMS 關聯（僅 canLinkVtms 使用者可見） */}
+          {canLinkVtms && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">關聯 VTMS 測試計畫</label>
+              <select
+                value={vtmsPlanId}
+                onChange={e => setVtmsPlanId(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— 不關聯 —</option>
+                {vtmsPlans.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.projectName} / {p.name} [{p.status}]
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* F11 Completed */}
           <div className="flex items-center gap-2">
             <input type="checkbox" id="isCompleted" checked={form.isCompleted}
               onChange={e => setForm(f => ({ ...f, isCompleted: e.target.checked }))}
-              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-            <label htmlFor="isCompleted" className="text-sm font-medium text-gray-700">Completed（工作已完成）</label>
+              disabled={!!vtmsPlanId}
+              className={`w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${vtmsPlanId ? 'cursor-not-allowed opacity-50' : ''}`} />
+            <label htmlFor="isCompleted" className={`text-sm font-medium ${vtmsPlanId ? 'text-gray-400' : 'text-gray-700'}`}>Completed（工作已完成）</label>
+            {vtmsPlanId && <span className="text-xs text-gray-500">由 VTMS 控制</span>}
           </div>
 
           {/* F12 Delayed */}
           <div className="flex items-center gap-2">
             <input type="checkbox" id="isDelayed" checked={form.isDelayed}
               onChange={e => setForm(f => ({ ...f, isDelayed: e.target.checked }))}
-              className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
-            <label htmlFor="isDelayed" className="text-sm font-medium text-gray-700">Delayed（工作已延遲）</label>
+              disabled={!!vtmsPlanId}
+              className={`w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 ${vtmsPlanId ? 'cursor-not-allowed opacity-50' : ''}`} />
+            <label htmlFor="isDelayed" className={`text-sm font-medium ${vtmsPlanId ? 'text-gray-400' : 'text-gray-700'}`}>Delayed（工作已延遲）</label>
+            {vtmsPlanId && <span className="text-xs text-gray-500">由 VTMS 控制</span>}
           </div>
 
           {/* F13 延遲原因 */}
           {form.isDelayed && field('延遲原因', 'delayReason', (
-            <textarea maxLength={FIELD_LIMITS.DELAY_REASON} rows={2} value={form.delayReason}
-              onChange={e => setForm(f => ({ ...f, delayReason: e.target.value }))}
-              placeholder="請說明延遲原因…"
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+            <div>
+              <textarea maxLength={FIELD_LIMITS.DELAY_REASON} rows={2} value={form.delayReason}
+                onChange={e => setForm(f => ({ ...f, delayReason: e.target.value }))}
+                disabled={!!vtmsPlanId}
+                placeholder="請說明延遲原因…"
+                className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500
+                  ${vtmsPlanId ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : 'border-gray-300'}`} />
+              {vtmsPlanId && <span className="text-xs text-gray-500">由 VTMS 控制</span>}
+            </div>
           ), true)}
         </div>
         <div className="flex items-center justify-between gap-2 p-4 border-t">
