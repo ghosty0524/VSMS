@@ -24,6 +24,7 @@ export interface Schedule {
   userFlag:      boolean
   userFlagNote:  string
   device:        string
+  vtmsPlanId:    string | null
 }
 
 export interface Option {

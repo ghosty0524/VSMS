@@ -6,6 +6,7 @@ import { appendAudit } from '../lib/storage.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { validateSchedule } from '../middleware/validateSchedule.js'
 import type { Schedule } from '../types.js'
+import { listTestPlans, getTestPlanProgress } from '../lib/vtmsClient.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -21,6 +22,7 @@ function toSchedule(s: {
   adminFlag: boolean; adminFlagNote: string | null;
   userFlag: boolean; userFlagNote: string | null;
   device: string;
+  vtmsPlanId: string | null;
 }): Schedule {
   return {
     ...s,
@@ -86,6 +88,48 @@ router.post('/', validateSchedule, async (req, res) => {
   await appendAudit(username, displayName, 'CREATE_SCHEDULE', schedule.id, [])
   res.status(201).json(toSchedule(schedule))
 })
+
+// GET /api/schedules/vtms-plans — proxy to VTMS test plan list (for dropdown in schedule form)
+router.get('/vtms-plans', async (_req, res) => {
+  try {
+    const plans = await listTestPlans();
+    res.json(plans);
+  } catch {
+    res.status(502).json({ error: 'VTMS unavailable' });
+  }
+});
+
+// GET /api/schedules/:id/vtms-progress — proxy VTMS progress for this schedule's linked plan
+router.get('/:id/vtms-progress', async (req, res) => {
+  const schedule = await prisma.schedule.findUnique({ where: { id: req.params.id } });
+  if (!schedule) { res.status(404).json({ error: 'Not found' }); return; }
+  if (!schedule.vtmsPlanId) { res.json(null); return; }
+  try {
+    const progress = await getTestPlanProgress(schedule.vtmsPlanId);
+    res.json(progress);
+  } catch {
+    res.status(502).json({ error: 'VTMS unavailable' });
+  }
+});
+
+// PATCH /api/schedules/:id/vtms-link — set or clear the VTMS plan link (canLinkVtms permission required)
+router.patch('/:id/vtms-link', async (req, res) => {
+  const username = req.session.username ?? 'unknown';
+  const dbUser = await prisma.user.findUnique({ where: { username } });
+  if (!dbUser?.canLinkVtms) {
+    res.status(403).json({ error: 'Requires canLinkVtms permission' });
+    return;
+  }
+  const schedule = await prisma.schedule.findUnique({ where: { id: req.params.id } });
+  if (!schedule) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const vtmsPlanId = (req.body.vtmsPlanId as string | null | undefined) ?? null; // null to unlink
+  const updated = await prisma.schedule.update({
+    where: { id: req.params.id },
+    data: { vtmsPlanId, updatedAt: new Date() },
+  });
+  res.json(toSchedule(updated));
+});
 
 // PUT /api/schedules/replace-all
 router.put('/replace-all', async (req, res) => {
@@ -172,6 +216,13 @@ router.put('/:id', validateSchedule, async (req, res) => {
     // ★ User 不可修改 adminFlag / adminFlagNote
     const { adminFlag: _af, adminFlagNote: _afn, ...safeBody } = body
 
+    // ★ If linked to VTMS, isCompleted / isDelayed / delayReason are VTMS-controlled
+    if (existing.vtmsPlanId) {
+      delete (safeBody as Record<string, unknown>).isCompleted;
+      delete (safeBody as Record<string, unknown>).isDelayed;
+      delete (safeBody as Record<string, unknown>).delayReason;
+    }
+
     const beforeRecord = existing as unknown as Record<string, unknown>
     const changedFields = Object.keys(safeBody).filter(
       k => JSON.stringify(beforeRecord[k]) !== JSON.stringify((safeBody as Record<string, unknown>)[k])
@@ -204,6 +255,14 @@ router.put('/:id', validateSchedule, async (req, res) => {
   const dbUser = await prisma.user.findUnique({ where: { username } })
   const displayName = dbUser?.displayName ?? username
   const body = req.body as Record<string, unknown>
+
+  // ★ If linked to VTMS, isCompleted / isDelayed / delayReason are VTMS-controlled
+  if (existing.vtmsPlanId) {
+    delete body.isCompleted;
+    delete body.isDelayed;
+    delete body.delayReason;
+  }
+
   const beforeRecord = existing as unknown as Record<string, unknown>
   const changedFields = Object.keys(body).filter(
     k => JSON.stringify(beforeRecord[k]) !== JSON.stringify(body[k])
