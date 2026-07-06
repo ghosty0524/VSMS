@@ -4,12 +4,30 @@ import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../lib/db.js'
 import { appendAudit } from '../lib/storage.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import { validateSchedule } from '../middleware/validateSchedule.js'
+import { validateSchedule, collectScheduleErrors } from '../middleware/validateSchedule.js'
 import type { Schedule } from '../types.js'
 import { listTestPlans, getTestPlanProgress } from '../lib/vtmsClient.js'
 
 const router = Router()
 router.use(requireAuth)
+
+// Writable schedule fields. Everything else (id, createdBy, createdAt, ...)
+// is server-managed; vtmsPlanId is deliberately excluded — it may only change
+// through the /:id/vtms-link endpoint which checks the canLinkVtms permission.
+const SCHEDULE_WRITABLE_FIELDS = [
+  'category', 'projectName', 'taskDescription', 'testUnit', 'testEngineer',
+  'timeResource', 'startDate', 'endDate', 'requiredPersonnel', 'testReport',
+  'isCompleted', 'isDelayed', 'delayReason',
+  'adminFlag', 'adminFlagNote', 'userFlag', 'userFlagNote', 'device',
+] as const
+
+function pickScheduleFields(body: Record<string, unknown>): Record<string, unknown> {
+  const picked: Record<string, unknown> = {}
+  for (const field of SCHEDULE_WRITABLE_FIELDS) {
+    if (field in body) picked[field] = body[field]
+  }
+  return picked
+}
 
 // Helper: map Prisma Schedule → app Schedule type (Date → ISO string)
 function toSchedule(s: {
@@ -69,7 +87,7 @@ router.post('/', validateSchedule, async (req, res) => {
   }
   const username = req.session.username ?? 'unknown'
   const allowedUnits = await getAllowedUnits(username)
-  const body = req.body as Omit<Schedule, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>
+  const body = pickScheduleFields(req.body as Record<string, unknown>) as Omit<Schedule, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>
 
   if (!canAccessUnit(allowedUnits, body.testUnit)) {
     res.status(403).json({
@@ -101,6 +119,15 @@ router.get('/vtms-plans', async (_req, res) => {
 
 // GET /api/schedules/:id/vtms-progress — proxy VTMS progress for this schedule's linked plan
 router.get('/:id/vtms-progress', async (req, res) => {
+  // canViewVtmsProgress exists as a user permission — enforce it server-side
+  // (super_admin implicitly allowed)
+  if (req.session.role !== 'super_admin') {
+    const viewer = await prisma.user.findUnique({ where: { username: req.session.username ?? '' } });
+    if (!viewer?.canViewVtmsProgress) {
+      res.status(403).json({ ok: false, message: '無檢視 VTMS 進度權限', code: 'NO_VTMS_PROGRESS_PERMISSION' });
+      return;
+    }
+  }
   const schedule = await prisma.schedule.findUnique({ where: { id: req.params.id } });
   if (!schedule) { res.status(404).json({ error: 'Not found' }); return; }
   if (!schedule.vtmsPlanId) { res.json(null); return; }
@@ -141,7 +168,28 @@ router.put('/replace-all', async (req, res) => {
   const allowedUnits = await getAllowedUnits(username)
   const dbUser = await prisma.user.findUnique({ where: { username } })
   const displayName = dbUser?.displayName ?? username
-  const incoming = req.body as Omit<Schedule, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>[]
+
+  if (!Array.isArray(req.body)) {
+    res.status(400).json({ ok: false, message: '匯入格式錯誤：需為陣列' })
+    return
+  }
+  const incoming = (req.body as Record<string, unknown>[])
+    .map(pickScheduleFields) as Omit<Schedule, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>[]
+
+  // Imported rows get the same validation as single creates
+  const rowErrors: { index: number; errors: Record<string, string> }[] = []
+  incoming.forEach((row, index) => {
+    const errors = collectScheduleErrors(row as unknown as Record<string, unknown>, true)
+    if (Object.keys(errors).length > 0) rowErrors.push({ index, errors })
+  })
+  if (rowErrors.length > 0) {
+    res.status(422).json({
+      ok: false,
+      message: `匯入資料有 ${rowErrors.length} 筆驗證失敗`,
+      rowErrors: rowErrors.slice(0, 20),
+    })
+    return
+  }
 
   if (allowedUnits !== null && allowedUnits.length > 0) {
     const blockedUnits = [...new Set(
@@ -207,7 +255,7 @@ router.put('/:id', validateSchedule, async (req, res) => {
       res.status(403).json({ ok: false, message: '您只能修改指派給自己的排程', code: 'NOT_OWN_SCHEDULE' })
       return
     }
-    const body = req.body as Partial<Schedule>
+    const body = pickScheduleFields(req.body as Record<string, unknown>) as Partial<Schedule>
     if (body.testEngineer !== undefined && body.testEngineer !== engineer) {
       res.status(403).json({ ok: false, message: '不可變更測試人員欄位', code: 'CANNOT_CHANGE_ENGINEER' })
       return
@@ -254,7 +302,7 @@ router.put('/:id', validateSchedule, async (req, res) => {
 
   const dbUser = await prisma.user.findUnique({ where: { username } })
   const displayName = dbUser?.displayName ?? username
-  const body = req.body as Record<string, unknown>
+  const body = pickScheduleFields(req.body as Record<string, unknown>)
 
   // ★ If linked to VTMS, isCompleted / isDelayed / delayReason are VTMS-controlled
   if (existing.vtmsPlanId) {

@@ -14,10 +14,25 @@ function qs(val: unknown): string | undefined {
   return undefined;
 }
 
+// Schedule dates are stored as 'YYYY/MM/DD'. Accept ISO 'YYYY-MM-DD' from
+// callers (agents send ISO dates) and normalise so string comparison lines up.
+function normalizeDate(value: string): string {
+  return value.replace(/-/g, '/');
+}
+
 function buildWhereClause(query: Record<string, unknown>) {
   const where: Record<string, unknown> = {};
   const testUnit = qs(query.testUnit);
   if (testUnit) where.testUnit = testUnit;
+  // ── work-schedule filters (#1) ──
+  const testEngineer = qs(query.testEngineer);
+  if (testEngineer) where.testEngineer = testEngineer;
+  // ── equipment-schedule filters (#2) ──
+  const device = qs(query.device);
+  if (device) where.device = device;
+  // projectName is free text → partial (contains) match for agent forgiveness
+  const projectName = qs(query.projectName);
+  if (projectName) where.projectName = { contains: projectName };
   const isCompleted = qs(query.isCompleted);
   if (isCompleted !== undefined) where.isCompleted = isCompleted === 'true';
   const isDelayed = qs(query.isDelayed);
@@ -26,8 +41,8 @@ function buildWhereClause(query: Record<string, unknown>) {
   const dateTo = qs(query.dateTo);
   if (dateFrom || dateTo) {
     const dateFilter: Record<string, string> = {};
-    if (dateFrom) dateFilter.gte = dateFrom;
-    if (dateTo) dateFilter.lte = dateTo;
+    if (dateFrom) dateFilter.gte = normalizeDate(dateFrom);
+    if (dateTo) dateFilter.lte = normalizeDate(dateTo);
     where.startDate = dateFilter;
   }
   return where;
@@ -47,11 +62,13 @@ router.get('/schedules', requireApiKey, async (req, res) => {
 // GET /schedules/summary — aggregate stats by testUnit
 router.get('/schedules/summary', requireApiKey, async (req, res) => {
   const schedules = await prisma.schedule.findMany();
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
   const total = schedules.length;
   const completed = schedules.filter(s => s.isCompleted).length;
-  const delayed = schedules.filter(s => s.isDelayed).length;
-  const inProgress = schedules.filter(s => !s.isCompleted && s.isDelayed === false).length;
-  const notStarted = schedules.filter(s => !s.isCompleted && !s.isDelayed).length;
+  const delayed = schedules.filter(s => !s.isCompleted && s.isDelayed).length;
+  // Mutually exclusive buckets: completed / delayed / inProgress / notStarted
+  const inProgress = schedules.filter(s => !s.isCompleted && !s.isDelayed && s.startDate <= today).length;
+  const notStarted = schedules.filter(s => !s.isCompleted && !s.isDelayed && s.startDate > today).length;
   const byUnit: Record<string, number> = {};
   for (const s of schedules) {
     if (s.testUnit) byUnit[s.testUnit] = (byUnit[s.testUnit] ?? 0) + 1;
@@ -106,6 +123,19 @@ router.patch('/schedules/:id/delay', requireApiKey, async (req, res) => {
   const updated = await prisma.schedule.update({
     where: { id },
     data: { isDelayed: true, delayReason: appendedReason, updatedAt: new Date() },
+  });
+  res.json(updated);
+});
+
+// PATCH /schedules/:id/vtms-plan — link or unlink a VTMS plan (called by VTMS)
+router.patch('/schedules/:id/vtms-plan', requireApiKey, async (req, res) => {
+  const id = String(req.params.id);
+  const { vtmsPlanId } = req.body as { vtmsPlanId: string | null };
+  const existing = await prisma.schedule.findUnique({ where: { id } });
+  if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+  const updated = await prisma.schedule.update({
+    where: { id },
+    data: { vtmsPlanId: vtmsPlanId ?? null, updatedAt: new Date() },
   });
   res.json(updated);
 });

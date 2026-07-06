@@ -47,7 +47,7 @@ const ExpiringList: React.FC<Props> = ({ schedules, showTitle = true }) => {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-600">
-                <th className="px-4 py-2 text-left">專案名稱</th>
+                <th className="px-4 py-2 text-left">PDN Number</th>
                 <th className="px-4 py-2 text-left">測試人員</th>
                 <th className="px-4 py-2 text-left">測試單位</th>
                 <th className="px-4 py-2 text-left">到期日</th>

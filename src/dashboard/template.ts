@@ -87,7 +87,7 @@ export function generateDashboardHTML(schedules: Schedule[], options: OptionsMap
   ${buildMultiSelect('eng', allEngineers, '測試人員')}
   <div class="filter-group">
     <label>關鍵字搜尋</label>
-    <input type="text" id="search-input" placeholder="專案名稱、工作內容…">
+    <input type="text" id="search-input" placeholder="PDN Number、工作內容…">
   </div>
   <div class="filter-group">
     <label>起始日期</label>
@@ -133,7 +133,7 @@ export function generateDashboardHTML(schedules: Schedule[], options: OptionsMap
         <tr>
           <th>狀態</th>
           <th data-sort="category">工作類別<span class="sort-indicator"></span></th>
-          <th>專案名稱</th>
+          <th>PDN Number</th>
           <th>工作內容</th>
           <th data-sort="testUnit">測試單位<span class="sort-indicator"></span></th>
           <th>測試人員</th>

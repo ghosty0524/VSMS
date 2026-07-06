@@ -139,4 +139,5 @@ export interface VtmsTestPlan {
   status: string
   plannedStartDate: string | null
   plannedEndDate: string | null
+  assignees: string[]
 }

@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { api, ApiError } from '../lib/api'
 import { useUIStore } from './uiStore'
-import { useAuditStore } from './auditStore'   // ★ 新增
 
 export interface Account {
   id: string
@@ -73,30 +72,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     try {
       const result = await api.login(username, password, force)
 
-      if (result.firstRun) {
-        const me = await api.me()
-        set({
-          isLoggedIn: true,
-          isFirstRun: false,
-          loginError: '',
-          loginWarning: '',
-          role: me.role as 'super_admin' | 'admin' | 'user',
-          username: me.username,
-          displayName: me.displayName,
-          allowedUnits: me.allowedUnits ?? [],
-          linkedEngineer: me.linkedEngineer ?? '',
-          canLinkVtms: me.canLinkVtms ?? false,
-          canViewVtmsProgress: me.canViewVtmsProgress ?? false,
-        })
-        // ★ 審計：首次啟動登入
-        useAuditStore.getState().addLog({
-          operator: me.displayName || me.username,
-          action: 'LOGIN',
-          field: '首次啟動登入',
-        })
-        return
-      }
-
       if (result.warning === 'duplicate_session') {
         set({
           loginWarning:
@@ -105,34 +80,25 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         return
       }
 
-      const me = await api.me()
+      // Login response includes user data directly — no extra /api/me call needed
+      if (result.sessionId) sessionStorage.setItem('vsms-session-token', result.sessionId)
       set({
         isLoggedIn: true,
+        isFirstRun: false,
         loginError: '',
         loginWarning: '',
-        role: me.role as 'super_admin' | 'admin' | 'user',
-        username: me.username,
-        displayName: me.displayName,
-        allowedUnits: me.allowedUnits ?? [],
-        linkedEngineer: me.linkedEngineer ?? '',
-        canLinkVtms: me.canLinkVtms ?? false,
-        canViewVtmsProgress: me.canViewVtmsProgress ?? false,
-      })
-      // ★ 審計：一般登入
-      useAuditStore.getState().addLog({
-        operator: me.displayName || me.username,
-        action: 'LOGIN',
-        field: force ? '強制登入（踢除既有 session）' : '登入系統',
+        role: result.role as 'super_admin' | 'admin' | 'user',
+        username: result.username ?? '',
+        displayName: result.displayName ?? '',
+        allowedUnits: result.allowedUnits ?? [],
+        linkedEngineer: result.linkedEngineer ?? '',
+        canLinkVtms: result.canLinkVtms ?? false,
+        canViewVtmsProgress: result.canViewVtmsProgress ?? false,
       })
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 401) {
-          set({ loginError: '帳號或密碼錯誤，請重新輸入。' })
-        } else if (err.status === 403) {
-          set({ loginError: '目前已達登入人數上限（30 人），請稍後再試。' })
-        } else {
-          set({ loginError: '無法連接伺服器，請確認伺服器已啟動。' })
-        }
+        // 伺服器訊息已在地化（401 帳密錯誤 / 403 人數上限 / 429 次數過多）
+        set({ loginError: err.message || '登入失敗，請稍後再試。' })
       } else {
         set({ loginError: '無法連接伺服器，請確認伺服器已啟動。' })
       }
@@ -140,15 +106,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   logout: () => {
-    // ★ 審計：登出（必須在清除 state 之前寫入）
-    const { displayName, username } = get()
-    useAuditStore.getState().addLog({
-      operator: displayName || username || 'unknown',
-      action: 'LOGOUT',
-      field: '登出系統',
-    })
-
+    // 登出審計由後端 /api/logout 寫入
     api.logout().catch(console.error)
+    sessionStorage.removeItem('vsms-session-token')
     sessionStorage.removeItem('ganttLeftWidth')
     useUIStore.getState().setView('main')
     set({

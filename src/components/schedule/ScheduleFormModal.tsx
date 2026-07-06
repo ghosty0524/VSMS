@@ -46,7 +46,10 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
 
   useEffect(() => {
     if (!canLinkVtms) return
-    fetch('/api/schedules/vtms-plans', { credentials: 'include' })
+    const token = sessionStorage.getItem('vsms-session-token')
+    const headers: Record<string, string> = {}
+    if (token) headers['X-Vsms-Session'] = token
+    fetch('/api/schedules/vtms-plans', { credentials: 'include', headers })
       .then(r => r.ok ? r.json() : [])
       .then(setVtmsPlans)
       .catch(() => {})
@@ -92,7 +95,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
 
     // admin / super_admin: full validation
     if (!form.category) e.category = '工作類別為必填'
-    if (!form.projectName.trim()) e.projectName = '專案名稱為必填'
+    if (!form.projectName.trim()) e.projectName = 'PDN Number 為必填'
     if (!form.taskDescription.trim()) e.taskDescription = '工作內容為必填'
     if (!form.testUnit) e.testUnit = '測試單位為必填'
     if (!form.testEngineer) e.testEngineer = '測試人員為必填'
@@ -165,7 +168,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
             </select>
           ), true)}
 
-          {field('專案名稱', 'projectName', (
+          {field('PDN Number', 'projectName', (
             <input type="text" maxLength={FIELD_LIMITS.PROJECT_NAME} value={form.projectName}
               onChange={e => setForm(f => ({ ...f, projectName: e.target.value }))}
               disabled={isUser}
@@ -271,11 +274,18 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">— 不關聯 —</option>
-                {vtmsPlans.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.projectName} / {p.name} [{p.status}]
-                  </option>
-                ))}
+                {vtmsPlans
+                  .filter(p =>
+                    p.id === vtmsPlanId ||
+                    (p.projectName === form.projectName.trim() &&
+                     form.testEngineer !== '' &&
+                     (p.assignees ?? []).includes(form.testEngineer))
+                  )
+                  .map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.projectName} / {p.name} [{p.status}]
+                    </option>
+                  ))}
               </select>
             </div>
           )}

@@ -3,8 +3,9 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../lib/db.js'
 import { appendAudit } from '../lib/storage.js'
-import { sha256 } from '../lib/crypto.js'
+import { hashPassword, verifyPassword, needsRehash } from '../lib/crypto.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { tokenStore } from '../lib/sessionTokens.js'
 import type { User } from '../types.js'
 
 const router = Router()
@@ -12,6 +13,50 @@ const router = Router()
 // ── Session management ──────────────────────────────────────
 const MAX_SESSIONS = 30
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000
+
+// ── Login rate limiting ─────────────────────────────────────
+// In-memory failure counter per IP+username; sessions are in-process already.
+const LOGIN_MAX_FAILURES = 5
+const LOGIN_WINDOW_MS = 15 * 60 * 1000
+const loginFailures = new Map<string, { count: number; firstFailureAt: number }>()
+
+function loginKey(ip: string | undefined, username: string): string {
+  return `${ip ?? 'unknown'}|${username.toLowerCase()}`
+}
+
+function isLoginBlocked(key: string): boolean {
+  const entry = loginFailures.get(key)
+  if (!entry) return false
+  if (Date.now() - entry.firstFailureAt > LOGIN_WINDOW_MS) {
+    loginFailures.delete(key)
+    return false
+  }
+  return entry.count >= LOGIN_MAX_FAILURES
+}
+
+function recordLoginFailure(key: string): void {
+  const now = Date.now()
+  const entry = loginFailures.get(key)
+  if (!entry || now - entry.firstFailureAt > LOGIN_WINDOW_MS) {
+    loginFailures.set(key, { count: 1, firstFailureAt: now })
+    return
+  }
+  entry.count += 1
+}
+
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of loginFailures) {
+    if (now - entry.firstFailureAt > LOGIN_WINDOW_MS) loginFailures.delete(key)
+  }
+}, 60 * 1000).unref()
+
+// Regenerate the session id on login to prevent session fixation.
+function regenerateSession(req: { session: { regenerate: (cb: (err?: unknown) => void) => void } }): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate(err => (err ? reject(err) : resolve()))
+  })
+}
 
 interface SessionInfo {
   sessionId: string
@@ -87,7 +132,7 @@ router.post('/login', async (req, res) => {
         id: uuidv4(),
         username: initUsername,
         displayName: 'Super Admin',
-        passwordHash: sha256(password),
+        passwordHash: await hashPassword(password),
         role: 'super_admin',
         isActive: true,
         allowedUnits: [],
@@ -96,6 +141,7 @@ router.post('/login', async (req, res) => {
     })
 
     const sid = uuidv4()
+    await regenerateSession(req)
     req.session.sessionId = sid
     req.session.username = superAdmin.username
     req.session.role = superAdmin.role as 'super_admin' | 'admin' | 'user'
@@ -106,21 +152,53 @@ router.post('/login', async (req, res) => {
       loginAt: new Date(),
       lastActiveAt: new Date(),
     })
+    tokenStore.set(sid, { username: superAdmin.username, role: superAdmin.role })
 
     await appendAudit(superAdmin.username, superAdmin.displayName, 'LOGIN', 'system')
-    res.json({ ok: true, firstRun: true })
+    await new Promise<void>((resolve, reject) =>
+      req.session.save(err => (err ? reject(err) : resolve()))
+    )
+    res.json({
+      ok: true,
+      firstRun: true,
+      sessionId: sid,
+      username: superAdmin.username,
+      displayName: superAdmin.displayName,
+      role: superAdmin.role,
+      allowedUnits: [],
+      linkedEngineer: '',
+      canLinkVtms: false,
+      canViewVtmsProgress: false,
+    })
     return
   }
 
   // Normal login
   const loginUsername = username?.trim() || 'admin'
+
+  const rateKey = loginKey(req.ip, loginUsername)
+  if (isLoginBlocked(rateKey)) {
+    res.status(429).json({ ok: false, message: '登入失敗次數過多，請 15 分鐘後再試', code: 'TOO_MANY_ATTEMPTS' })
+    return
+  }
+
   const dbUser = await prisma.user.findFirst({
     where: { username: loginUsername, isActive: true },
   })
 
-  if (!dbUser || sha256(password) !== dbUser.passwordHash) {
+  if (!dbUser || !(await verifyPassword(password, dbUser.passwordHash))) {
+    recordLoginFailure(rateKey)
     res.status(401).json({ ok: false, message: '帳號或密碼錯誤' })
     return
+  }
+  loginFailures.delete(rateKey)
+
+  // Transparent migration: rehash legacy SHA-256 hashes with bcrypt on login
+  if (needsRehash(dbUser.passwordHash)) {
+    await prisma.user.update({
+      where: { id: dbUser.id },
+      data: { passwordHash: await hashPassword(password) },
+    })
   }
 
   cleanExpiredSessions()
@@ -149,9 +227,13 @@ router.post('/login', async (req, res) => {
     return
   }
 
-  if (existingEntry) activeSessions.delete(existingEntry[0])
+  if (existingEntry) {
+    activeSessions.delete(existingEntry[0])
+    tokenStore.delete(existingEntry[0]) // kicked session's header token must die too
+  }
 
   const sid = uuidv4()
+  await regenerateSession(req)
   req.session.sessionId = sid
   req.session.username = dbUser.username
   req.session.role = dbUser.role as 'super_admin' | 'admin' | 'user'
@@ -162,6 +244,7 @@ router.post('/login', async (req, res) => {
     loginAt: new Date(),
     lastActiveAt: new Date(),
   })
+  tokenStore.set(sid, { username: dbUser.username, role: dbUser.role })
 
   await prisma.user.update({
     where: { id: dbUser.id },
@@ -169,7 +252,21 @@ router.post('/login', async (req, res) => {
   })
 
   await appendAudit(dbUser.username, dbUser.displayName, 'LOGIN', 'system')
-  res.json({ ok: true })
+
+  await new Promise<void>((resolve, reject) =>
+    req.session.save(err => (err ? reject(err) : resolve()))
+  )
+  res.json({
+    ok: true,
+    sessionId: sid,
+    username: dbUser.username,
+    displayName: dbUser.displayName,
+    role: dbUser.role,
+    allowedUnits: (dbUser.allowedUnits as string[]) ?? [],
+    linkedEngineer: dbUser.linkedEngineer ?? '',
+    canLinkVtms: dbUser.canLinkVtms,
+    canViewVtmsProgress: dbUser.canViewVtmsProgress,
+  })
 })
 
 // ── POST /api/logout ───────────────────────────────────────
@@ -178,7 +275,10 @@ router.post('/logout', requireAuth, async (req, res) => {
   const dbUser = await prisma.user.findUnique({ where: { username } })
   await appendAudit(username, dbUser?.displayName ?? username, 'LOGOUT', 'system')
 
-  if (req.session.sessionId) activeSessions.delete(req.session.sessionId)
+  if (req.session.sessionId) {
+    activeSessions.delete(req.session.sessionId)
+    tokenStore.delete(req.session.sessionId)
+  }
   req.session.destroy(() => res.json({ ok: true }))
 })
 
@@ -238,7 +338,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
     res.status(404).json({ ok: false, message: 'User not found' })
     return
   }
-  if (sha256(oldPassword) !== dbUser.passwordHash) {
+  if (!(await verifyPassword(oldPassword, dbUser.passwordHash))) {
     res.status(401).json({ ok: false, message: '舊密碼錯誤' })
     return
   }
@@ -249,7 +349,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
 
   await prisma.user.update({
     where: { id: dbUser.id },
-    data: { passwordHash: sha256(newPassword) },
+    data: { passwordHash: await hashPassword(newPassword) },
   })
   await appendAudit(dbUser.username, dbUser.displayName, 'UPDATE_USER', dbUser.username, ['passwordHash'])
   res.json({ ok: true })

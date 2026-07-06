@@ -10,7 +10,7 @@ model Schedule {
   id                String   @id @default(uuid())
   category          String   @db.VarChar(100)
   projectName       String   @db.VarChar(100)
-  taskDescription   String   @db.VarChar(500)
+  taskDescription   String   @db.Text
   testUnit          String   @db.VarChar(100)
   testEngineer      String   @db.VarChar(100)
   timeResource      Int

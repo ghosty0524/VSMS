@@ -1,4 +1,7 @@
 // server/src/lib/vtmsClient.ts
+import https from 'node:https';
+import http from 'node:http';
+
 export interface VtmsTestPlan {
   id: string;
   name: string;
@@ -7,6 +10,7 @@ export interface VtmsTestPlan {
   status: string;
   plannedStartDate: string | null;
   plannedEndDate: string | null;
+  assignees: string[];
 }
 
 export interface VtmsProgressResults {
@@ -24,18 +28,41 @@ export interface VtmsProgress {
   completionPct: number;
 }
 
-const VTMS_URL = process.env.VTMS_API_URL ?? 'http://localhost:4000';
+const VTMS_URL = process.env.VTMS_API_URL ?? 'https://localhost:4000';
 const VTMS_KEY = process.env.VTMS_API_KEY ?? '';
 
-async function vtmsGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${VTMS_URL}${path}`, {
+// Use node:https/http directly so we can disable cert verification for internal self-signed certs
+function vtmsGet<T>(path: string): Promise<T> {
+  const url = new URL(`${VTMS_URL}${path}`);
+  const isHttps = url.protocol === 'https:';
+  const options = {
+    hostname: url.hostname,
+    port: url.port || (isHttps ? '443' : '80'),
+    path: url.pathname + url.search,
+    method: 'GET',
     headers: { 'X-Api-Key': VTMS_KEY, 'Content-Type': 'application/json' },
+    rejectUnauthorized: false,
+    // Fail fast instead of hanging callers when VTMS is unreachable
+    timeout: 10_000,
+  };
+  return new Promise((resolve, reject) => {
+    const client = isHttps ? https : http;
+    const req = client.request(options, res => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(body) as T); }
+          catch (e) { reject(e); }
+        } else {
+          reject(Object.assign(new Error(`VTMS ${res.statusCode}: ${body}`), { status: res.statusCode }));
+        }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('VTMS request timed out')));
+    req.on('error', reject);
+    req.end();
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw Object.assign(new Error(`VTMS ${res.status}: ${text}`), { status: res.status });
-  }
-  return res.json() as Promise<T>;
 }
 
 export async function listTestPlans(): Promise<VtmsTestPlan[]> {

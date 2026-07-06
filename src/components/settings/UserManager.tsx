@@ -1,17 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { api } from '../../lib/api'
-import { useAuthStore } from '../../store/authStore'
-import { useAuditStore } from '../../store/auditStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import type { User } from '../../types'
 
 type SafeUser = Omit<User, 'passwordHash'>
 
 export function UserManager() {
-  const { displayName: currentDisplayName, username: currentUsername } = useAuthStore()
-  const { addLog } = useAuditStore()
   const { options } = useOptionsStore()
-  const operatorName = currentDisplayName || currentUsername || 'unknown'
 
   const [users, setUsers] = useState<SafeUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,6 +26,8 @@ export function UserManager() {
     role: 'admin' as 'admin' | 'user',
     allowedUnits: [] as string[],
     linkedEngineer: '',
+    canLinkVtms: false,
+    canViewVtmsProgress: false,
   })
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -89,7 +86,6 @@ export function UserManager() {
         allowedUnits: form.role === 'admin' ? form.allowedUnits : [],
         linkedEngineer: form.role === 'user' ? form.linkedEngineer : '',
       })
-      addLog({ operator: operatorName, action: 'CREATE', field: `新增帳號(${form.username.trim()}) 角色:${form.role}` })
       showMsg(`帳號 ${form.username} 已新增`)
       setForm({ username: '', displayName: '', password: '', role: 'admin', allowedUnits: [], linkedEngineer: '' })
       setShowAddForm(false)
@@ -107,11 +103,12 @@ export function UserManager() {
         password: editForm.password || undefined,
         allowedUnits: editTarget.role === 'admin' ? editForm.allowedUnits : [],
         linkedEngineer: editTarget.role === 'user' ? editForm.linkedEngineer : undefined,
+        canLinkVtms: editForm.canLinkVtms,
+        canViewVtmsProgress: editForm.canViewVtmsProgress,
       })
-      addLog({ operator: operatorName, action: 'UPDATE', field: `帳號(${editTarget.username}) 更新` })
       showMsg(`帳號 ${editTarget.username} 已更新`)
       setEditTarget(null)
-      setEditForm({ displayName: '', password: '', role: 'admin', allowedUnits: [], linkedEngineer: '' })
+      setEditForm({ displayName: '', password: '', role: 'admin', allowedUnits: [], linkedEngineer: '', canLinkVtms: false, canViewVtmsProgress: false })
       await loadUsers()
     } catch (e: unknown) {
       showMsg((e as Error).message || '更新失敗', true)
@@ -122,7 +119,6 @@ export function UserManager() {
     if (!confirm(`確定要停用帳號 ${user.username}？`)) return
     try {
       await api.disableUser(user.id)
-      addLog({ operator: operatorName, action: 'UPDATE', field: `帳號(${user.username}) 停用` })
       showMsg(`帳號 ${user.username} 已停用`)
       await loadUsers()
     } catch (e: unknown) {
@@ -134,7 +130,6 @@ export function UserManager() {
     if (!confirm(`確定要啟用帳號 ${user.username}？`)) return
     try {
       await api.enableUser(user.id)
-      addLog({ operator: operatorName, action: 'UPDATE', field: `帳號(${user.username}) 啟用` })
       showMsg(`帳號 ${user.username} 已啟用`)
       await loadUsers()
     } catch (e: unknown) {
@@ -146,7 +141,6 @@ export function UserManager() {
     if (!confirm(`⚠️ 確定要永久刪除帳號 ${user.username}？\n此操作無法復原！`)) return
     try {
       await api.deleteUserPermanent(user.id)
-      addLog({ operator: operatorName, action: 'DELETE', field: `帳號(${user.username}) 永久刪除` })
       showMsg(`帳號 ${user.username} 已永久刪除`)
       await loadUsers()
     } catch (e: unknown) {
@@ -360,6 +354,27 @@ export function UserManager() {
                       onChange={(v) => setEditForm(f => ({ ...f, linkedEngineer: v }))}
                     />
                   )}
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">VTMS 整合權限</p>
+                    <label className="flex items-center gap-2 text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editForm.canLinkVtms}
+                        onChange={e => setEditForm(f => ({ ...f, canLinkVtms: e.target.checked }))}
+                        className="w-3.5 h-3.5 accent-blue-600"
+                      />
+                      可連結排程至 VTMS 測試計畫
+                    </label>
+                    <label className="flex items-center gap-2 text-xs cursor-pointer mt-1">
+                      <input
+                        type="checkbox"
+                        checked={editForm.canViewVtmsProgress}
+                        onChange={e => setEditForm(f => ({ ...f, canViewVtmsProgress: e.target.checked }))}
+                        className="w-3.5 h-3.5 accent-blue-600"
+                      />
+                      可檢視 VTMS 測試進度統計
+                    </label>
+                  </div>
                 </div>
                 <div className="flex gap-2 mt-3">
                   <button type="button" onClick={handleEdit}
@@ -427,6 +442,8 @@ export function UserManager() {
                               role: user.role as 'admin' | 'user',
                               allowedUnits: user.allowedUnits ?? [],
                               linkedEngineer: user.linkedEngineer ?? '',
+                              canLinkVtms: user.canLinkVtms ?? false,
+                              canViewVtmsProgress: user.canViewVtmsProgress ?? false,
                             })
                           }}
                           className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50">

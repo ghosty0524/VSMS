@@ -233,7 +233,7 @@ export async function generateAgentExcel(schedules: Schedule[]): Promise<void> {
   ws1.columns = [
     { key: 'status',            header: '狀態',            width: 12 },
     { key: 'category',          header: '工作類別',        width: 14 },
-    { key: 'projectName',       header: '專案名稱',        width: 28 },
+    { key: 'projectName',       header: 'PDN Number',      width: 28 },
     { key: 'taskDescription',   header: '工作內容',        width: 36 },
     { key: 'testUnit',          header: '測試單位',        width: 12 },
     { key: 'testEngineer',      header: '測試人員',        width: 12 },
@@ -346,7 +346,7 @@ export async function generateAgentExcel(schedules: Schedule[]): Promise<void> {
   })
 
   ws3.columns = [
-    { key: 'projectName',  header: '專案名稱', width: 28 },
+    { key: 'projectName',  header: 'PDN Number', width: 28 },
     { key: 'testUnit',     header: '測試單位', width: 14 },
     { key: 'testEngineer', header: '測試人員', width: 14 },
     { key: 'endDate',      header: '到期日期', width: 14 },

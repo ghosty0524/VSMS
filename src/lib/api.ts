@@ -8,9 +8,14 @@ export class ApiError extends Error {
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const token = sessionStorage.getItem('vsms-session-token')
+  if (token) headers['X-Vsms-Session'] = token
+
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'include',
   })
@@ -24,9 +29,19 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 export const api = {
   // ── Auth ──────────────────────────────────────────────
   login: (username: string, password: string, force?: boolean) =>
-    req<{ ok: boolean; warning?: string; firstRun?: boolean }>(
-      'POST', '/login', { username, password, force }
-    ),
+    req<{
+      ok: boolean
+      warning?: string
+      firstRun?: boolean
+      sessionId?: string
+      username?: string
+      displayName?: string
+      role?: string
+      allowedUnits?: string[]
+      linkedEngineer?: string
+      canLinkVtms?: boolean
+      canViewVtmsProgress?: boolean
+    }>('POST', '/login', { username, password, force }),
   logout: () =>
     req<{ ok: boolean }>('POST', '/logout'),
   me: () =>
@@ -85,10 +100,6 @@ export const api = {
     req<Option>('PUT', `/options/devices/${id}`, data),
   deleteDevice: (id: string) =>
     req<{ ok: boolean }>('DELETE', `/options/devices/${id}`),
-
-  // ── Dashboard export ──────────────────────────────────
-  exportDashboard: () =>
-    req<{ html: string }>('GET', '/export/dashboard'),
 
   // ── VTMS progress ─────────────────────────────────────
   getScheduleVtmsProgress: (scheduleId: string) =>

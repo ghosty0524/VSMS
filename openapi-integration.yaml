@@ -69,11 +69,14 @@ paths:
     get:
       summary: List schedules with optional filters
       parameters:
-        - { in: query, name: testUnit,     schema: { type: string } }
+        - { in: query, name: testUnit,     schema: { type: string }, description: 'Exact test unit name' }
+        - { in: query, name: testEngineer, schema: { type: string }, description: 'Exact test engineer name' }
+        - { in: query, name: device,       schema: { type: string }, description: 'Exact equipment/device name' }
+        - { in: query, name: projectName,  schema: { type: string }, description: 'Partial project name match' }
         - { in: query, name: isCompleted,  schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: isDelayed,    schema: { type: string, enum: ['true','false'] } }
-        - { in: query, name: dateFrom,     schema: { type: string, description: 'YYYY-MM-DD' } }
-        - { in: query, name: dateTo,       schema: { type: string, description: 'YYYY-MM-DD' } }
+        - { in: query, name: dateFrom,     schema: { type: string, description: 'YYYY-MM-DD (matches startDate >=)' } }
+        - { in: query, name: dateTo,       schema: { type: string, description: 'YYYY-MM-DD (matches startDate <=)' } }
       responses:
         '200':
           description: Schedule array
@@ -132,11 +135,14 @@ paths:
     get:
       summary: Schedules with VTMS progress data (Copilot cross-system query)
       parameters:
-        - { in: query, name: testUnit,    schema: { type: string } }
-        - { in: query, name: isCompleted, schema: { type: string, enum: ['true','false'] } }
-        - { in: query, name: isDelayed,   schema: { type: string, enum: ['true','false'] } }
-        - { in: query, name: dateFrom,    schema: { type: string } }
-        - { in: query, name: dateTo,      schema: { type: string } }
+        - { in: query, name: testUnit,     schema: { type: string } }
+        - { in: query, name: testEngineer, schema: { type: string }, description: 'Exact test engineer name' }
+        - { in: query, name: device,       schema: { type: string }, description: 'Exact equipment/device name' }
+        - { in: query, name: projectName,  schema: { type: string }, description: 'Partial project name match' }
+        - { in: query, name: isCompleted,  schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: isDelayed,    schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: dateFrom,     schema: { type: string } }
+        - { in: query, name: dateTo,       schema: { type: string } }
       responses:
         '200':
           description: Schedules with embedded VTMS progress (null if not linked or VTMS unavailable)

@@ -260,6 +260,19 @@ export function GanttChart({
   const allUnits  = options.testUnits.map(u => u.value)
   const filtered  = applyFilter(schedules, filterSort, role, allowedUnits, linkedEngineer)
 
+  // 從 options 建立 testEngineer value → 顯示名稱（label）的對照表
+  const engineerLabelMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const unit of options.testUnits) {
+      for (const eng of unit.engineers) {
+        map.set(eng.value, eng.label)
+      }
+    }
+    return map
+  }, [options.testUnits])
+
+  const engLabel = (value: string) => engineerLabelMap.get(value) ?? value
+
   // ── 設備視角 rows ──────────────────────────────────────
   const deviceRows = useMemo(() => {
     if (groupBy !== 'device') return []
@@ -597,11 +610,19 @@ export function GanttChart({
                                     onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
                                     onMouseLeave={() => setTooltip(null)} />
                                 )}
-                                {barW > 30 && (
-                                  <text x={barX + 5} y={barY + 15} fontSize={10} fill="#ffffff" fontWeight="600"
-                                    style={{ pointerEvents: 'none' }}>
-                                    {s.testEngineer}
-                                  </text>
+                                {barW > 24 && (
+                                  <>
+                                    <defs>
+                                      <clipPath id={`bc-${s.id}`}>
+                                        <rect x={barX + 4} y={barY} width={barW - 8} height={22} />
+                                      </clipPath>
+                                    </defs>
+                                    <text x={barX + 6} y={barY + 14} fontSize={11} fill="#ffffff" fontWeight="600"
+                                      clipPath={`url(#bc-${s.id})`}
+                                      style={{ pointerEvents: 'none' }}>
+                                      {engLabel(s.testEngineer)}
+                                    </text>
+                                  </>
                                 )}
                               </g>
                             )
@@ -712,17 +733,6 @@ export function GanttChart({
                           </div>
                         </div>
                         {s.taskDescription && <div className="text-[11px] text-slate-500 truncate pl-[86px] -mt-[2px]">{s.taskDescription}</div>}
-                        {/* ★ VTMS 測試進度徽章 */}
-                        {canViewVtmsProgress && s.vtmsPlanId && progressMap[s.id] && (
-                          <div className="flex items-center gap-1 text-xs text-gray-600 pl-[86px] -mt-[2px]">
-                            <span className="font-medium">{progressMap[s.id]!.completionPct}%</span>
-                            <span className="text-green-600">✓{progressMap[s.id]!.results.pass}</span>
-                            <span className="text-red-500">✗{progressMap[s.id]!.results.fail}</span>
-                            {progressMap[s.id]!.results.blocked > 0 && (
-                              <span className="text-orange-500">⊘{progressMap[s.id]!.results.blocked}</span>
-                            )}
-                          </div>
-                        )}
                         {/* ★ 旗標圖示 + 操作按鈕 */}
                         <div className="absolute right-2 top-[10px] flex gap-1">
                           {/* Admin 旗標（Admin/SA 限定） */}
@@ -881,14 +891,19 @@ export function GanttChart({
                             onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
                             onMouseLeave={() => setTooltip(null)} />
                         )}
-                        {barW > 30 && (
-                          <text x={barX + 5} y={barY + 15} fontSize={10} fill="#ffffff" fontWeight="600"
-                            style={{ pointerEvents: 'none' }}>
-                            {s.testEngineer}
-                            {canViewVtmsProgress && s.vtmsPlanId && progressMap[s.id] && barW > 80
-                              ? ` ${progressMap[s.id]!.completionPct}%`
-                              : ''}
-                          </text>
+                        {barW > 24 && (
+                          <>
+                            <defs>
+                              <clipPath id={`bc-${s.id}`}>
+                                <rect x={barX + 4} y={barY} width={barW - 8} height={22} />
+                              </clipPath>
+                            </defs>
+                            <text x={barX + 6} y={barY + 14} fontSize={11} fill="#ffffff" fontWeight="600"
+                              clipPath={`url(#bc-${s.id})`}
+                              style={{ pointerEvents: 'none' }}>
+                              {engLabel(s.testEngineer)}
+                            </text>
+                          </>
                         )}
                       </g>
                     )
@@ -925,10 +940,23 @@ export function GanttChart({
             <div className="space-y-0.5 text-slate-300 text-xs">
               <div><span className="text-slate-400">工作類別：</span>{tooltip.s.category}</div>
               <div><span className="text-slate-400">測試單位：</span>{tooltip.s.testUnit}</div>
-              <div><span className="text-slate-400">測試人員：</span>{tooltip.s.testEngineer}</div>
+              <div><span className="text-slate-400">測試人員：</span>{engLabel(tooltip.s.testEngineer)}</div>
               <div><span className="text-slate-400">起始／完成日期：</span>{tooltip.s.startDate} ～ {tooltip.s.endDate}</div>
               <div><span className="text-slate-400">需求人員：</span>{tooltip.s.requiredPersonnel}</div>
             </div>
+            {canViewVtmsProgress && tooltip.s.vtmsPlanId && progressMap[tooltip.s.id] && (
+              <div className="mt-2 pt-2 border-t border-slate-600 text-xs">
+                <div className="text-slate-400 mb-1">VTMS 測試進度</div>
+                <div className="flex items-center gap-2 text-slate-300">
+                  <span className="font-semibold text-white">{progressMap[tooltip.s.id]!.completionPct}%</span>
+                  <span className="text-green-400">✓{progressMap[tooltip.s.id]!.results.pass}</span>
+                  <span className="text-red-400">✗{progressMap[tooltip.s.id]!.results.fail}</span>
+                  {progressMap[tooltip.s.id]!.results.blocked > 0 && (
+                    <span className="text-orange-400">⊘{progressMap[tooltip.s.id]!.results.blocked}</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

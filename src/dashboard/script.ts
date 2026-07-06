@@ -90,6 +90,13 @@ export const DASHBOARD_JS = `
     }
   }
 
+  /* ── 工程師 value → label 對照 ── */
+  var engineerMap = {};
+  (OPTIONS.testUnits || []).forEach(function(u) {
+    (u.engineers || []).forEach(function(e) { engineerMap[e.value] = e.label; });
+  });
+  function engLabel(value) { return engineerMap[value] || value; }
+
   /* ── 全域狀態 ── */
   var state = {
     categories:[], testUnits:[], testEngineers:[],
@@ -298,7 +305,15 @@ export const DASHBOARD_JS = `
       var projName = escapeHtml(s.projectName.length > 18 ? s.projectName.slice(0,18)+'…' : s.projectName);
       var taskDesc = s.taskDescription
         ? escapeHtml(s.taskDescription.length > 20 ? s.taskDescription.slice(0,20)+'…' : s.taskDescription) : '';
+      var engName = escapeHtml(engLabel(s.testEngineer));
       var evenFill = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+      var chipHtml = '<span style="flex-shrink:0;font-size:11px;font-weight:600;color:#1d4ed8;'
+        +'background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;'
+        +'padding:0 6px;line-height:18px;white-space:nowrap;">'+engName+'</span>';
+      var secondLine = '<div style="display:flex;align-items:center;gap:5px;padding-left:80px;margin-top:-1px;overflow:hidden;">'
+        +chipHtml
+        +(taskDesc ? '<span style="font-size:11px;color:#64748b;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+taskDesc+'</span>' : '')
+        +'</div>';
       return '<div data-idx="'+i+'" class="left-row-hover" style="'
         +'height:'+ROW_H+'px;background:'+evenFill+';'
         +'box-shadow:inset 0 -1px 0 #e2e8f0;'
@@ -309,7 +324,7 @@ export const DASHBOARD_JS = `
         +'background:'+sc.bg+';color:'+sc.text+';">'+status+'</div>'
         +'<div style="font-size:13px;font-weight:600;color:#1e293b;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+projName+'</div>'
         +'</div>'
-        +(taskDesc ? '<div style="font-size:11px;color:#64748b;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding-left:80px;margin-top:-1px;">'+taskDesc+'</div>' : '')
+        +secondLine
         +'</div>';
     }).join('');
 
@@ -344,6 +359,12 @@ export const DASHBOARD_JS = `
         html += '<rect x="'+bx+'" y="'+barY+'" width="'+bw+'" height="22"'
           +' fill="'+color+'" rx="4" data-idx="'+i+'" class="gantt-bar"'
           +' style="cursor:pointer;opacity:0.88"/>';
+      }
+      if (bw > 24) {
+        var clipId = 'bc'+i;
+        html += '<defs><clipPath id="'+clipId+'"><rect x="'+(bx+4)+'" y="'+barY+'" width="'+(bw-8)+'" height="22"/></clipPath></defs>'
+          +'<text x="'+(bx+6)+'" y="'+(barY+14)+'" font-size="11" fill="#ffffff" font-weight="600"'
+          +' clip-path="url(#'+clipId+')" style="pointer-events:none">'+escapeHtml(engLabel(s.testEngineer))+'</text>';
       }
       return html;
     }).join('');
@@ -482,7 +503,7 @@ export const DASHBOARD_JS = `
     var fields = [
       ['狀態',     '<span class="status-badge status-'+status+'">'+status+'</span>'],
       ['工作類別', escapeHtml(s.category)],
-      ['專案名稱', escapeHtml(s.projectName)],
+      ['PDN Number', escapeHtml(s.projectName)],
       ['工作內容', escapeHtml(s.taskDescription || '—')],
       ['測試單位', escapeHtml(s.testUnit)],
       ['測試人員', escapeHtml(s.testEngineer)],

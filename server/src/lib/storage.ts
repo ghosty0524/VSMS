@@ -13,10 +13,22 @@ export async function appendAudit(
   await prisma.auditLog.create({
     data: { username, displayName, action, target, fields },
   })
-  // Keep last 180 days only
+}
+
+// Retention purge runs on a schedule instead of on every write
+const AUDIT_RETENTION_DAYS = 180
+
+export async function purgeOldAuditLogs(): Promise<void> {
   const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - 180)
+  cutoff.setDate(cutoff.getDate() - AUDIT_RETENTION_DAYS)
   await prisma.auditLog.deleteMany({ where: { timestamp: { lt: cutoff } } })
+}
+
+export function scheduleAuditCleaner(): void {
+  purgeOldAuditLogs().catch(err => console.error('[audit] purge failed:', err))
+  setInterval(() => {
+    purgeOldAuditLogs().catch(err => console.error('[audit] purge failed:', err))
+  }, 24 * 60 * 60 * 1000).unref()
 }
 
 // ── DB Initialisation ────────────────────────────────────────

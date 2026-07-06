@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../lib/db.js'
 import { appendAudit } from '../lib/storage.js'
-import { sha256 } from '../lib/crypto.js'
+import { hashPassword } from '../lib/crypto.js'
 import { requireAuth, requireSuperAdmin } from '../middleware/requireAuth.js'
 
 const router = Router()
@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
       id: uuidv4(),
       username,
       displayName: displayName?.trim() || username,
-      passwordHash: sha256(password),
+      passwordHash: await hashPassword(password),
       role: role === 'user' ? 'user' : 'admin',
       isActive: true,
       allowedUnits: role === 'user' ? [] : (Array.isArray(allowedUnits) ? allowedUnits : []),
@@ -109,7 +109,7 @@ router.put('/:id', async (req, res) => {
       res.status(400).json({ ok: false, message: '新密碼長度至少需要 8 個字元' })
       return
     }
-    updates.passwordHash = sha256(password)
+    updates.passwordHash = await hashPassword(password)
     changedFields.push('passwordHash')
   }
 
