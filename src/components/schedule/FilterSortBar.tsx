@@ -66,11 +66,24 @@ export const EMPTY_FILTER: FilterSortState = {
   devices: [],
 }
 
-// 登入時的預設篩選：隱藏 Completed（可在「狀態」下拉勾回）；
+function fmtDate(d: Date): string {
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+}
+
+// 預設甘特圖範圍：今日 −1 個月 ～ +6 個月，
+// 讓時間軸畫布寬度不隨歷史資料累積而成長
+function defaultGanttRange(): { ganttStart: string; ganttEnd: string } {
+  const start = new Date(); start.setMonth(start.getMonth() - 1)
+  const end = new Date(); end.setMonth(end.getMonth() + 6)
+  return { ganttStart: fmtDate(start), ganttEnd: fmtDate(end) }
+}
+
+// 登入時的預設篩選：隱藏 Completed（可在「狀態」下拉勾回）+ 預設時間範圍；
 // 「清除全部」仍回到 EMPTY_FILTER（顯示全部）
 export const DEFAULT_FILTER: FilterSortState = {
   ...EMPTY_FILTER,
   statuses: ['Delayed', 'Testing', 'Planned'],
+  ...defaultGanttRange(),
 }
 
 const ALL_STATUSES: ScheduleStatus[] = ['Completed', 'Delayed', 'Testing', 'Planned']

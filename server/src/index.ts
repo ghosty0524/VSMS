@@ -1,5 +1,6 @@
 // server/src/index.ts
 import express from 'express'
+import compression from 'compression'
 import session from 'express-session'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -19,6 +20,8 @@ const __dirname = path.dirname(__filename)
 
 export const app = express()
 
+// gzip 所有可壓縮回應（排程 JSON 與 2.6MB singlefile SPA 傳輸量可降七成以上）
+app.use(compression())
 app.use(express.json({ limit: '10mb' }))
 
 // Without SESSION_SECRET a random per-boot secret is used instead of a known

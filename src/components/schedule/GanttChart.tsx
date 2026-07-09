@@ -263,6 +263,23 @@ export function GanttChart({
   const leftBodyRef    = useRef<HTMLDivElement>(null)
   const rafRef         = useRef<number | null>(null)
 
+  // ── 列虛擬化（工程師視角）───────────────────────────────
+  // 只渲染可視範圍 ± 緩衝的列；範圍索引不預先夾限，交由 slice 自然截斷
+  const VIRTUAL_BUFFER = 10
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
+  const updateVisibleRange = useCallback(() => {
+    const el = rightBodyRef.current
+    if (!el) return
+    const start = Math.max(0, Math.floor(el.scrollTop / ROW_H) - VIRTUAL_BUFFER)
+    const end = Math.ceil((el.scrollTop + el.clientHeight) / ROW_H) + VIRTUAL_BUFFER
+    setVisibleRange(prev => (prev.start === start && prev.end === end ? prev : { start, end }))
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('resize', updateVisibleRange)
+    return () => window.removeEventListener('resize', updateVisibleRange)
+  }, [updateVisibleRange])
+
   const allUnits  = options.testUnits.map(u => u.value)
   const filtered  = applyFilter(schedules, filterSort, role, allowedUnits, linkedEngineer)
   // guest 唯讀：所有寫入操作（旗標/編輯/刪除）一律隱藏
@@ -331,6 +348,7 @@ export function GanttChart({
     rafRef.current = requestAnimationFrame(() => {
       if (rightHeaderRef.current) rightHeaderRef.current.scrollLeft = scrollLeft
       if (leftBodyRef.current) leftBodyRef.current.style.transform = `translateY(-${scrollTop}px)`
+      updateVisibleRange()
     })
   }
 
@@ -343,11 +361,12 @@ export function GanttChart({
   useEffect(() => {
     if (!rightBodyRef.current || schedules.length === 0) return
     const today = new Date(); today.setHours(0, 0, 0, 0)
-    if (filterSort.ganttStart) {
-      rightBodyRef.current.scrollLeft = 0
-    } else {
+    // 今日在時間軸範圍內就置中（含預設 −1m~+6m 範圍），否則捲到範圍起點
+    if (today >= timelineStart && today <= timelineEnd) {
       const todayX = daysBetween(timelineStart, today) * PX_PER_DAY
       rightBodyRef.current.scrollLeft = todayX - rightBodyRef.current.clientWidth / 2
+    } else {
+      rightBodyRef.current.scrollLeft = 0
     }
     handleRightBodyScroll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -732,7 +751,10 @@ export function GanttChart({
               <div className="shrink-0 border-r bg-white overflow-hidden"
                 style={{ width: leftWidth }} onWheel={forwardWheelToBody}>
                 <div ref={leftBodyRef} style={{ willChange: 'transform' }}>
-                  {filtered.map((s, i) => {
+                  {/* 虛擬化：以 spacer 撐住捲動位移，只渲染可視列 */}
+                  {visibleRange.start > 0 && <div style={{ height: visibleRange.start * ROW_H }} />}
+                  {filtered.slice(visibleRange.start, visibleRange.end).map((s, sliceIdx) => {
+                    const i = visibleRange.start + sliceIdx
                     const status      = computeStatus(s)
                     const statusColor = STATUS_COLORS[status]
                     const evenFill = i % 2 === 0 ? '#fafbfc' : '#f1f5f9'
@@ -867,7 +889,9 @@ export function GanttChart({
                     <line key={`ml-${ml.x}`} x1={ml.x} y1={0} x2={ml.x} y2={bodyHeight} stroke="#cbd5e1" strokeWidth={1} />
                   ))}
 
-                  {filtered.map((s, i) => {
+                  {/* 虛擬化：座標為絕對定位（y = i × ROW_H），非可視列直接略過 */}
+                  {filtered.slice(visibleRange.start, visibleRange.end).map((s, sliceIdx) => {
+                    const i      = visibleRange.start + sliceIdx
                     const y      = i * ROW_H
                     const sDate  = parseDate(s.startDate)
                     const eDate  = parseDate(s.endDate)
