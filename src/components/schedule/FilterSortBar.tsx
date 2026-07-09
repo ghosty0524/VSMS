@@ -66,6 +66,13 @@ export const EMPTY_FILTER: FilterSortState = {
   devices: [],
 }
 
+// 登入時的預設篩選：隱藏 Completed（可在「狀態」下拉勾回）；
+// 「清除全部」仍回到 EMPTY_FILTER（顯示全部）
+export const DEFAULT_FILTER: FilterSortState = {
+  ...EMPTY_FILTER,
+  statuses: ['Delayed', 'Testing', 'Planned'],
+}
+
 const ALL_STATUSES: ScheduleStatus[] = ['Completed', 'Delayed', 'Testing', 'Planned']
 
 function toInputVal(s: string): string { return s ? s.replace(/\//g, '-') : '' }

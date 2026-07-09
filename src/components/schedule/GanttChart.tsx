@@ -7,7 +7,7 @@ import { api } from '../../lib/api'
 import { getUnitColor, STATUS_COLORS, OVERFLOW_COLOR } from '../../constants'
 import { computeStatus } from '../../lib/status'
 import { isRestDay } from '../../lib/restDays'
-import { FilterSortBar, EMPTY_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
+import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
 import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { FlagPopover } from './FlagPopover'
@@ -180,7 +180,7 @@ export function GanttChart({
   const { schedules, remove, update } = useScheduleStore()
   const { options }           = useOptionsStore()
   const { role, allowedUnits, linkedEngineer, canViewVtmsProgress } = useAuthStore()
-  const [filterSort, setFilterSort]     = useState<FilterSortState>(EMPTY_FILTER)
+  const [filterSort, setFilterSort]     = useState<FilterSortState>(DEFAULT_FILTER)
   const [editTarget, setEditTarget]     = useState<Schedule | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null)
   const [tooltip, setTooltip]           = useState<{ x: number; y: number; s: Schedule } | null>(null)
