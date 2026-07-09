@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { useOptionsStore } from '../store/optionsStore'
+import { LoadingScreen } from './shared/LoadingScreen'
 
 interface Props { children: React.ReactNode }
 
@@ -32,12 +33,6 @@ export function ProtectedLayout({ children }: Props) {
   }, [isLoggedIn])
 
   if (!isLoggedIn) return null
-  if (!ready) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-gray-400 text-sm">載入資料中…</p>
-      </div>
-    )
-  }
+  if (!ready) return <LoadingScreen text="載入資料中…" />
   return <>{children}</>
 }

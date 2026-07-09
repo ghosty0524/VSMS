@@ -68,8 +68,8 @@ function canAccessUnit(allowedUnits: string[] | null, testUnit: string): boolean
 router.get('/', async (req, res) => {
   const schedules = await prisma.schedule.findMany({ orderBy: { createdAt: 'asc' } })
   const mapped = schedules.map(toSchedule)
-  // User 角色不可見 adminFlag / adminFlagNote
-  if (req.session.role === 'user') {
+  // User / Guest 角色不可見 adminFlag / adminFlagNote
+  if (req.session.role === 'user' || req.session.role === 'guest') {
     res.json(mapped.map(s => {
       const { adminFlag: _af, adminFlagNote: _afn, ...rest } = s
       return rest
@@ -108,7 +108,12 @@ router.post('/', validateSchedule, async (req, res) => {
 })
 
 // GET /api/schedules/vtms-plans — proxy to VTMS test plan list (for dropdown in schedule form)
-router.get('/vtms-plans', async (_req, res) => {
+router.get('/vtms-plans', async (req, res) => {
+  // 表單專用資料，Guest 無填表需求，也不應間接讀到 VTMS 計畫清單
+  if (req.session.role === 'guest') {
+    res.status(403).json({ ok: false, message: 'Guest 帳號無此權限', code: 'GUEST_READ_ONLY' })
+    return
+  }
   try {
     const plans = await listTestPlans();
     res.json(plans);

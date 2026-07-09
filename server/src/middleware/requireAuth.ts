@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from 'express'
 import { tokenStore } from '../lib/sessionTokens.js'
+import type { Role } from '../types.js'
 
-function applyHeaderAuth(req: Request): boolean {
+export function applyHeaderAuth(req: Request): boolean {
   if (req.session.sessionId) return true
   const token = req.headers['x-vsms-session'] as string | undefined
   if (!token) return false
@@ -9,7 +10,7 @@ function applyHeaderAuth(req: Request): boolean {
   if (!entry) return false
   req.session.sessionId = token
   req.session.username = entry.username
-  req.session.role = entry.role as 'super_admin' | 'admin' | 'user'
+  req.session.role = entry.role as Role
   return true
 }
 

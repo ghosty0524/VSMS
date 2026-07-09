@@ -12,11 +12,16 @@ import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { FlagPopover } from './FlagPopover'
 import type { FilterSortState, SortRule, SortableField } from './FilterSortBar'
-import type { Schedule, VtmsProgress } from '../../types'
+import type { Role, Schedule, VtmsProgress } from '../../types'
 import type { ScheduleStatus } from '../../lib/status'
 
+// 狀態非顏色指示：色弱使用者可藉符號辨識
+const STATUS_GLYPH: Record<ScheduleStatus, string> = {
+  Completed: '✓', Delayed: '!', Testing: '▶', Planned: '○',
+}
+
 // ── 尺寸常數 ──────────────────────────────────────────
-const LEFT_W       = 248
+const LEFT_W       = 260  // 狀態籤加寬 12px（72→84），預設欄寬同步補償
 const ROW_H        = 46
 const HEADER_H     = 90
 const HEADER_MONTH = 30
@@ -107,7 +112,7 @@ function getWorkDayOffset(
 function applyFilter(
   schedules: Schedule[],
   fs: FilterSortState,
-  role: 'super_admin' | 'admin' | 'user' | null,
+  role: Role | null,
   allowedUnits: string[],
   linkedEngineer: string,
 ): Schedule[] {
@@ -189,8 +194,9 @@ export function GanttChart({
     (localStorage.getItem('vsms-gantt-group-by') as 'engineer' | 'device') ?? 'engineer'
   )
 
+  // 顯示偏好存 localStorage（跨登入保留）；相容舊版 sessionStorage 值
   const [leftWidth, setLeftWidth] = useState<number>(() => {
-    const saved = sessionStorage.getItem('ganttLeftWidth')
+    const saved = localStorage.getItem('ganttLeftWidth') ?? sessionStorage.getItem('ganttLeftWidth')
     const n = Number(saved)
     return saved && !isNaN(n) ? Math.min(600, Math.max(180, n)) : LEFT_W
   })
@@ -213,7 +219,7 @@ export function GanttChart({
     const handleMouseUp = (ev: MouseEvent) => {
       const finalW = Math.min(600, Math.max(180, startWidth + ev.clientX - startX))
       setLeftWidth(finalW)
-      sessionStorage.setItem('ganttLeftWidth', String(finalW))
+      localStorage.setItem('ganttLeftWidth', String(finalW))
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
       dragListenersRef.current = null
@@ -259,6 +265,8 @@ export function GanttChart({
 
   const allUnits  = options.testUnits.map(u => u.value)
   const filtered  = applyFilter(schedules, filterSort, role, allowedUnits, linkedEngineer)
+  // guest 唯讀：所有寫入操作（旗標/編輯/刪除）一律隱藏
+  const canWrite  = role === 'super_admin' || role === 'admin'
 
   // 從 options 建立 testEngineer value → 顯示名稱（label）的對照表
   const engineerLabelMap = useMemo(() => {
@@ -411,7 +419,7 @@ export function GanttChart({
         role={role} groupBy={groupBy} />
 
       {/* ── 圖例 ── */}
-      <div className="flex-shrink-0 flex flex-wrap gap-4 px-4 py-2.5 border-b bg-white">
+      <div className="flex-shrink-0 flex flex-wrap gap-4 px-4 py-2.5 border-b bg-slate-50">
         {options.testUnits.filter(u => u.isActive).map(u => (
           <span key={u.id} className="flex items-center gap-1.5 text-sm text-gray-700 font-medium">
             <span className="inline-block w-3.5 h-3.5 rounded-sm flex-shrink-0"
@@ -518,15 +526,20 @@ export function GanttChart({
                     {weekTicks.map((t) => (
                       <g key={t.label}>
                         <line x1={t.x} y1={HEADER_MONTH} x2={t.x} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
-                        <text x={t.x + 2} y={HEADER_MONTH + HEADER_WEEK / 2 + 5} fontSize={10} fill="#64748b" fontWeight="600">{t.label}</text>
+                        <text x={t.x + 2} y={HEADER_MONTH + HEADER_WEEK / 2 + 5} fontSize={11} fill="#64748b" fontWeight="600">{t.label}</text>
                       </g>
                     ))}
                     {dayLabelItems.map((d) => (
                       <g key={`day-${d.x}`}>
+                        {/* 休息日以淡灰底標示（紅色保留給今日線與 Delayed） */}
+                        {d.isRest && (
+                          <rect x={d.x} y={HEADER_MONTH + HEADER_WEEK} width={PX_PER_DAY} height={HEADER_DAY}
+                            fill="rgba(100,116,139,0.14)" />
+                        )}
                         <line x1={d.x} y1={HEADER_MONTH + HEADER_WEEK} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
                         {PX_PER_DAY >= 16 && (
                           <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_WEEK + HEADER_DAY / 2 + 5}
-                            fontSize={10} fill={d.isRest ? '#ef4444' : '#64748b'} textAnchor="middle"
+                            fontSize={11} fill="#64748b" textAnchor="middle"
                             fontWeight={d.isRest ? '700' : '400'}>{d.label}</text>
                         )}
                       </g>
@@ -534,8 +547,8 @@ export function GanttChart({
                     {today >= timelineStart && today <= timelineEnd && (
                       <>
                         <line x1={todayX} y1={0} x2={todayX} y2={HEADER_H} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4 3" />
-                        <rect x={todayX - 1} y={4} width={28} height={14} rx={3} fill="#ef4444" />
-                        <text x={todayX + 3} y={14} fontSize={10} fill="#ffffff" fontWeight="600">今日</text>
+                        <rect x={todayX - 1} y={4} width={32} height={16} rx={3} fill="#ef4444" />
+                        <text x={todayX + 3} y={16} fontSize={11} fill="#ffffff" fontWeight="600">今日</text>
                       </>
                     )}
                   </svg>
@@ -549,7 +562,7 @@ export function GanttChart({
                   style={{ width: leftWidth }} onWheel={forwardWheelToBody}>
                   <div ref={leftBodyRef} style={{ willChange: 'transform' }}>
                     {deviceRows.map(({ device: dev, schedules: devSchedules }, i) => {
-                      const evenFill = i % 2 === 0 ? '#ffffff' : '#f8fafc'
+                      const evenFill = i % 2 === 0 ? '#fafbfc' : '#f1f5f9'
                       return (
                         <div key={dev.id} className="relative border-b flex items-center px-3"
                           style={{ height: ROW_H, background: evenFill }}>
@@ -566,7 +579,7 @@ export function GanttChart({
                 {/* 右下：Bar 區 */}
                 <div ref={rightBodyRef} className="flex-1 overflow-auto" onScroll={handleRightBodyScroll}>
                   <svg width={svgWidth} height={deviceRows.length * ROW_H} className="block">
-                    <rect x={0} y={0} width={svgWidth} height={deviceRows.length * ROW_H} fill="#ffffff" />
+                    <rect x={0} y={0} width={svgWidth} height={deviceRows.length * ROW_H} fill="#fafbfc" />
                     {restDayBgs.map(({ x }) => (
                       <rect key={`rd-${x}`} x={x} y={0} width={PX_PER_DAY} height={deviceRows.length * ROW_H} fill="rgba(0,0,0,0.085)" />
                     ))}
@@ -575,7 +588,7 @@ export function GanttChart({
                     ))}
                     {deviceRows.map(({ device: dev, schedules: devSchedules }, rowIdx) => {
                       const y = rowIdx * ROW_H
-                      const evenFillAlpha = rowIdx % 2 === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(248,250,252,0.5)'
+                      const evenFillAlpha = rowIdx % 2 === 0 ? 'rgba(250,251,252,0.5)' : 'rgba(241,245,249,0.5)'
                       return (
                         <g key={dev.id}>
                           <rect x={0} y={y} width={svgWidth} height={ROW_H} fill={evenFillAlpha} />
@@ -617,7 +630,7 @@ export function GanttChart({
                                         <rect x={barX + 4} y={barY} width={barW - 8} height={22} />
                                       </clipPath>
                                     </defs>
-                                    <text x={barX + 6} y={barY + 14} fontSize={11} fill="#ffffff" fontWeight="600"
+                                    <text x={barX + 6} y={barY + 14} fontSize={12} fill="#ffffff" fontWeight="600"
                                       clipPath={`url(#bc-${s.id})`}
                                       style={{ pointerEvents: 'none' }}>
                                       {engLabel(s.testEngineer)}
@@ -683,15 +696,20 @@ export function GanttChart({
                   {weekTicks.map((t) => (
                     <g key={t.label}>
                       <line x1={t.x} y1={HEADER_MONTH} x2={t.x} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
-                      <text x={t.x + 2} y={HEADER_MONTH + HEADER_WEEK / 2 + 5} fontSize={10} fill="#64748b" fontWeight="600">{t.label}</text>
+                      <text x={t.x + 2} y={HEADER_MONTH + HEADER_WEEK / 2 + 5} fontSize={11} fill="#64748b" fontWeight="600">{t.label}</text>
                     </g>
                   ))}
                   {dayLabelItems.map((d) => (
                     <g key={`day-${d.x}`}>
+                      {/* 休息日以淡灰底標示（紅色保留給今日線與 Delayed） */}
+                      {d.isRest && (
+                        <rect x={d.x} y={HEADER_MONTH + HEADER_WEEK} width={PX_PER_DAY} height={HEADER_DAY}
+                          fill="rgba(100,116,139,0.14)" />
+                      )}
                       <line x1={d.x} y1={HEADER_MONTH + HEADER_WEEK} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
                       {PX_PER_DAY >= 16 && (
                         <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_WEEK + HEADER_DAY / 2 + 5}
-                          fontSize={10} fill={d.isRest ? '#ef4444' : '#64748b'} textAnchor="middle"
+                          fontSize={11} fill="#64748b" textAnchor="middle"
                           fontWeight={d.isRest ? '700' : '400'}>{d.label}</text>
                       )}
                     </g>
@@ -699,8 +717,8 @@ export function GanttChart({
                   {today >= timelineStart && today <= timelineEnd && (
                     <>
                       <line x1={todayX} y1={0} x2={todayX} y2={HEADER_H} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4 3" />
-                      <rect x={todayX - 1} y={4} width={28} height={14} rx={3} fill="#ef4444" />
-                      <text x={todayX + 3} y={14} fontSize={10} fill="#ffffff" fontWeight="600">今日</text>
+                      <rect x={todayX - 1} y={4} width={32} height={16} rx={3} fill="#ef4444" />
+                      <text x={todayX + 3} y={16} fontSize={11} fill="#ffffff" fontWeight="600">今日</text>
                     </>
                   )}
                 </svg>
@@ -717,26 +735,26 @@ export function GanttChart({
                   {filtered.map((s, i) => {
                     const status      = computeStatus(s)
                     const statusColor = STATUS_COLORS[status]
-                    const evenFill = i % 2 === 0 ? '#ffffff' : '#f8fafc'
+                    const evenFill = i % 2 === 0 ? '#fafbfc' : '#f1f5f9'
                     return (
                       <div key={s.id} className="relative border-b"
                         style={{ height: ROW_H, background: evenFill }}
                         onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
                         onMouseLeave={() => setTooltip(null)}>
                         <div className="flex items-center gap-2 px-2 pt-[6px]">
-                          <div className="flex-shrink-0 w-[72px] h-[24px] rounded-[5px] text-[11px] font-bold flex items-center justify-center"
+                          <div className="flex-shrink-0 w-[84px] h-[24px] rounded-[5px] text-xs font-bold flex items-center justify-center"
                             style={{ background: statusColor.bg, color: statusColor.text, letterSpacing: '0.02em' }}>
-                            {status}
+                            {STATUS_GLYPH[status]} {status}
                           </div>
                           <div className="min-w-0 text-[13px] font-semibold text-slate-800 truncate pr-28">
                             {s.projectName}
                           </div>
                         </div>
-                        {s.taskDescription && <div className="text-[11px] text-slate-500 truncate pl-[86px] -mt-[2px]">{s.taskDescription}</div>}
+                        {s.taskDescription && <div className="text-xs text-slate-500 truncate pl-[98px] -mt-[2px]">{s.taskDescription}</div>}
                         {/* ★ 旗標圖示 + 操作按鈕 */}
                         <div className="absolute right-2 top-[10px] flex gap-1">
                           {/* Admin 旗標（Admin/SA 限定） */}
-                          {role !== 'user' && (
+                          {canWrite && (
                             <div className="relative">
                               <button
                                 type="button"
@@ -776,7 +794,8 @@ export function GanttChart({
                             </div>
                           )}
 
-                          {/* 使用者旗標（全角色可見） */}
+                          {/* 使用者旗標（登入帳號皆可，guest 唯讀不可） */}
+                          {role !== 'guest' && (
                           <div className="relative">
                             <button
                               type="button"
@@ -814,15 +833,16 @@ export function GanttChart({
                               />
                             )}
                           </div>
+                          )}
 
-                          {/* 編輯按鈕：user 只能編輯指派給自己的排程 */}
-                          {(role !== 'user' || s.testEngineer === linkedEngineer) && (
+                          {/* 編輯按鈕：user 只能編輯指派給自己的排程；guest 不可編輯 */}
+                          {(canWrite || (role === 'user' && s.testEngineer === linkedEngineer)) && (
                             <button type="button" title="編輯" onClick={() => setEditTarget(s)}
                               className="w-[22px] h-[22px] flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors duration-100">
                               <Pencil size={12} strokeWidth={2.5} />
                             </button>
                           )}
-                          {role !== 'user' && (
+                          {canWrite && (
                             <button type="button" title="刪除" onClick={() => setDeleteTarget(s)}
                               className="w-[22px] h-[22px] flex items-center justify-center rounded-md bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 transition-colors duration-100">
                               <Trash2 size={12} strokeWidth={2.5} />
@@ -838,7 +858,7 @@ export function GanttChart({
               {/* ★ 右下：Bar 區（含溢出雙色） */}
               <div ref={rightBodyRef} className="flex-1 overflow-auto" onScroll={handleRightBodyScroll}>
                 <svg width={svgWidth} height={bodyHeight} className="block">
-                  <rect x={0} y={0} width={svgWidth} height={bodyHeight} fill="#ffffff" />
+                  <rect x={0} y={0} width={svgWidth} height={bodyHeight} fill="#fafbfc" />
 
                   {restDayBgs.map(({ x }) => (
                     <rect key={`rd-${x}`} x={x} y={0} width={PX_PER_DAY} height={bodyHeight} fill="rgba(0,0,0,0.085)" />
@@ -855,7 +875,7 @@ export function GanttChart({
                     const totalBarDays = daysBetween(sDate, eDate) + 1
                     const barW   = Math.max(totalBarDays * PX_PER_DAY, 6)
                     const color  = getUnitColor(s.testUnit, allUnits)
-                    const evenFillAlpha = i % 2 === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(248,250,252,0.5)'
+                    const evenFillAlpha = i % 2 === 0 ? 'rgba(250,251,252,0.5)' : 'rgba(241,245,249,0.5)'
                     const barY   = y + Math.floor((ROW_H - 22) / 2)
 
                     // ★ 溢出判定
@@ -898,7 +918,7 @@ export function GanttChart({
                                 <rect x={barX + 4} y={barY} width={barW - 8} height={22} />
                               </clipPath>
                             </defs>
-                            <text x={barX + 6} y={barY + 14} fontSize={11} fill="#ffffff" fontWeight="600"
+                            <text x={barX + 6} y={barY + 14} fontSize={12} fill="#ffffff" fontWeight="600"
                               clipPath={`url(#bc-${s.id})`}
                               style={{ pointerEvents: 'none' }}>
                               {engLabel(s.testEngineer)}

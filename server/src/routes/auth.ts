@@ -12,7 +12,37 @@ const router = Router()
 
 // ── Session management ──────────────────────────────────────
 const MAX_SESSIONS = 30
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000
+// Same env knob as the cookie maxAge in index.ts and the token store TTL
+const SESSION_TIMEOUT_MIN = Number(process.env.SESSION_TIMEOUT_MIN ?? 30)
+const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MIN * 60 * 1000
+
+// ── Guest (virtual read-only account) ───────────────────────
+const GUEST_USERNAME = 'Guest'
+const GUEST_DISPLAY_NAME = '訪客'
+const MAX_GUEST_SESSIONS = 10
+const GUEST_LOGIN_MAX_PER_WINDOW = 20
+const GUEST_LOGIN_WINDOW_MS = 15 * 60 * 1000
+const guestLoginHits = new Map<string, { count: number; firstHitAt: number }>()
+
+function isGuestLoginBlocked(ip: string): boolean {
+  const entry = guestLoginHits.get(ip)
+  if (!entry) return false
+  if (Date.now() - entry.firstHitAt > GUEST_LOGIN_WINDOW_MS) {
+    guestLoginHits.delete(ip)
+    return false
+  }
+  return entry.count >= GUEST_LOGIN_MAX_PER_WINDOW
+}
+
+function recordGuestLogin(ip: string): void {
+  const now = Date.now()
+  const entry = guestLoginHits.get(ip)
+  if (!entry || now - entry.firstHitAt > GUEST_LOGIN_WINDOW_MS) {
+    guestLoginHits.set(ip, { count: 1, firstHitAt: now })
+    return
+  }
+  entry.count += 1
+}
 
 // ── Login rate limiting ─────────────────────────────────────
 // In-memory failure counter per IP+username; sessions are in-process already.
@@ -269,11 +299,70 @@ router.post('/login', async (req, res) => {
   })
 })
 
+// ── POST /api/guest-login ──────────────────────────────────
+// Passwordless read-only login. Guest is a virtual account: no users-table row,
+// multiple concurrent sessions allowed (exempt from the duplicate-session kick).
+router.post('/guest-login', async (req, res) => {
+  const ip = req.ip ?? 'unknown'
+  if (isGuestLoginBlocked(ip)) {
+    res.status(429).json({ ok: false, message: '嘗試次數過多，請 15 分鐘後再試', code: 'TOO_MANY_ATTEMPTS' })
+    return
+  }
+  recordGuestLogin(ip)
+
+  cleanExpiredSessions()
+  const guestCount = [...activeSessions.values()]
+    .filter(s => s.username === GUEST_USERNAME).length
+  if (guestCount >= MAX_GUEST_SESSIONS) {
+    res.status(403).json({
+      ok: false,
+      message: `訪客人數已達上限（${MAX_GUEST_SESSIONS} 人），請稍後再試`,
+      code: 'MAX_GUEST_SESSIONS_REACHED',
+    })
+    return
+  }
+
+  const sid = uuidv4()
+  await regenerateSession(req)
+  req.session.sessionId = sid
+  req.session.username = GUEST_USERNAME
+  req.session.role = 'guest'
+
+  activeSessions.set(sid, {
+    sessionId: sid,
+    username: GUEST_USERNAME,
+    loginAt: new Date(),
+    lastActiveAt: new Date(),
+  })
+  tokenStore.set(sid, { username: GUEST_USERNAME, role: 'guest' })
+
+  // 決策：訪客僅記 LOGIN（含來源 IP），不記 LOGOUT
+  await appendAudit(GUEST_USERNAME, `${GUEST_DISPLAY_NAME} (${ip})`, 'LOGIN', 'system')
+
+  await new Promise<void>((resolve, reject) =>
+    req.session.save(err => (err ? reject(err) : resolve()))
+  )
+  res.json({
+    ok: true,
+    sessionId: sid,
+    username: GUEST_USERNAME,
+    displayName: GUEST_DISPLAY_NAME,
+    role: 'guest',
+    allowedUnits: [],
+    linkedEngineer: '',
+    canLinkVtms: false,
+    canViewVtmsProgress: false,
+  })
+})
+
 // ── POST /api/logout ───────────────────────────────────────
 router.post('/logout', requireAuth, async (req, res) => {
-  const username = req.session.username ?? 'unknown'
-  const dbUser = await prisma.user.findUnique({ where: { username } })
-  await appendAudit(username, dbUser?.displayName ?? username, 'LOGOUT', 'system')
+  // 決策：訪客不記 LOGOUT audit（僅記 LOGIN）
+  if (req.session.role !== 'guest') {
+    const username = req.session.username ?? 'unknown'
+    const dbUser = await prisma.user.findUnique({ where: { username } })
+    await appendAudit(username, dbUser?.displayName ?? username, 'LOGOUT', 'system')
+  }
 
   if (req.session.sessionId) {
     activeSessions.delete(req.session.sessionId)
@@ -284,13 +373,29 @@ router.post('/logout', requireAuth, async (req, res) => {
 
 // ── GET /api/me ────────────────────────────────────────────
 router.get('/me', requireAuth, async (req, res) => {
+  if (req.session.sessionId) touchSession(req.session.sessionId)
+
+  // Guest 為虛擬帳號，users 表無資料列
+  if (req.session.role === 'guest') {
+    res.json({
+      ok: true,
+      username: GUEST_USERNAME,
+      displayName: GUEST_DISPLAY_NAME,
+      role: 'guest',
+      allowedUnits: [],
+      linkedEngineer: '',
+      canLinkVtms: false,
+      canViewVtmsProgress: false,
+      sessionTimeoutMin: SESSION_TIMEOUT_MIN,
+    })
+    return
+  }
+
   const dbUser = await prisma.user.findUnique({ where: { username: req.session.username } })
   if (!dbUser) {
     res.status(401).json({ ok: false, message: 'User not found' })
     return
   }
-
-  if (req.session.sessionId) touchSession(req.session.sessionId)
 
   res.json({
     ok: true,
@@ -301,6 +406,7 @@ router.get('/me', requireAuth, async (req, res) => {
     linkedEngineer: dbUser.linkedEngineer ?? '',
     canLinkVtms: dbUser.canLinkVtms,
     canViewVtmsProgress: dbUser.canViewVtmsProgress,
+    sessionTimeoutMin: SESSION_TIMEOUT_MIN,
   })
 })
 

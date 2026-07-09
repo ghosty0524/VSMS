@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useEscapeKey } from '../shared/useEscapeKey'
 
 interface Props {
   isOpen: boolean
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export function ExportExcelModal({ isOpen, allUnits, onConfirm, onClose }: Props) {
+  useEscapeKey(isOpen, onClose)
   const [selected, setSelected] = useState<string[]>([])
 
   // 開啟時重置為全選

@@ -11,13 +11,13 @@ import { generateDashboardHTML } from '../../lib/export'
 import { downloadTemplate, exportSchedules, generateAgentExcel } from '../../lib/excel'
 import { ExcelImportModal } from '../schedule/ExcelImportModal'
 import { ExportExcelModal } from '../schedule/ExportExcelModal'
-import type { View } from '../../types'
+import type { Role, View } from '../../types'
 
 interface Props {
   currentView: View
   onNavigate: (v: View) => void
   onAddSchedule: () => void
-  role: 'super_admin' | 'admin' | 'user' | null
+  role: Role | null
 }
 
 interface ToastMsg {
@@ -75,10 +75,11 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
   const exportRef = useRef<HTMLDivElement>(null)
 
   // ── Toast 工具 ────────────────────────────────────────────
+  // error 與 loading 不自動消失：錯誤需使用者確認後手動關閉
   const addToast = (text: string, type: ToastMsg['type'], duration = 4000) => {
     const id = Date.now()
     setToasts(prev => [...prev, { id, text, type }])
-    if (type !== 'loading') {
+    if (type !== 'loading' && type !== 'error') {
       setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration)
     }
     return id
@@ -124,9 +125,12 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
     setShowExportExcelModal(true)
   }
 
+  // 寫入權限：guest 唯讀、user 僅能改自己的排程，兩者皆無 Header 寫入操作
+  const canWrite = role === 'super_admin' || role === 'admin'
+
   const visibleTabs = NAV_TABS.filter(tab => {
     if (tab.superAdminOnly && role !== 'super_admin') return false
-    if (tab.userHidden && role === 'user') return false
+    if (tab.userHidden && (role === 'user' || role === 'guest')) return false
     return true
   })
 
@@ -163,7 +167,7 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
           <div className="flex items-center gap-2">
 
             {/* 新增排程 */}
-            {currentView === 'main' && role !== 'user' && (
+            {currentView === 'main' && canWrite && (
               <button
                 type="button"
                 onClick={onAddSchedule}
@@ -177,7 +181,7 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
             )}
 
             {/* 匯入 */}
-            {role !== 'user' && (
+            {canWrite && (
             <button
               type="button"
               onClick={() => setShowImport(true)}
@@ -192,7 +196,7 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
             )}
 
             {/* 匯出下拉 */}
-            {role !== 'user' && (
+            {canWrite && (
             <div className="relative" ref={exportRef}>
               <button
                 type="button"
@@ -252,7 +256,7 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
             )}
 
             {/* 下載範本 */}
-            {role !== 'user' && (
+            {canWrite && (
             <button
               type="button"
               onClick={downloadTemplate}
@@ -283,6 +287,13 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
                   <span className="px-1.5 py-0.5 text-xs font-bold
                                    bg-green-500 text-white rounded-md leading-tight">
                     U
+                  </span>
+                )}
+                {role === 'guest' && (
+                  <span title="訪客（唯讀）"
+                        className="px-1.5 py-0.5 text-xs font-bold
+                                   bg-amber-500 text-white rounded-md leading-tight">
+                    G
                   </span>
                 )}
               </div>

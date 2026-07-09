@@ -1,4 +1,8 @@
 // src/types.ts
+
+// Session 角色。guest 為虛擬唯讀帳號（不存在於 users 表）
+export type Role = 'super_admin' | 'admin' | 'user' | 'guest'
+
 export interface Schedule {
   id: string
   category: string

@@ -51,6 +51,10 @@ export interface OptionsMap {
   devices: Option[]
 }
 
+// Session-level role. 'guest' is a virtual account (never stored in the users
+// table) with read-only access enforced by the guestReadOnly middleware.
+export type Role = 'super_admin' | 'admin' | 'user' | 'guest'
+
 export interface User {
   id: string
   username: string

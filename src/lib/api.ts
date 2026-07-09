@@ -7,12 +7,19 @@ export class ApiError extends Error {
   }
 }
 
+// 最後一次 API 活動時間（供 session 逾時提醒判斷閒置時長）
+let lastApiActivityAt = Date.now()
+export function getLastApiActivityAt(): number {
+  return lastApiActivityAt
+}
+
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {}
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const token = sessionStorage.getItem('vsms-session-token')
   if (token) headers['X-Vsms-Session'] = token
 
+  lastApiActivityAt = Date.now()
   const res = await fetch(`/api${path}`, {
     method,
     headers,
@@ -42,10 +49,18 @@ export const api = {
       canLinkVtms?: boolean
       canViewVtmsProgress?: boolean
     }>('POST', '/login', { username, password, force }),
+  guestLogin: () =>
+    req<{
+      ok: boolean
+      sessionId?: string
+      username?: string
+      displayName?: string
+      role?: string
+    }>('POST', '/guest-login'),
   logout: () =>
     req<{ ok: boolean }>('POST', '/logout'),
   me: () =>
-    req<{ ok: boolean; role: string; username: string; displayName: string; allowedUnits?: string[]; linkedEngineer?: string; canLinkVtms?: boolean; canViewVtmsProgress?: boolean }>('GET', '/me'),
+    req<{ ok: boolean; role: string; username: string; displayName: string; allowedUnits?: string[]; linkedEngineer?: string; canLinkVtms?: boolean; canViewVtmsProgress?: boolean; sessionTimeoutMin?: number }>('GET', '/me'),
   changePassword: (oldPassword: string, newPassword: string) =>
     req<{ ok: boolean }>('POST', '/change-password', { oldPassword, newPassword }),
 

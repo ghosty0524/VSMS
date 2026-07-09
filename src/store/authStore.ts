@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, ApiError } from '../lib/api'
 import { useUIStore } from './uiStore'
+import type { Role } from '../types'
 
 export interface Account {
   id: string
@@ -16,18 +17,20 @@ interface AuthState {
   isLoggedIn: boolean
   isFirstRun: boolean
   isChecking: boolean
-  role: 'super_admin' | 'admin' | 'user' | null
+  role: Role | null
   username: string
   displayName: string
   allowedUnits: string[]
   linkedEngineer: string
   canLinkVtms: boolean
   canViewVtmsProgress: boolean
+  sessionTimeoutMin: number
   loginError: string
   loginWarning: string
   accounts: Account[]
   checkAuth: () => Promise<void>
   login: (username: string, password: string, force?: boolean) => Promise<void>
+  guestLogin: () => Promise<void>
   logout: () => void
   clearErrors: () => void
   fetchAccounts: () => Promise<void>
@@ -45,6 +48,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   linkedEngineer: '',
   canLinkVtms: false,
   canViewVtmsProgress: false,
+  sessionTimeoutMin: 30,
   loginError: '',
   loginWarning: '',
   accounts: [],
@@ -55,13 +59,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({
         isLoggedIn: true,
         isChecking: false,
-        role: res.role as 'super_admin' | 'admin' | 'user',
+        role: res.role as Role,
         username: res.username,
         displayName: res.displayName,
         allowedUnits: res.allowedUnits ?? [],
         linkedEngineer: res.linkedEngineer ?? '',
         canLinkVtms: res.canLinkVtms ?? false,
         canViewVtmsProgress: res.canViewVtmsProgress ?? false,
+        sessionTimeoutMin: res.sessionTimeoutMin ?? 30,
       })
     } catch {
       set({ isLoggedIn: false, isChecking: false })
@@ -87,7 +92,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         isFirstRun: false,
         loginError: '',
         loginWarning: '',
-        role: result.role as 'super_admin' | 'admin' | 'user',
+        role: result.role as Role,
         username: result.username ?? '',
         displayName: result.displayName ?? '',
         allowedUnits: result.allowedUnits ?? [],
@@ -105,11 +110,36 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
+  guestLogin: async () => {
+    try {
+      const result = await api.guestLogin()
+      if (result.sessionId) sessionStorage.setItem('vsms-session-token', result.sessionId)
+      set({
+        isLoggedIn: true,
+        isFirstRun: false,
+        loginError: '',
+        loginWarning: '',
+        role: 'guest',
+        username: result.username ?? 'Guest',
+        displayName: result.displayName ?? '訪客',
+        allowedUnits: [],
+        linkedEngineer: '',
+        canLinkVtms: false,
+        canViewVtmsProgress: false,
+      })
+    } catch (err) {
+      if (err instanceof ApiError) {
+        set({ loginError: err.message || '訪客登入失敗，請稍後再試。' })
+      } else {
+        set({ loginError: '無法連接伺服器，請確認伺服器已啟動。' })
+      }
+    }
+  },
+
   logout: () => {
     // 登出審計由後端 /api/logout 寫入
     api.logout().catch(console.error)
     sessionStorage.removeItem('vsms-session-token')
-    sessionStorage.removeItem('ganttLeftWidth')
     useUIStore.getState().setView('main')
     set({
       isLoggedIn: false,

@@ -53,6 +53,12 @@ router.post('/', async (req, res) => {
     return
   }
 
+  // 「Guest」為訪客虛擬帳號保留字，避免與 /api/guest-login 的 session 身分混淆
+  if (username.trim().toLowerCase() === 'guest') {
+    res.status(400).json({ ok: false, message: '「Guest」為系統保留帳號名稱' })
+    return
+  }
+
   const existing = await prisma.user.findUnique({ where: { username } })
   if (existing) {
     res.status(409).json({ ok: false, message: '帳號已存在' })

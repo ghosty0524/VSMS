@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuthStore } from '../../store/authStore'
 
 export function LoginPage() {
-  const { login, loginError, loginWarning, clearErrors, isChecking } = useAuthStore()
+  const { login, guestLogin, loginError, loginWarning, clearErrors, isChecking } = useAuthStore()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -13,6 +13,13 @@ export function LoginPage() {
     setSubmitting(true)
     clearErrors()
     await login(username, password, force)
+    setSubmitting(false)
+  }
+
+  const handleGuestLogin = async () => {
+    setSubmitting(true)
+    clearErrors()
+    await guestLogin()
     setSubmitting(false)
   }
 
@@ -112,6 +119,23 @@ export function LoginPage() {
                 transition-colors"
             >
               {submitting ? '登入中…' : '登入'}
+            </button>
+
+            {/* 訪客入口（唯讀） */}
+            <div className="flex items-center gap-3 pt-1">
+              <div className="flex-1 border-t border-gray-200" />
+              <span className="text-xs text-gray-400">或</span>
+              <div className="flex-1 border-t border-gray-200" />
+            </div>
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              disabled={submitting}
+              className="w-full py-2.5 text-sm font-medium rounded-lg border border-gray-300
+                text-gray-600 hover:bg-gray-50 hover:border-gray-400
+                disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              以訪客身分瀏覽（唯讀）
             </button>
           </form>
         )}

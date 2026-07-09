@@ -9,6 +9,7 @@ import {
 import { useOptionsStore } from '../../store/optionsStore'
 import { MultiSelectDropdown } from '../shared/MultiSelectDropdown'
 import type { ScheduleStatus } from '../../lib/status'
+import type { Role } from '../../types'
 
 // ── 排序型別 ─────────────────────────────────────────
 export type SortableField =
@@ -78,7 +79,7 @@ interface Props {
   onChange:         (v: FilterSortState) => void
   collapsed:        boolean
   onToggleCollapse: () => void
-  role:             'super_admin' | 'admin' | 'user' | null
+  role:             Role | null
   groupBy?:         'engineer' | 'device'
 }
 
@@ -395,8 +396,8 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
               只顯示已標記
             </button>
 
-            {/* Admin 旗標篩選（Admin/SA 限定） */}
-            {role !== 'user' && (
+            {/* Admin 旗標篩選（Admin/SA 限定；guest 看不到 adminFlag 資料） */}
+            {(role === 'super_admin' || role === 'admin') && (
               <button
                 type="button"
                 aria-pressed={value.showAdminFlagged}

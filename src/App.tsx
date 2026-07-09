@@ -4,6 +4,8 @@ import { useAuthStore } from './store/authStore'
 import { useUIStore } from './store/uiStore'
 import { LoginPage } from './components/layout/LoginPage'
 import { ProtectedLayout } from './components/ProtectedLayout'
+import { SessionExpiryWarning } from './components/shared/SessionExpiryWarning'
+import { LoadingScreen } from './components/shared/LoadingScreen'
 import { Header } from './components/layout/Header'
 import { GanttChart } from './components/schedule/GanttChart'
 import { SettingsPage } from './components/settings/SettingsPage'
@@ -26,18 +28,12 @@ export function App() {
   }, [view, setView])
 
   useEffect(() => {
-    if (role === 'user' && view !== 'main') {
+    if ((role === 'user' || role === 'guest') && view !== 'main') {
       setView('main')
     }
   }, [role, view, setView])
 
-  if (isChecking) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-gray-400 text-sm">連線中…</p>
-      </div>
-    )
-  }
+  if (isChecking) return <LoadingScreen text="連線中…" />
 
   if (!isLoggedIn) return <LoginPage />
 
@@ -63,12 +59,12 @@ export function App() {
               />
             </div>
           )}
-          {view === 'analytics' && role !== 'user' && (
+          {view === 'analytics' && (role === 'super_admin' || role === 'admin') && (
             <div className="h-full overflow-y-auto">
               <AnalyticsPage />
             </div>
           )}
-          {view === 'settings' && role !== 'user' && (
+          {view === 'settings' && (role === 'super_admin' || role === 'admin') && (
             <div className="h-full overflow-y-auto">
               <SettingsPage />
             </div>
@@ -79,6 +75,7 @@ export function App() {
             </div>
           )}
         </main>
+        <SessionExpiryWarning />
       </div>
     </ProtectedLayout>
   )

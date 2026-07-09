@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useScheduleStore } from '../../store/scheduleStore'
+import { useEscapeKey } from '../shared/useEscapeKey'
 import { parseImportFile } from '../../lib/excel'
 import type { ImportResult } from '../../lib/excel'
 import type { Schedule } from '../../types'
@@ -143,6 +144,7 @@ export function ExcelImportModal({ isOpen, onClose }: Props) {
 
   const reset = () => { setResult(null); setParseError(''); setMode('replace'); setDiffRecords([]); setShowDiff(false); if (fileRef.current) fileRef.current.value = '' }
   const handleClose = () => { reset(); onClose() }
+  useEscapeKey(isOpen, handleClose)
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return

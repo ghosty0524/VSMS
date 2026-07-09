@@ -6,6 +6,7 @@ import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
 import { ApiError } from '../../lib/api'
 import { MIN_DATE, FIELD_LIMITS } from '../../constants'
+import { useEscapeKey } from '../shared/useEscapeKey'
 import type { Schedule, ScheduleFormValues, VtmsTestPlan } from '../../types'
 
 interface Props {
@@ -33,6 +34,7 @@ function formatDate(d: Date): string {
 }
 
 export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
+  useEscapeKey(isOpen, onClose)
   const { add, update } = useScheduleStore()
   const { options } = useOptionsStore()
   const { role, canLinkVtms } = useAuthStore()

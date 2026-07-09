@@ -5,6 +5,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import { guestReadOnly } from './middleware/guestReadOnly.js'
 import authRouter from './routes/auth.js'
 import schedulesRouter from './routes/schedules.js'
 import optionsRouter from './routes/options.js'
@@ -37,6 +38,8 @@ app.use(session({
 }))
 
 // ── API Routes ─────────────────────────────────────────
+// Deny-by-default: guests can only issue GET (plus /logout) across all /api routes
+app.use('/api', guestReadOnly)
 app.use('/api', authRouter)
 app.use('/api/schedules', schedulesRouter)
 app.use('/api/options', optionsRouter)
@@ -46,12 +49,14 @@ app.use('/api/calendar', calendarRouter)
 app.use('/api/integration', integrationRouter)
 
 // ── Static (serve SPA in production) ──────────────────
-const isProd = !process.argv[1]?.includes('tsx')
-const distPath = isProd
-  ? path.join(__dirname, '../../../dist')
-  : path.join(__dirname, '../../dist')
+// 依執行位置不同（tsx 跑 server/src、node 跑 server/dist/src），dist 相對深度不同；
+// 直接找存在的候選路徑，不依賴 argv 判斷執行器
+const distPath = [
+  path.join(__dirname, '../../dist'),    // tsx: server/src → 專案根/dist
+  path.join(__dirname, '../../../dist'), // node: server/dist/src → 專案根/dist
+].find(p => fs.existsSync(p)) ?? ''
 
-if (fs.existsSync(distPath)) {
+if (distPath && fs.existsSync(distPath)) {
   app.use(express.static(distPath))
   app.get('/{*splat}', (req, res, next) => {
     // Unknown API routes must return JSON 404, not the SPA shell
