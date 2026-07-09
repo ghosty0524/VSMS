@@ -50,13 +50,13 @@ app.use('/api/integration', integrationRouter)
 
 // ── Static (serve SPA in production) ──────────────────
 // 依執行位置不同（tsx 跑 server/src、node 跑 server/dist/src），dist 相對深度不同；
-// 直接找存在的候選路徑，不依賴 argv 判斷執行器
+// 以 index.html 是否存在判斷，避免誤挑到同名的 server/dist 編譯輸出目錄
 const distPath = [
   path.join(__dirname, '../../dist'),    // tsx: server/src → 專案根/dist
   path.join(__dirname, '../../../dist'), // node: server/dist/src → 專案根/dist
-].find(p => fs.existsSync(p)) ?? ''
+].find(p => fs.existsSync(path.join(p, 'index.html'))) ?? ''
 
-if (distPath && fs.existsSync(distPath)) {
+if (distPath) {
   app.use(express.static(distPath))
   app.get('/{*splat}', (req, res, next) => {
     // Unknown API routes must return JSON 404, not the SPA shell
