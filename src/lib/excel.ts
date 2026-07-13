@@ -168,8 +168,8 @@ function computeStatus(s: Schedule): string {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const start = new Date(s.startDate.replace(/\//g, '-'))
-  const end   = new Date(s.endDate.replace(/\//g, '-'))
-  if (today >= start && today <= end) return 'Testing'
+  // 已開始（含逾期）但未勾 Completed/Delayed → 維持 Testing
+  if (today >= start) return 'Testing'
   return 'Planned'
 }
 

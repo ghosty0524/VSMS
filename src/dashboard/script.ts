@@ -46,8 +46,8 @@ export const DASHBOARD_JS = `
     if (s.isDelayed)   return 'Delayed';
     var today = new Date(); today.setHours(0,0,0,0);
     var start = parseDate(s.startDate);
-    var end   = parseDate(s.endDate);
-    if (today >= start && today <= end) return 'Testing';
+    // 已開始（含逾期）但未勾 Completed/Delayed → 維持 Testing
+    if (today >= start) return 'Testing';
     return 'Planned';
   }
   function escapeHtml(s) {

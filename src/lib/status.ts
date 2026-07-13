@@ -13,7 +13,8 @@ export function computeStatus(s: Schedule): ScheduleStatus {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const start = parseDate(s.startDate)
-  const end = parseDate(s.endDate)
-  if (today >= start && today <= end) return 'Testing'
+  // 已開始（含已超過完成日）但未勾 Completed/Delayed → 維持 Testing，
+  // 避免逾期排程被歸回 Planned
+  if (today >= start) return 'Testing'
   return 'Planned'
 }
