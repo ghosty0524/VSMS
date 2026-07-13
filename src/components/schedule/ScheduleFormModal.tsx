@@ -13,6 +13,7 @@ interface Props {
   isOpen: boolean
   schedule: Schedule | null
   onClose: () => void
+  onSaved?: (saved: { isCompleted: boolean }) => void
 }
 
 const EMPTY: ScheduleFormValues = {
@@ -33,7 +34,7 @@ function formatDate(d: Date): string {
   return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`
 }
 
-export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
+export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props) {
   useEscapeKey(isOpen, onClose)
   const { add, update } = useScheduleStore()
   const { options } = useOptionsStore()
@@ -131,6 +132,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose }: Props) {
     try {
       if (schedule) await update(schedule.id, data)
       else await add(data)
+      onSaved?.({ isCompleted: data.isCompleted })
       onClose()
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {

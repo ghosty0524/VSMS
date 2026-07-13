@@ -190,6 +190,18 @@ export function GanttChart({
   // Fix 4: stable close handler to avoid re-registering mousedown listener
   const closeFlagPopover = useCallback(() => setFlagPopover(null), [])
 
+  // 儲存成功但排程被目前篩選（預設隱藏 Completed）擋掉時的提示，
+  // 避免使用者以為「標記完成」沒有生效
+  const [saveNotice, setSaveNotice] = useState<string | null>(null)
+  const saveNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleSaved = useCallback(({ isCompleted }: { isCompleted: boolean }) => {
+    if (isCompleted && filterSort.statuses.length > 0 && !filterSort.statuses.includes('Completed')) {
+      setSaveNotice('已標記為 Completed。已完成的排程目前被「狀態」篩選隱藏，勾選 Completed 即可重新顯示。')
+      if (saveNoticeTimer.current) clearTimeout(saveNoticeTimer.current)
+      saveNoticeTimer.current = setTimeout(() => setSaveNotice(null), 8000)
+    }
+  }, [filterSort.statuses])
+
   const [groupBy, setGroupBy] = useState<'engineer' | 'device'>(() =>
     (localStorage.getItem('vsms-gantt-group-by') as 'engineer' | 'device') ?? 'engineer'
   )
@@ -386,7 +398,7 @@ export function GanttChart({
             <p className="text-sm text-gray-400 mt-1">點擊右上角「＋ 新增排程」開始建立</p>
           </div>
         </div>
-        <ScheduleFormModal isOpen={showAddModal} schedule={null} onClose={onCloseAddModal} />
+        <ScheduleFormModal isOpen={showAddModal} schedule={null} onSaved={handleSaved} onClose={onCloseAddModal} />
       </>
     )
   }
@@ -1007,7 +1019,17 @@ export function GanttChart({
 
       {/* ── Modals ── */}
       <ScheduleFormModal isOpen={showAddModal || !!editTarget} schedule={editTarget}
+        onSaved={handleSaved}
         onClose={() => { setEditTarget(null); onCloseAddModal() }} />
+      {saveNotice && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-5 py-3 text-sm font-medium
+                        bg-blue-50 border border-blue-200 text-blue-800 rounded-xl shadow-xl
+                        min-w-[260px] max-w-[420px]">
+          <span>✅ {saveNotice}</span>
+          <button type="button" onClick={() => setSaveNotice(null)}
+            className="ml-auto text-blue-400 hover:text-blue-600">✕</button>
+        </div>
+      )}
       <DeleteConfirmDialog isOpen={!!deleteTarget}
         message={`確定要刪除「${deleteTarget?.projectName}」嗎？此操作無法復原。`}
         onConfirm={() => { remove(deleteTarget!.id); setDeleteTarget(null) }}
