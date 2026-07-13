@@ -85,6 +85,8 @@ export function LoginPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">帳號</label>
               <input
                 type="text"
+                name="username"
+                autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="請輸入帳號"
@@ -98,6 +100,8 @@ export function LoginPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">密碼</label>
               <input
                 type="password"
+                name="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="請輸入密碼"
