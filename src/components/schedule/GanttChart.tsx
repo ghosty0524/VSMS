@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange } from 'lucide-react'
+import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange, Maximize2, Minimize2 } from 'lucide-react'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
@@ -206,6 +206,25 @@ export function GanttChart({
     (localStorage.getItem('vsms-gantt-group-by') as 'engineer' | 'device') ?? 'engineer'
   )
 
+  // ── 全螢幕檢視 ────────────────────────────────────────
+  // CSS 覆蓋整個視窗 + 嘗試瀏覽器全螢幕（失敗則僅覆蓋視窗）。
+  // 彈窗／tooltip 都 portal 到 body，瀏覽器全螢幕作用在整份文件上所以照常顯示。
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen(f => {
+      const next = !f
+      if (next) document.documentElement.requestFullscreen?.().catch(() => {})
+      else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+      return next
+    })
+  }, [])
+  useEffect(() => {
+    // 使用者按 Esc 離開瀏覽器全螢幕時，同步關閉覆蓋模式
+    const onFsChange = () => { if (!document.fullscreenElement) setIsFullscreen(false) }
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
   // 顯示偏好存 localStorage（跨登入保留）；相容舊版 sessionStorage 值
   const [leftWidth, setLeftWidth] = useState<number>(() => {
     const saved = localStorage.getItem('ganttLeftWidth') ?? sessionStorage.getItem('ganttLeftWidth')
@@ -291,6 +310,20 @@ export function GanttChart({
     window.addEventListener('resize', updateVisibleRange)
     return () => window.removeEventListener('resize', updateVisibleRange)
   }, [updateVisibleRange])
+
+  useEffect(() => {
+    // 全螢幕切換會改變容器高度，重算虛擬化可視範圍
+    const raf = requestAnimationFrame(updateVisibleRange)
+    if (!isFullscreen) return () => cancelAnimationFrame(raf)
+    // 瀏覽器全螢幕被拒（僅覆蓋模式）時以 Esc 離開；有彈窗開啟時讓彈窗優先
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.fullscreenElement) return
+      if (editTarget || deleteTarget || flagPopover || showAddModal) return
+      setIsFullscreen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('keydown', onKey) }
+  }, [isFullscreen, editTarget, deleteTarget, flagPopover, showAddModal, updateVisibleRange])
 
   const allUnits  = options.testUnits.map(u => u.value)
   const filtered  = applyFilter(schedules, filterSort, role, allowedUnits, linkedEngineer)
@@ -444,7 +477,9 @@ export function GanttChart({
   const todayX = daysBetween(timelineStart, today) * PX_PER_DAY
 
   return (
-    <div className="h-full flex flex-col bg-white rounded-lg shadow overflow-hidden">
+    <div className={`flex flex-col bg-white overflow-hidden ${
+      isFullscreen ? 'fixed inset-0 z-[100]' : 'h-full rounded-lg shadow'
+    }`}>
       <FilterSortBar value={filterSort} onChange={setFilterSort}
         collapsed={filterCollapsed} onToggleCollapse={onToggleFilter}
         role={role} groupBy={groupBy} />
@@ -516,6 +551,17 @@ export function GanttChart({
               按設備
             </button>
           </div>
+          {/* ★ 全螢幕切換 */}
+          <button
+            type="button"
+            title={isFullscreen ? '離開全螢幕（Esc）' : '全螢幕檢視甘特圖'}
+            onClick={e => { e.stopPropagation(); toggleFullscreen() }}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-300 bg-white
+                       text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors"
+          >
+            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            {isFullscreen ? '離開全螢幕' : '全螢幕'}
+          </button>
           <span className="text-slate-400 text-sm">
             {ganttCollapsed ? '▼ 展開' : '▲ 收合'}
           </span>
@@ -772,9 +818,7 @@ export function GanttChart({
                     const evenFill = i % 2 === 0 ? '#fafbfc' : '#f1f5f9'
                     return (
                       <div key={s.id} className="relative border-b"
-                        style={{ height: ROW_H, background: evenFill }}
-                        onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
-                        onMouseLeave={() => setTooltip(null)}>
+                        style={{ height: ROW_H, background: evenFill }}>
                         <div className="flex items-center gap-2 px-2 pt-[6px]">
                           <div className="flex-shrink-0 w-[84px] h-[24px] rounded-[5px] text-xs font-bold flex items-center justify-center"
                             style={{ background: statusColor.bg, color: statusColor.text, letterSpacing: '0.02em' }}>
@@ -784,9 +828,9 @@ export function GanttChart({
                             {s.projectName}
                           </div>
                         </div>
-                        {s.taskDescription && <div className="text-xs text-slate-500 truncate pl-[98px] -mt-[2px]">{s.taskDescription}</div>}
-                        {/* ★ 旗標圖示 + 操作按鈕 */}
-                        <div className="absolute right-2 top-[10px] flex gap-1">
+                        {s.taskDescription && <div className="text-xs text-slate-500 truncate pl-[98px] -mt-[2px] pr-28">{s.taskDescription}</div>}
+                        {/* ★ 旗標圖示 + 操作按鈕：對齊第一行（狀態籤中線），避免壓到第二行文字 */}
+                        <div className="absolute right-2 top-[7px] flex gap-1">
                           {/* Admin 旗標（Admin/SA 限定） */}
                           {canWrite && (
                             <div className="relative">
@@ -802,11 +846,11 @@ export function GanttChart({
                                 }}
                                 className={`w-[22px] h-[22px] flex items-center justify-center rounded-md transition-colors duration-100
                                   ${s.adminFlag
-                                    ? 'bg-orange-100 text-orange-500 hover:bg-orange-200'
-                                    : 'bg-gray-50 text-gray-300 hover:text-orange-400 hover:bg-orange-50'
+                                    ? 'bg-orange-500 text-white shadow-sm ring-1 ring-orange-600/30 hover:bg-orange-600'
+                                    : 'bg-white text-gray-400 border border-gray-200 hover:text-orange-500 hover:bg-orange-50 hover:border-orange-300'
                                   }`}
                               >
-                                <ShieldCheck size={12} strokeWidth={2} />
+                                <ShieldCheck size={14} strokeWidth={2.2} />
                               </button>
                               {flagPopover?.scheduleId === s.id && flagPopover.type === 'admin' && (
                                 <FlagPopover
@@ -843,11 +887,11 @@ export function GanttChart({
                               }}
                               className={`w-[22px] h-[22px] flex items-center justify-center rounded-md transition-colors duration-100
                                 ${s.userFlag
-                                  ? 'bg-blue-100 text-blue-500 hover:bg-blue-200'
-                                  : 'bg-gray-50 text-gray-300 hover:text-blue-400 hover:bg-blue-50'
+                                  ? 'bg-blue-500 text-white shadow-sm ring-1 ring-blue-600/30 hover:bg-blue-600'
+                                  : 'bg-white text-gray-400 border border-gray-200 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-300'
                                 }`}
                             >
-                              <Bookmark size={12} strokeWidth={2} />
+                              <Bookmark size={14} strokeWidth={2.2} fill={s.userFlag ? 'currentColor' : 'none'} />
                             </button>
                             {flagPopover?.scheduleId === s.id && flagPopover.type === 'user' && (
                               <FlagPopover
