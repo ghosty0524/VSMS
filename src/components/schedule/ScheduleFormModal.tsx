@@ -16,6 +16,15 @@ interface Props {
   onSaved?: (saved: { isCompleted: boolean }) => void
 }
 
+/**
+ * 從 API 錯誤取出後端 422 驗證的逐欄位錯誤(例如歷史資料的任務描述超過
+ * 500 字)。非 422 或沒有欄位錯誤時回傳 null,交由既有的通用訊息處理。
+ */
+export function serverFieldErrors(err: unknown): Partial<Record<keyof ScheduleFormValues, string>> | null {
+  if (!(err instanceof ApiError) || err.status !== 422 || !err.fieldErrors) return null
+  return err.fieldErrors as Partial<Record<keyof ScheduleFormValues, string>>
+}
+
 const EMPTY: ScheduleFormValues = {
   category: '', projectName: '', taskDescription: '',
   testUnit: '', testEngineer: '', timeResource: '',
@@ -135,7 +144,11 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
       onSaved?.({ isCompleted: data.isCompleted })
       onClose()
     } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
+      const fieldErrs = serverFieldErrors(err)
+      if (fieldErrs) {
+        setErrors(fieldErrs)
+        setSubmitError('儲存失敗：請修正欄位錯誤後再試')
+      } else if (err instanceof ApiError && err.status === 403) {
         setSubmitError('您只能編輯指派給自己的排程')
       } else {
         setSubmitError('儲存失敗，請稍後再試')
