@@ -44,7 +44,7 @@ function buildMultiSelect(id: string, items: string[], label: string): string {
     </div>`
 }
 
-const ALL_STATUSES = ['Completed', 'Delayed', 'Testing', 'Planned'] as const
+const ALL_STATUSES = ['Completed', 'Delayed', 'Testing', 'Planned', 'Cancelled'] as const
 
 export function generateDashboardHTML(schedules: Schedule[], options: OptionsMap): string {
   const activeCategories = options.categories.filter(c => c.isActive).map(c => c.value)
@@ -64,7 +64,7 @@ export function generateDashboardHTML(schedules: Schedule[], options: OptionsMap
   + `<span class="legend-item"><span class="legend-dot" style="background:${OVERFLOW_COLOR}"></span>超出時間資源</span>`
 
   const statusCheckboxes = ALL_STATUSES.map(s =>
-    `<label><input type="checkbox" class="status-cb" value="${s}"${s !== 'Completed' ? ' checked' : ''}> <span class="status-badge status-${s}">${s}</span></label>`
+    `<label><input type="checkbox" class="status-cb" value="${s}"${s !== 'Completed' && s !== 'Cancelled' ? ' checked' : ''}> <span class="status-badge status-${s}">${s}</span></label>`
   ).join('')
 
   return `<!DOCTYPE html>

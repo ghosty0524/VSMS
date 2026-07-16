@@ -374,6 +374,7 @@ header .export-time {
 .status-Delayed   { background: #fee2e2; color: #991b1b; }
 .status-Testing   { background: #dbeafe; color: #1e40af; }
 .status-Planned   { background: #f1f5f9; color: #475569; }
+.status-Cancelled { background: #111827; color: #f9fafb; }
 
 /* ════════════════════════════════════════
    排程列表

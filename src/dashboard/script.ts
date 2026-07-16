@@ -18,6 +18,7 @@ export const DASHBOARD_JS = `
     'Delayed':   { bg:'#FEE2E2', text:'#991B1B' },
     'Testing':   { bg:'#DBEAFE', text:'#1E40AF' },
     'Planned':   { bg:'#F1F5F9', text:'#475569' },
+    'Cancelled': { bg:'#111827', text:'#F9FAFB' },
   };
 
   /* ── 工具函式 ── */
@@ -42,6 +43,7 @@ export const DASHBOARD_JS = `
     return false;
   }
   function computeStatus(s) {
+    if (s.isCancelled) return 'Cancelled';
     if (s.isCompleted) return 'Completed';
     if (s.isDelayed)   return 'Delayed';
     var today = new Date(); today.setHours(0,0,0,0);
@@ -100,7 +102,7 @@ export const DASHBOARD_JS = `
   /* ── 全域狀態 ── */
   var state = {
     categories:[], testUnits:[], testEngineers:[],
-    hiddenStatuses:['Completed'],
+    hiddenStatuses:['Completed','Cancelled'],
     projectSearch:'',
     startFrom:'', endFrom:'',
     sortField:'', sortDir:'asc'
@@ -595,7 +597,7 @@ export const DASHBOARD_JS = `
 
   /* ── 狀態 checkbox ── */
   document.querySelectorAll('.status-cb').forEach(function(cb) {
-    if (cb.value === 'Completed') cb.checked = false;
+    if (cb.value === 'Completed' || cb.value === 'Cancelled') cb.checked = false;
     cb.addEventListener('change', function() {
       state.hiddenStatuses = Array.from(document.querySelectorAll('.status-cb:not(:checked)')).map(function(c){ return c.value; });
       renderAll();
@@ -616,7 +618,7 @@ export const DASHBOARD_JS = `
   /* ── 清除所有篩選 ── */
   document.getElementById('clear-filters').addEventListener('click', function() {
     state.categories = []; state.testUnits = []; state.testEngineers = [];
-    state.hiddenStatuses = ['Completed'];
+    state.hiddenStatuses = ['Completed','Cancelled'];
     state.projectSearch = '';
     state.startFrom = ''; state.endFrom = '';
     state.sortField = ''; state.sortDir = 'asc';
@@ -633,7 +635,7 @@ export const DASHBOARD_JS = `
 
     document.getElementById('search-input').value = '';
     document.querySelectorAll('.filters input[type=date]').forEach(function(el){ el.value = ''; });
-    document.querySelectorAll('.status-cb').forEach(function(cb){ cb.checked = cb.value !== 'Completed'; });
+    document.querySelectorAll('.status-cb').forEach(function(cb){ cb.checked = cb.value !== 'Completed' && cb.value !== 'Cancelled'; });
     document.querySelectorAll('th[data-sort] .sort-indicator').forEach(function(el){ el.textContent = ''; });
     renderAll();
   });
