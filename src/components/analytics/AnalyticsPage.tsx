@@ -5,7 +5,7 @@ import { computeStatus } from '../../lib/status'
 import { CATEGORY_COLORS } from '../../constants'
 import KpiSection from './KpiSection'
 import TrendSection from './TrendSection'
-import LoadChart from './LoadChart'
+import LoadSection from './LoadSection'
 import ExpiringList from './ExpiringList'
 
 export interface AnalyticsFilter {
@@ -178,9 +178,8 @@ const AnalyticsPage: React.FC = () => {
           <TrendSection schedules={filtered} categories={categoryOptions} colorOf={colorOf} />
         </section>
 
-        <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
-          <h3 className="text-base font-semibold text-gray-700">負載分布</h3>
-          <LoadChart schedules={filtered} categories={categoryOptions} showTitle={false} />
+        <section className="bg-white rounded-xl border shadow-sm p-5">
+          <LoadSection schedules={filtered} categories={categoryOptions} colorOf={colorOf} />
         </section>
 
         <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
