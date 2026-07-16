@@ -20,6 +20,8 @@ model Schedule {
   testReport        String   @db.VarChar(500)
   isCompleted       Boolean  @default(false)
   isDelayed         Boolean  @default(false)
+  isCancelled       Boolean  @default(false)
+  completedAt       DateTime?
   delayReason       String   @db.VarChar(5000)
   createdBy         String   @db.VarChar(100)
   updatedBy         String   @db.VarChar(100)
