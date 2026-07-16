@@ -3,7 +3,7 @@ import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { computeStatus } from '../../lib/status'
 import { CATEGORY_COLORS } from '../../constants'
-import KpiCards from './KpiCards'
+import KpiSection from './KpiSection'
 import TrendChart from './TrendChart'
 import LoadChart from './LoadChart'
 import ExpiringList from './ExpiringList'
@@ -173,7 +173,7 @@ const AnalyticsPage: React.FC = () => {
       <div className="p-6 space-y-6">
         <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
           <h3 className="text-base font-semibold text-gray-700">整體概覽</h3>
-          <KpiCards schedules={filtered} />
+          <KpiSection schedules={filtered} />
         </section>
 
         <section className="bg-white rounded-xl border shadow-sm p-5">
