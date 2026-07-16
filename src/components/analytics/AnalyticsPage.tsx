@@ -7,6 +7,8 @@ import KpiSection from './KpiSection'
 import TrendSection from './TrendSection'
 import LoadSection from './LoadSection'
 import RiskList from './RiskList'
+import UnitComparison from './UnitComparison'
+import DelayAnalysis from './DelayAnalysis'
 
 export interface AnalyticsFilter {
   categories: string[]
@@ -186,6 +188,17 @@ const AnalyticsPage: React.FC = () => {
           <h3 className="text-base font-semibold text-gray-700">風險清單</h3>
           <RiskList schedules={filtered} />
         </section>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
+            <h3 className="text-base font-semibold text-gray-700">單位執行比較</h3>
+            <UnitComparison schedules={filtered} />
+          </section>
+          <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
+            <h3 className="text-base font-semibold text-gray-700">延遲分析</h3>
+            <DelayAnalysis schedules={filtered} />
+          </section>
+        </div>
       </div>
     </div>
   )
