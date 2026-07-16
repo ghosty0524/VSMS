@@ -6,7 +6,7 @@ import { CATEGORY_COLORS } from '../../constants'
 import KpiSection from './KpiSection'
 import TrendSection from './TrendSection'
 import LoadSection from './LoadSection'
-import ExpiringList from './ExpiringList'
+import RiskList from './RiskList'
 
 export interface AnalyticsFilter {
   categories: string[]
@@ -184,7 +184,7 @@ const AnalyticsPage: React.FC = () => {
 
         <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
           <h3 className="text-base font-semibold text-gray-700">風險清單</h3>
-          <ExpiringList schedules={filtered} showTitle={false} />
+          <RiskList schedules={filtered} />
         </section>
       </div>
     </div>
