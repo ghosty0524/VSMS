@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/db.js';
 import { requireApiKey } from '../middleware/requireApiKey.js';
 import { getTestPlanProgressBatch } from '../lib/vtmsClient.js';
+import { analyzeWorkload } from '../lib/workload.js';
 
 const router = Router();
 
@@ -108,6 +109,62 @@ router.get('/schedules-with-progress', requireApiKey, async (req, res) => {
     vtmsProgress: s.vtmsPlanId ? (progressMap[s.vtmsPlanId] ?? null) : null,
   }));
   res.json(result);
+});
+
+// GET /workload-analysis — engineer workload for one month (Copilot Agent).
+// The scoring algorithm lives in lib/workload.ts so the agent never computes it.
+// Overtime hours come from Work IQ (outside this system) and are passed in via
+// the optional `overtime` param: "Name1=8,Name2=4.5".
+router.get('/workload-analysis', requireApiKey, async (req, res) => {
+  const month = qs(req.query.month) ?? '';
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    res.status(400).json({ error: 'month is required, format YYYY-MM' });
+    return;
+  }
+  const year = Number(month.slice(0, 4));
+  const monthStart = normalizeDate(`${month}-01`);
+  const monthEnd = normalizeDate(`${month}-31`); // string compare: '31' covers every month length
+
+  const where: Record<string, unknown> = {
+    startDate: { lte: monthEnd },
+    endDate: { gte: monthStart },
+  };
+  const testEngineer = qs(req.query.testEngineer);
+  if (testEngineer) where.testEngineer = testEngineer;
+  const testUnit = qs(req.query.testUnit);
+  if (testUnit) where.testUnit = testUnit;
+  const schedules = await prisma.schedule.findMany({ where });
+
+  // 例假日（非週末）取自政府行事曆匯入；年度不符時僅排除週六日並註明
+  const limitations: string[] = [];
+  let holidays: string[] = [];
+  const calendar = await prisma.calendarConfig.findUnique({ where: { id: 1 } });
+  if (calendar && calendar.year === year) {
+    holidays = (calendar.nonWeekendHolidays as string[]) ?? [];
+  } else {
+    limitations.push(`行事曆未涵蓋 ${year} 年，工作日僅排除週六日、未排除國定假日`);
+  }
+
+  // overtime=Name1=8,Name2=4.5（來源：Work IQ，由 Agent 轉入）
+  let overtime: Record<string, number> | undefined;
+  const overtimeRaw = qs(req.query.overtime);
+  if (overtimeRaw) {
+    overtime = {};
+    for (const pair of overtimeRaw.split(',')) {
+      const idx = pair.lastIndexOf('=');
+      const name = pair.slice(0, idx).trim();
+      const hours = Number(pair.slice(idx + 1));
+      if (name && Number.isFinite(hours) && hours >= 0) overtime[name] = hours;
+    }
+  }
+
+  const result = analyzeWorkload({
+    month,
+    schedules: schedules.filter(s => s.testEngineer),
+    holidays,
+    overtime,
+  });
+  res.json({ ...result, limitations });
 });
 
 // PATCH /schedules/:id/delay — called by VTMS when Delay log is saved

@@ -155,6 +155,50 @@ paths:
         '401':
           description: Unauthorized
 
+  /workload-analysis:
+    get:
+      summary: Engineer workload analysis for one month (algorithm runs server-side)
+      parameters:
+        - { in: query, name: month,        required: true, schema: { type: string }, description: 'Target month, YYYY-MM' }
+        - { in: query, name: testEngineer, schema: { type: string }, description: 'Exact test engineer name' }
+        - { in: query, name: testUnit,     schema: { type: string }, description: 'Exact test unit name' }
+        - { in: query, name: overtime,     schema: { type: string }, description: 'Overtime hours per engineer, "Name1=8,Name2=4.5" (from Work IQ)' }
+      responses:
+        '200':
+          description: Per-engineer workload sorted by rate desc
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  month:    { type: string }
+                  workdays: { type: integer, description: 'Business days in month (weekends and imported holidays excluded)' }
+                  limitations:
+                    type: array
+                    items: { type: string }
+                  engineers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        testEngineer:    { type: string }
+                        testUnits:       { type: array, items: { type: string } }
+                        scheduleCount:   { type: integer }
+                        baseScore:       { type: number, description: 'Σ min(daily intensity sum, 1.2) over month workdays' }
+                        overtimeHours:   { type: number, nullable: true }
+                        overtimeBonus:   { type: number, nullable: true, description: 'hours × 0.125, uncapped' }
+                        total:           { type: number }
+                        rate:            { type: number, description: 'total ÷ month workdays × 100 (%)' }
+                        level:           { type: string, enum: ['超載', '滿載', '中等', '偏低'] }
+                        unscheduledDays: { type: integer }
+                        partialDays:     { type: integer, description: 'Workdays with pre-cap intensity < 1' }
+                        cappedDays:      { type: integer, description: 'Workdays with pre-cap intensity ≥ 1.2' }
+                        limitations:     { type: array, items: { type: string } }
+        '400':
+          description: Missing or malformed month
+        '401':
+          description: Unauthorized
+
   /schedules/{id}/delay:
     patch:
       summary: Mark schedule as delayed (called by VTMS on Delay log)
