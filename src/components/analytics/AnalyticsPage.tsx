@@ -4,7 +4,7 @@ import { useOptionsStore } from '../../store/optionsStore'
 import { computeStatus } from '../../lib/status'
 import { CATEGORY_COLORS } from '../../constants'
 import KpiSection from './KpiSection'
-import TrendChart from './TrendChart'
+import TrendSection from './TrendSection'
 import LoadChart from './LoadChart'
 import ExpiringList from './ExpiringList'
 
@@ -133,8 +133,6 @@ const AnalyticsPage: React.FC = () => {
     const map = new Map(categoryOptions.map((c, i) => [c, CATEGORY_COLORS[i % CATEGORY_COLORS.length]]))
     return (cat: string) => map.get(cat) ?? CATEGORY_COLORS[CATEGORY_COLORS.length - 1]
   }, [categoryOptions])
-  // Task 13/14 使用
-  void colorOf
 
   const filtered = useMemo(() => schedules.filter(s => {
     if (filter.categories.length > 0 && !filter.categories.includes(s.category)) return false
@@ -177,7 +175,7 @@ const AnalyticsPage: React.FC = () => {
         </section>
 
         <section className="bg-white rounded-xl border shadow-sm p-5">
-          <TrendChart schedules={filtered} categories={categoryOptions} />
+          <TrendSection schedules={filtered} categories={categoryOptions} colorOf={colorOf} />
         </section>
 
         <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
