@@ -207,6 +207,8 @@ router.patch('/schedules/:id/complete', requireApiKey, async (req, res) => {
   const id = String(req.params.id);
   const existing = await prisma.schedule.findUnique({ where: { id } });
   if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+  // 取消是 VSMS 排程層的人為決策，VTMS 完成事件不覆寫
+  if (existing.isCancelled) { res.json(existing); return; }
   const updated = await prisma.schedule.update({
     where: { id },
     data: { isCompleted: true, ...completedAtPatch(existing.isCompleted, true), updatedAt: new Date() },

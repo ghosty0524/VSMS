@@ -53,8 +53,10 @@ components:
         endDate:         { type: string }
         isCompleted:     { type: boolean }
         isDelayed:       { type: boolean }
+        isCancelled:     { type: boolean, description: 'True if cancelled in VSMS; mutually exclusive with isCompleted' }
         delayReason:     { type: string, nullable: true }
         vtmsPlanId:      { type: string, nullable: true }
+        completedAt:     { type: string, format: date-time, nullable: true, description: 'Timestamp when isCompleted last transitioned to true' }
 
     ScheduleWithProgress:
       allOf:
@@ -75,6 +77,7 @@ paths:
         - { in: query, name: projectName,  schema: { type: string }, description: 'Partial project name match' }
         - { in: query, name: isCompleted,  schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: isDelayed,    schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: isCancelled,  schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: dateFrom,     schema: { type: string, description: 'YYYY-MM-DD (matches startDate >=)' } }
         - { in: query, name: dateTo,       schema: { type: string, description: 'YYYY-MM-DD (matches startDate <=)' } }
       responses:
@@ -101,10 +104,11 @@ paths:
                 type: object
                 properties:
                   total:       { type: integer }
-                  completed:   { type: integer }
-                  delayed:     { type: integer }
-                  inProgress:  { type: integer }
-                  notStarted:  { type: integer }
+                  completed:   { type: integer, description: 'Mutually exclusive bucket; excludes cancelled schedules' }
+                  delayed:     { type: integer, description: 'Mutually exclusive bucket; excludes cancelled schedules' }
+                  inProgress:  { type: integer, description: 'Mutually exclusive bucket; excludes cancelled schedules' }
+                  notStarted:  { type: integer, description: 'Mutually exclusive bucket; excludes cancelled schedules' }
+                  cancelled:   { type: integer, description: 'Schedules cancelled in VSMS; not counted in the other buckets' }
                   byUnit:
                     type: object
                     additionalProperties: { type: integer }
