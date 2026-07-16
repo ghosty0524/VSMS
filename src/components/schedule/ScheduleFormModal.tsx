@@ -30,7 +30,7 @@ const EMPTY: ScheduleFormValues = {
   testUnit: '', testEngineer: '', timeResource: '',
   startDate: null, endDate: null,
   requiredPersonnel: '', testReport: '',
-  isCompleted: false, isDelayed: false, delayReason: '',
+  isCompleted: false, isDelayed: false, isCancelled: false, delayReason: '',
   device: '',
 }
 
@@ -77,6 +77,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
         startDate: parseDate(schedule.startDate), endDate: parseDate(schedule.endDate),
         requiredPersonnel: schedule.requiredPersonnel, testReport: schedule.testReport,
         isCompleted: schedule.isCompleted, isDelayed: schedule.isDelayed,
+        isCancelled: schedule.isCancelled,
         delayReason: schedule.delayReason,
         device: schedule.device ?? '',
       })
@@ -134,6 +135,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
       startDate: formatDate(form.startDate!), endDate: formatDate(form.endDate!),
       requiredPersonnel: form.requiredPersonnel.trim(), testReport: form.testReport.trim(),
       isCompleted: form.isCompleted, isDelayed: form.isDelayed,
+      ...(isUser ? {} : { isCancelled: form.isCancelled }),
       delayReason: form.isDelayed ? form.delayReason.trim() : '',
       ...(isUser ? {} : { device: form.device }),
       ...(canLinkVtms ? { vtmsPlanId: vtmsPlanId || null } : {}),
@@ -311,9 +313,9 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
           <div className="flex items-center gap-2">
             <input type="checkbox" id="isCompleted" checked={form.isCompleted}
               onChange={e => setForm(f => ({ ...f, isCompleted: e.target.checked }))}
-              disabled={!!vtmsPlanId}
-              className={`w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${vtmsPlanId ? 'cursor-not-allowed opacity-50' : ''}`} />
-            <label htmlFor="isCompleted" className={`text-sm font-medium ${vtmsPlanId ? 'text-gray-400' : 'text-gray-700'}`}>Completed（工作已完成）</label>
+              disabled={!!vtmsPlanId || form.isCancelled}
+              className={`w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${vtmsPlanId || form.isCancelled ? 'cursor-not-allowed opacity-50' : ''}`} />
+            <label htmlFor="isCompleted" className={`text-sm font-medium ${vtmsPlanId || form.isCancelled ? 'text-gray-400' : 'text-gray-700'}`}>Completed（工作已完成）</label>
             {vtmsPlanId && <span className="text-xs text-gray-500">由 VTMS 控制</span>}
           </div>
 
@@ -339,6 +341,15 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
               {vtmsPlanId && <span className="text-xs text-gray-500">由 VTMS 控制</span>}
             </div>
           ), true)}
+
+          {/* Cancelled：與 Completed 互斥、僅 Admin 可操作、VTMS 關聯不鎖定 */}
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="isCancelled" checked={form.isCancelled}
+              onChange={e => setForm(f => ({ ...f, isCancelled: e.target.checked, isCompleted: e.target.checked ? false : f.isCompleted }))}
+              disabled={isUser || form.isCompleted}
+              className={`w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500 ${isUser || form.isCompleted ? 'cursor-not-allowed opacity-50' : ''}`} />
+            <label htmlFor="isCancelled" className={`text-sm font-medium ${isUser || form.isCompleted ? 'text-gray-400' : 'text-gray-700'}`}>Cancelled（工作已取消）</label>
+          </div>
         </div>
         <div className="flex items-center justify-between gap-2 p-4 border-t">
           {submitError
