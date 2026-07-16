@@ -86,7 +86,7 @@ export const DEFAULT_FILTER: FilterSortState = {
   ...defaultGanttRange(),
 }
 
-const ALL_STATUSES: ScheduleStatus[] = ['Completed', 'Delayed', 'Testing', 'Planned']
+const ALL_STATUSES: ScheduleStatus[] = ['Completed', 'Delayed', 'Testing', 'Planned', 'Cancelled']
 
 function toInputVal(s: string): string { return s ? s.replace(/\//g, '-') : '' }
 function fromInputVal(s: string): string { return s ? s.replace(/-/g, '/') : '' }
