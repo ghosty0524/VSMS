@@ -19,7 +19,7 @@ const TrendSection: React.FC<Props> = ({ schedules, categories, colorOf }) => {
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [piePeriod, setPiePeriod] = useState('全部')
 
-  const visibleCats = categories.filter(c => !hidden.has(c))
+  const visibleCats = useMemo(() => categories.filter(c => !hidden.has(c)), [categories, hidden])
 
   const toggleCat = (cat: string) => {
     setHidden(prev => {
