@@ -17,6 +17,8 @@ export interface Schedule {
   testReport: string
   isCompleted: boolean
   isDelayed: boolean
+  isCancelled: boolean
+  completedAt: string | null
   delayReason: string
   createdBy: string
   updatedBy: string
@@ -112,6 +114,7 @@ export interface ScheduleFormValues {
   testReport: string
   isCompleted: boolean
   isDelayed: boolean
+  isCancelled: boolean
   delayReason: string
   device: string          // 設備 value，空字串表示未指定
 }

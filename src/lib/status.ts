@@ -1,6 +1,6 @@
 import type { Schedule } from '../types'
 
-export type ScheduleStatus = 'Completed' | 'Delayed' | 'Testing' | 'Planned'
+export type ScheduleStatus = 'Cancelled' | 'Completed' | 'Delayed' | 'Testing' | 'Planned'
 
 function parseDate(s: string): Date {
   const [y, m, d] = s.split('/').map(Number)
@@ -8,6 +8,7 @@ function parseDate(s: string): Date {
 }
 
 export function computeStatus(s: Schedule): ScheduleStatus {
+  if (s.isCancelled) return 'Cancelled'
   if (s.isCompleted) return 'Completed'
   if (s.isDelayed) return 'Delayed'
   const today = new Date()

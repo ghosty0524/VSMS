@@ -35,11 +35,19 @@ export function getUnitColor(unitValue: string, allUnits: string[]): string {
 }
 
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  Cancelled: { bg: '#111827', text: '#FFFFFF' },
   Completed: { bg: '#16A34A', text: '#FFFFFF' },
   Delayed:   { bg: '#DC2626', text: '#FFFFFF' },
   Testing:   { bg: '#2563EB', text: '#FFFFFF' },
   Planned:   { bg: '#6B7280', text: '#FFFFFF' },
 }
+
+// 統計圖表類別色盤：dataviz validator 驗證通過（白底、最差相鄰 CVD ΔE 12.9）。
+// 順序固定 —— 依啟用類別清單的索引指派（index % 8），不可依篩選結果重排。
+export const CATEGORY_COLORS = [
+  '#2a78d6', '#eda100', '#0891b2', '#eb6834',
+  '#4a3aa7', '#1baf7a', '#e87ba4', '#a16207',
+]
 
 function makeOption(value: string, sortOrder: number): Option {
   return { id: uuidv4(), value, label: value, isActive: true, sortOrder }

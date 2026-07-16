@@ -17,7 +17,7 @@ import type { ScheduleStatus } from '../../lib/status'
 
 // 狀態非顏色指示：色弱使用者可藉符號辨識
 const STATUS_GLYPH: Record<ScheduleStatus, string> = {
-  Completed: '✓', Delayed: '!', Testing: '▶', Planned: '○',
+  Cancelled: '✕', Completed: '✓', Delayed: '!', Testing: '▶', Planned: '○',
 }
 
 // ── 尺寸常數 ──────────────────────────────────────────
@@ -64,7 +64,7 @@ function daysBetween(a: Date, b: Date): number {
 }
 
 const STATUS_PRIORITY: Record<ScheduleStatus, number> = {
-  Completed: 0, Delayed: 1, Testing: 2, Planned: 3,
+  Cancelled: 4, Completed: 0, Delayed: 1, Testing: 2, Planned: 3,
 }
 
 // ★ 測試單位自訂排序
