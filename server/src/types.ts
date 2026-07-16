@@ -14,6 +14,8 @@ export interface Schedule {
   testReport: string
   isCompleted: boolean
   isDelayed: boolean
+  isCancelled: boolean
+  completedAt: string | null
   delayReason: string
   createdBy: string
   updatedBy: string

@@ -99,4 +99,23 @@ describe('validateSchedule middleware', () => {
     expect(res.status).toBe(422)
     expect(Object.keys(res.body.errors).length).toBeGreaterThanOrEqual(3)
   })
+
+  it('rejects isCancelled=true together with isCompleted=true', async () => {
+    const res = await request(app).post('/test').send({ ...validBody, isCancelled: true, isCompleted: true })
+    expect(res.status).toBe(422)
+    expect(res.body.errors.isCancelled).toBeDefined()
+  })
+
+  it('rejects non-boolean isCancelled', async () => {
+    const res = await request(app).post('/test').send({ ...validBody, isCancelled: 'yes' })
+    expect(res.status).toBe(422)
+    expect(res.body.errors.isCancelled).toBeDefined()
+  })
+
+  it('accepts isCancelled=true with isCompleted=false (and isDelayed=true allowed)', async () => {
+    const res = await request(app).post('/test').send({
+      ...validBody, isCancelled: true, isCompleted: false, isDelayed: true, delayReason: '設備延誤',
+    })
+    expect(res.status).toBe(200)
+  })
 })

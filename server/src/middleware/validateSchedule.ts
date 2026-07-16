@@ -47,6 +47,12 @@ export function collectScheduleErrors(body: Record<string, unknown>, requireCore
       errors.delayReason = `延遲原因不可超過 ${LIMITS.DELAY_REASON} 字`
     }
   }
+  if (body.isCancelled !== undefined && typeof body.isCancelled !== 'boolean') {
+    errors.isCancelled = 'isCancelled 須為布林值'
+  }
+  if (body.isCancelled === true && body.isCompleted === true) {
+    errors.isCancelled = 'Cancelled 與 Completed 不可同時勾選'
+  }
 
   if (!requireCore) return errors
 
