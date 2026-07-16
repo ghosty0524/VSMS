@@ -6,7 +6,7 @@ import type { ImportResult } from '../../lib/excel'
 import type { Schedule } from '../../types'
 
 interface FieldDiff {
-  field: 'testReport' | 'isCompleted' | 'isDelayed' | 'delayReason' | 'device' | 'adminFlag' | 'adminFlagNote' | 'userFlag' | 'userFlagNote'
+  field: 'testReport' | 'isCompleted' | 'isDelayed' | 'isCancelled' | 'delayReason' | 'device' | 'adminFlag' | 'adminFlagNote' | 'userFlag' | 'userFlagNote'
   label: string
   oldVal: string
   newVal: string
@@ -21,7 +21,7 @@ function computeDiffs(
   incoming: Array<{
     projectName: string; taskDescription: string; testEngineer: string
     startDate: string; endDate: string; testReport: string
-    isCompleted: boolean; isDelayed: boolean; delayReason: string
+    isCompleted: boolean; isDelayed: boolean; isCancelled: boolean; delayReason: string
     device: string
     adminFlag: boolean; adminFlagNote: string
     userFlag: boolean; userFlagNote: string
@@ -46,6 +46,8 @@ function computeDiffs(
       diffs.push({ field: 'isCompleted', label: 'Completed', oldVal: boolStr(match.isCompleted), newVal: boolStr(row.isCompleted) })
     if (row.isDelayed !== match.isDelayed)
       diffs.push({ field: 'isDelayed', label: 'Delayed', oldVal: boolStr(match.isDelayed), newVal: boolStr(row.isDelayed) })
+    if (row.isCancelled !== match.isCancelled)
+      diffs.push({ field: 'isCancelled', label: 'Cancelled', oldVal: boolStr(match.isCancelled), newVal: boolStr(row.isCancelled) })
     if (row.delayReason !== match.delayReason)
       diffs.push({ field: 'delayReason', label: '延遲原因', oldVal: match.delayReason || '（空白）', newVal: row.delayReason || '（空白）' })
     if (row.device !== (match.device ?? ''))

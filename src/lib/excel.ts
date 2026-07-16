@@ -17,6 +17,7 @@ export interface ImportRow {
   testReport?: unknown
   isCompleted?: unknown
   isDelayed?: unknown
+  isCancelled?: unknown
   delayReason?: unknown
   device?: unknown
   adminFlag?: unknown
@@ -68,6 +69,7 @@ export function parseImportRows(rows: ImportRow[]): ImportResult {
     const testReport = str(r.testReport)
     const isCompleted = parseBool(r.isCompleted)
     const isDelayed = parseBool(r.isDelayed)
+    const isCancelled = parseBool(r.isCancelled)
     const delayReason = str(r.delayReason)
     const device = str(r.device)
     const adminFlag = parseBool(r.adminFlag)
@@ -87,10 +89,12 @@ export function parseImportRows(rows: ImportRow[]): ImportResult {
       msgs.push('timeResource 須為正整數')
     if (startDate && endDate && startDate > endDate)
       msgs.push('endDate 不可早於 startDate')
+    if (isCancelled && isCompleted)
+      msgs.push('isCancelled 與 isCompleted 不可同時為 TRUE')
     if (msgs.length > 0) { errors.push({ row: rowNum, messages: msgs }); return }
     valid.push({ category, projectName, taskDescription, testUnit, testEngineer,
       timeResource: trNum, startDate, endDate, requiredPersonnel, testReport,
-      isCompleted, isDelayed, delayReason,
+      isCompleted, isDelayed, isCancelled, delayReason, completedAt: null,
       device, adminFlag, adminFlagNote, userFlag, userFlagNote })
   })
   return { valid, errors }
@@ -116,12 +120,12 @@ export function parseImportFile(file: File): Promise<ImportResult> {
 // ─── 匯出範本 & 排程 ─────────────────────────────────────────
 const HEADERS = ['category','projectName','taskDescription','testUnit','testEngineer',
   'timeResource','startDate','endDate','requiredPersonnel','testReport',
-  'isCompleted','isDelayed','delayReason',
+  'isCompleted','isDelayed','isCancelled','delayReason',
   'device','adminFlag','adminFlagNote','userFlag','userFlagNote']
 
 export function downloadTemplate(): void {
   const example = ['NPI','示範專案','工作內容說明','SIT-HW','Eric',5,
-    '2026/05/01', '2026/05/31','需求人員名稱','測試報告連結','FALSE','FALSE','',
+    '2026/05/01', '2026/05/31','需求人員名稱','測試報告連結','FALSE','FALSE','FALSE','',
     '','FALSE','','FALSE','']
   const ws = XLSX.utils.aoa_to_sheet([HEADERS, example])
   const wb = XLSX.utils.book_new()
@@ -140,7 +144,8 @@ export function exportSchedules(schedules: Schedule[], selectedUnits?: string[])
     s.startDate,
     s.endDate,
     s.requiredPersonnel, s.testReport,
-    s.isCompleted ? 'TRUE' : 'FALSE', s.isDelayed ? 'TRUE' : 'FALSE', s.delayReason,
+    s.isCompleted ? 'TRUE' : 'FALSE', s.isDelayed ? 'TRUE' : 'FALSE',
+    s.isCancelled ? 'TRUE' : 'FALSE', s.delayReason,
     s.device ?? '',
     s.adminFlag ? 'TRUE' : 'FALSE', s.adminFlagNote ?? '',
     s.userFlag ? 'TRUE' : 'FALSE', s.userFlagNote ?? '',
@@ -163,6 +168,7 @@ export function exportSchedules(schedules: Schedule[], selectedUnits?: string[])
 
 // 計算排程狀態（對齊後端邏輯）
 function computeStatus(s: Schedule): string {
+  if (s.isCancelled) return 'Cancelled'
   if (s.isCompleted) return 'Completed'
   if (s.isDelayed)   return 'Delayed'
   const today = new Date()
@@ -281,12 +287,14 @@ export async function generateAgentExcel(schedules: Schedule[]): Promise<void> {
   })
 
   const total     = schedules.length
-  const completed = schedules.filter(s => s.isCompleted).length
-  const delayed   = schedules.filter(s => s.isDelayed).length
+  const cancelled = schedules.filter(s => s.isCancelled).length
+  const active    = schedules.filter(s => !s.isCancelled)
+  const completed = active.filter(s => s.isCompleted).length
+  const delayed   = active.filter(s => s.isDelayed && !s.isCompleted).length
   const testing   = schedules.filter(s => computeStatus(s) === 'Testing').length
   const planned   = schedules.filter(s => computeStatus(s) === 'Planned').length
   const expiring7 = schedules.filter(s => {
-    if (s.isCompleted) return false
+    if (s.isCompleted || s.isCancelled) return false
     const days = daysUntil(s.endDate)
     return days >= 0 && days <= 7
   }).length
@@ -296,6 +304,7 @@ export async function generateAgentExcel(schedules: Schedule[]): Promise<void> {
     total: number; completed: number; delayed: number; testing: number
   }> = {}
   schedules.forEach(s => {
+    if (s.isCancelled) return
     if (!unitMap[s.testUnit]) {
       unitMap[s.testUnit] = { total: 0, completed: 0, delayed: 0, testing: 0 }
     }
@@ -316,10 +325,11 @@ export async function generateAgentExcel(schedules: Schedule[]): Promise<void> {
   const kpiRows = [
     { metric: '資料更新時間',       value: new Date().toLocaleString('zh-TW'), note: '本次匯出時間' },
     { metric: '排程總數',           value: total,     note: '所有排程筆數' },
-    { metric: 'Completed 數',      value: completed, note: `完成率 ${total ? ((completed/total)*100).toFixed(1) : 0}%` },
-    { metric: 'Delayed 數',        value: delayed,   note: `延遲率 ${total ? ((delayed/total)*100).toFixed(1) : 0}%` },
+    { metric: 'Completed 數',      value: completed, note: `完成率 ${active.length ? ((completed/active.length)*100).toFixed(1) : 0}%（排除已取消）` },
+    { metric: 'Delayed 數',        value: delayed,   note: `延遲率 ${active.length ? ((delayed/active.length)*100).toFixed(1) : 0}%（排除已取消）` },
     { metric: 'Testing 數',        value: testing,   note: '目前進行中' },
     { metric: 'Planned 數',        value: planned,   note: '尚未開始' },
+    { metric: 'Cancelled 數',      value: cancelled, note: '已取消，不計入比率' },
     { metric: '7 天內到期',        value: expiring7, note: '非 Completed，需注意' },
     { metric: '',                   value: '',        note: '' },
     { metric: '── 各測試單位統計 ──', value: '',      note: '' },
@@ -359,7 +369,7 @@ export async function generateAgentExcel(schedules: Schedule[]): Promise<void> {
 
   const expiringList = schedules
     .filter(s => {
-      if (s.isCompleted) return false
+      if (s.isCompleted || s.isCancelled) return false
       const days = daysUntil(s.endDate)
       return days >= 0 && days <= 7
     })

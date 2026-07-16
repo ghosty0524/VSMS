@@ -58,7 +58,7 @@ const baseExisting: Schedule = {
   taskDescription: '整合測試', testUnit: 'SIT-HW', testEngineer: 'Alice',
   timeResource: 5, startDate: '2026/05/01', endDate: '2026/05/31',
   requiredPersonnel: '人員A', testReport: '', isCompleted: false,
-  isDelayed: false, delayReason: '', createdBy: 'admin', updatedBy: 'admin',
+  isDelayed: false, isCancelled: false, completedAt: null, delayReason: '', createdBy: 'admin', updatedBy: 'admin',
   createdAt: '', updatedAt: '',
 }
 
