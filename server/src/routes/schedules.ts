@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/requireAuth.js'
 import { validateSchedule, collectScheduleErrors } from '../middleware/validateSchedule.js'
 import type { Schedule } from '../types.js'
 import { listTestPlans, getTestPlanProgress } from '../lib/vtmsClient.js'
+import { completedAtPatch } from '../lib/completedAt.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -17,7 +18,7 @@ router.use(requireAuth)
 const SCHEDULE_WRITABLE_FIELDS = [
   'category', 'projectName', 'taskDescription', 'testUnit', 'testEngineer',
   'timeResource', 'startDate', 'endDate', 'requiredPersonnel', 'testReport',
-  'isCompleted', 'isDelayed', 'delayReason',
+  'isCompleted', 'isDelayed', 'isCancelled', 'delayReason',
   'adminFlag', 'adminFlagNote', 'userFlag', 'userFlagNote', 'device',
 ] as const
 
@@ -35,7 +36,7 @@ function toSchedule(s: {
   testUnit: string; testEngineer: string; timeResource: number;
   startDate: string; endDate: string; requiredPersonnel: string;
   testReport: string; isCompleted: boolean; isDelayed: boolean;
-  delayReason: string; createdBy: string; updatedBy: string;
+  delayReason: string; isCancelled: boolean; completedAt: Date | null; createdBy: string; updatedBy: string;
   createdAt: Date; updatedAt: Date;
   adminFlag: boolean; adminFlagNote: string | null;
   userFlag: boolean; userFlagNote: string | null;
@@ -48,6 +49,7 @@ function toSchedule(s: {
     userFlagNote:  s.userFlagNote  ?? '',
     createdAt: s.createdAt.toISOString(),
     updatedAt: s.updatedAt.toISOString(),
+    completedAt: s.completedAt ? s.completedAt.toISOString() : null,
   }
 }
 
@@ -100,7 +102,11 @@ router.post('/', validateSchedule, async (req, res) => {
   const displayName = dbUser?.displayName ?? username
 
   const schedule = await prisma.schedule.create({
-    data: { id: uuidv4(), ...body, createdBy: username, updatedBy: username },
+    data: {
+      id: uuidv4(), ...body,
+      ...completedAtPatch(false, (body as Record<string, unknown>).isCompleted as boolean | undefined),
+      createdBy: username, updatedBy: username,
+    },
   })
 
   await appendAudit(username, displayName, 'CREATE_SCHEDULE', schedule.id, [])
@@ -218,7 +224,9 @@ router.put('/replace-all', async (req, res) => {
       if (incoming.length > 0) {
         await tx.schedule.createMany({
           data: incoming.map(d => ({
-            id: uuidv4(), ...d, createdBy: username, updatedBy: username,
+            id: uuidv4(), ...d,
+            completedAt: (d as Record<string, unknown>).isCompleted === true ? now : null,
+            createdBy: username, updatedBy: username,
             createdAt: now, updatedAt: now,
           })),
         })
@@ -231,7 +239,9 @@ router.put('/replace-all', async (req, res) => {
       if (incoming.length > 0) {
         await tx.schedule.createMany({
           data: incoming.map(d => ({
-            id: uuidv4(), ...d, createdBy: username, updatedBy: username,
+            id: uuidv4(), ...d,
+            completedAt: (d as Record<string, unknown>).isCompleted === true ? now : null,
+            createdBy: username, updatedBy: username,
             createdAt: now, updatedAt: now,
           })),
         })
@@ -268,6 +278,7 @@ router.put('/:id', validateSchedule, async (req, res) => {
 
     // ★ User 不可修改 adminFlag / adminFlagNote
     const { adminFlag: _af, adminFlagNote: _afn, ...safeBody } = body
+    delete (safeBody as Record<string, unknown>).isCancelled
 
     // ★ If linked to VTMS, isCompleted / isDelayed / delayReason are VTMS-controlled
     if (existing.vtmsPlanId) {
@@ -283,7 +294,11 @@ router.put('/:id', validateSchedule, async (req, res) => {
 
     const updated = await prisma.schedule.update({
       where: { id: scheduleId },
-      data: { ...safeBody, testEngineer: engineer, updatedBy: username, updatedAt: new Date() },
+      data: {
+        ...safeBody,
+        ...completedAtPatch(existing.isCompleted, (safeBody as Record<string, unknown>).isCompleted as boolean | undefined),
+        testEngineer: engineer, updatedBy: username, updatedAt: new Date(),
+      },
     })
     const userFlagFields = ['userFlag', 'userFlagNote']
     const isFlagOnly = changedFields.length > 0 && changedFields.every(f => userFlagFields.includes(f))
@@ -323,7 +338,11 @@ router.put('/:id', validateSchedule, async (req, res) => {
 
   const updated = await prisma.schedule.update({
     where: { id: scheduleId },
-    data: { ...body, updatedBy: username, updatedAt: new Date() },
+    data: {
+      ...body,
+      ...completedAtPatch(existing.isCompleted, body.isCompleted as boolean | undefined),
+      updatedBy: username, updatedAt: new Date(),
+    },
   })
   const flagFields = ['adminFlag', 'adminFlagNote', 'userFlag', 'userFlagNote']
   const isFlagOnly = changedFields.length > 0 && changedFields.every(f => flagFields.includes(f))
