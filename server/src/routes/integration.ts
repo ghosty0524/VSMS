@@ -3,6 +3,7 @@ import { prisma } from '../lib/db.js';
 import { requireApiKey } from '../middleware/requireApiKey.js';
 import { getTestPlanProgressBatch } from '../lib/vtmsClient.js';
 import { analyzeWorkload } from '../lib/workload.js';
+import { completedAtPatch } from '../lib/completedAt.js';
 
 const router = Router();
 
@@ -38,6 +39,8 @@ function buildWhereClause(query: Record<string, unknown>) {
   if (isCompleted !== undefined) where.isCompleted = isCompleted === 'true';
   const isDelayed = qs(query.isDelayed);
   if (isDelayed !== undefined) where.isDelayed = isDelayed === 'true';
+  const isCancelled = qs(query.isCancelled);
+  if (isCancelled !== undefined) where.isCancelled = isCancelled === 'true';
   const dateFrom = qs(query.dateFrom);
   const dateTo = qs(query.dateTo);
   if (dateFrom || dateTo) {
@@ -65,16 +68,18 @@ router.get('/schedules/summary', requireApiKey, async (req, res) => {
   const schedules = await prisma.schedule.findMany();
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
   const total = schedules.length;
-  const completed = schedules.filter(s => s.isCompleted).length;
-  const delayed = schedules.filter(s => !s.isCompleted && s.isDelayed).length;
-  // Mutually exclusive buckets: completed / delayed / inProgress / notStarted
-  const inProgress = schedules.filter(s => !s.isCompleted && !s.isDelayed && s.startDate <= today).length;
-  const notStarted = schedules.filter(s => !s.isCompleted && !s.isDelayed && s.startDate > today).length;
+  const cancelled = schedules.filter(s => s.isCancelled).length;
+  const active = schedules.filter(s => !s.isCancelled);
+  const completed = active.filter(s => s.isCompleted).length;
+  const delayed = active.filter(s => !s.isCompleted && s.isDelayed).length;
+  // Mutually exclusive buckets: completed / delayed / inProgress / notStarted (+cancelled)
+  const inProgress = active.filter(s => !s.isCompleted && !s.isDelayed && s.startDate <= today).length;
+  const notStarted = active.filter(s => !s.isCompleted && !s.isDelayed && s.startDate > today).length;
   const byUnit: Record<string, number> = {};
   for (const s of schedules) {
     if (s.testUnit) byUnit[s.testUnit] = (byUnit[s.testUnit] ?? 0) + 1;
   }
-  res.json({ total, completed, delayed, inProgress, notStarted, byUnit });
+  res.json({ total, completed, delayed, inProgress, notStarted, cancelled, byUnit });
 });
 
 // GET /schedules/by-plan/:planId — find schedule linked to a VTMS plan
@@ -204,7 +209,7 @@ router.patch('/schedules/:id/complete', requireApiKey, async (req, res) => {
   if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
   const updated = await prisma.schedule.update({
     where: { id },
-    data: { isCompleted: true, updatedAt: new Date() },
+    data: { isCompleted: true, ...completedAtPatch(existing.isCompleted, true), updatedAt: new Date() },
   });
   res.json(updated);
 });
