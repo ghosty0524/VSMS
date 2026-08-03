@@ -272,6 +272,44 @@ const [viewMode, setViewMode] = useState<'gantt' | 'list'>(...)
 - `ganttLeftWidth` 的 localStorage 舊值（多為 260）沿用不強制重置，PDN 自適應已針對窄欄處理
 - 類別被刪除後遺留的排程，其 `category` 值在 categories 中查無對應，一律視為 `counted`
 
+## 部署與退版
+
+變動橫跨前端、後端與資料庫，測試期間必須能在數十秒內退回目前可正常工作的版本。
+
+### 前置：建立還原點
+
+實作開始前必須先做，否則無版可退。
+
+1. **提交目前工作區**。`feat/guest-role-and-uiux` 分支上有未 commit 的修改（`server/src/lib/workload.ts`、`server/src/lib/db.ts`、`server/src/routes/integration.ts`、`openapi-integration.yaml`、`server/src/__tests__/workload.test.ts`）與未追蹤的新檔（`server/src/lib/engineerMatch.ts`、`server/src/__tests__/engineerMatch.test.ts`），而 `server/dist` 的建置時間與這些原始碼一致——**線上執行的正是這份未進版控的程式碼**。先將其提交，再打上 `vsms-stable-20260803` 標籤。
+2. **快照建置產物**。將 `dist/`（2.6MB）與 `server/dist/`（174KB）整份複製為 `dist.stable-20260803/` 與 `server/dist.stable-20260803/`。專案的 `dist` 由磁碟即時服務，因此退版可用資料夾置換完成，不需重新 build。
+3. **備份受影響資料表**。以 `mysqldump` 單獨匯出 `categories`、`test_units`、`engineers` 三張表。
+
+### 退版程序
+
+```
+1. 置換 dist/ 與 server/dist/ 為 .stable-20260803 快照
+2. pm2 restart vsms
+```
+
+**資料庫不需退版**。三項 schema 變更皆為 additive 且 nullable 或帶 DEFAULT，舊版程式在新 schema 上可正常運行——它只是不讀取那些欄位。因此退版只需置換建置產物。
+
+唯一副作用：退版後若有人在設定頁儲存，舊版的 `PUT /api/options`（全刪重建，且不認識新欄位）會把 `statsMode` 重設為 `'counted'`、`color` 重設為 `NULL`。這不會造成錯誤，只會遺失自訂值，而前置步驟 3 的資料表備份即為此準備。
+
+### 分階段提交
+
+雖然是單一實作計畫，各階段必須各自成為獨立 commit，使 `git revert` 能單獨回退某一階段。順序依風險由低到高排列，讓部分退版具有實際意義：
+
+| 階段 | 內容 | 風險 |
+|---|---|---|
+| 1 | 左欄兩層資訊、PDN 自適應、狀態籤縮小 | 純前端，不動資料 |
+| 2 | 甘特／列表切換 | 純前端，新增元件 |
+| 3 | 類別統計模式（schema、設定頁、分析頁、負載分析後端） | 動 schema 與後端 |
+| 4 | 雙色 bar 與可自訂顏色（schema、設定頁、匯出 dashboard） | 動 schema 與匯出格式 |
+
+階段 1、2 不觸及資料庫，可獨立上線並獨立退回。階段 3、4 各自的 schema 變更互不相依，可分開驗證。
+
+不採用功能旗標（feature flag）的原因：旗標無法乾淨地涵蓋 DB 層的顏色解析與後端負載分析的行為變更，而建置產物置換可一次涵蓋全部且操作更單純。
+
 ## 測試計畫
 
 | 對象 | 內容 |
