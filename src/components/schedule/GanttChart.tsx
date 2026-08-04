@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
-import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange, Maximize2, Minimize2 } from 'lucide-react'
+import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange, Maximize2, Minimize2, ClipboardCopy } from 'lucide-react'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
@@ -7,6 +7,7 @@ import { api } from '../../lib/api'
 import { STATUS_COLORS, OVERFLOW_COLOR, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../../lib/colors'
 import { computeStatus } from '../../lib/status'
+import { schedulesToTsv } from '../../lib/tsv'
 import { isRestDay } from '../../lib/restDays'
 import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
 import { ScheduleFormModal } from './ScheduleFormModal'
@@ -203,6 +204,11 @@ export function GanttChart({
   // 避免使用者以為「標記完成」沒有生效
   const [saveNotice, setSaveNotice] = useState<string | null>(null)
   const saveNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 列表複製提示：成功時顯示筆數，讓使用者確認拿到的是完整篩選結果而非
+  // 虛擬化畫面上的可視列；失敗（不安全來源／權限被拒）時顯示原因而非無聲失敗。
+  const [copyNotice, setCopyNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const copyNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleSaved = useCallback(({ isCompleted }: { isCompleted: boolean }) => {
     if (isCompleted && filterSort.statuses.length > 0 && !filterSort.statuses.includes('Completed')) {
       setSaveNotice('已標記為 Completed。已完成的排程目前被「狀態」篩選隱藏，勾選 Completed 即可重新顯示。')
@@ -364,6 +370,28 @@ export function GanttChart({
   }, [options.testUnits])
 
   const engLabel = (value: string) => engineerLabelMap.get(value) ?? value
+
+  // 列表模式「複製表格」：把「當前 filtered 陣列的全部資料」（非可視列）轉為
+  // TSV 寫入剪貼簿，這是它存在的唯一理由——虛擬化只渲染可視列 ± 緩衝，若照
+  // DOM 內容複製，篩選出的 599 筆會只拿到畫面上那 20～30 列且不會有任何警示。
+  const handleCopyList = async () => {
+    if (copyNoticeTimer.current) clearTimeout(copyNoticeTimer.current)
+
+    if (filtered.length === 0) {
+      setCopyNotice({ kind: 'error', text: '沒有可複製的資料' })
+    } else {
+      const tsv = schedulesToTsv(filtered, engLabel)
+      try {
+        await navigator.clipboard.writeText(tsv)
+        setCopyNotice({ kind: 'success', text: `已複製 ${filtered.length} 筆到剪貼簿` })
+      } catch {
+        // navigator.clipboard.writeText 在非安全來源（非 HTTPS/localhost）或權限被拒時會 reject，
+        // 需求明確要求「顯示提示而非無聲失敗」
+        setCopyNotice({ kind: 'error', text: '複製失敗，請確認瀏覽器剪貼簿權限或改用 HTTPS 連線' })
+      }
+    }
+    copyNoticeTimer.current = setTimeout(() => setCopyNotice(null), 4000)
+  }
 
   // ── 設備視角 rows ──────────────────────────────────────
   const deviceRows = useMemo(() => {
@@ -597,6 +625,19 @@ export function GanttChart({
                 按設備
               </button>
             </div>
+          )}
+          {/* ★ 複製表格：僅列表模式顯示，複製的是 filtered 全部資料而非畫面上的可視列 */}
+          {viewMode === 'list' && (
+            <button
+              type="button"
+              title="複製目前篩選結果的完整列表（TSV，可直接貼到 Excel）"
+              onClick={e => { e.stopPropagation(); handleCopyList() }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-300 bg-white
+                         text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors"
+            >
+              <ClipboardCopy size={13} />
+              複製表格
+            </button>
           )}
           {/* ★ 全螢幕切換 */}
           <button
@@ -1101,6 +1142,18 @@ export function GanttChart({
           <span>✅ {saveNotice}</span>
           <button type="button" onClick={() => setSaveNotice(null)}
             className="ml-auto text-blue-400 hover:text-blue-600">✕</button>
+        </div>
+      )}
+      {copyNotice && (
+        <div className={`fixed top-20 right-4 z-50 flex items-center gap-2 px-5 py-3 text-sm font-medium
+                        rounded-xl shadow-xl min-w-[260px] max-w-[420px] ${
+                          copyNotice.kind === 'success'
+                            ? 'bg-green-50 border border-green-200 text-green-800'
+                            : 'bg-red-50 border border-red-200 text-red-800'
+                        }`}>
+          <span>{copyNotice.kind === 'success' ? '✅' : '⚠️'} {copyNotice.text}</span>
+          <button type="button" onClick={() => setCopyNotice(null)}
+            className={`ml-auto ${copyNotice.kind === 'success' ? 'text-green-400 hover:text-green-600' : 'text-red-400 hover:text-red-600'}`}>✕</button>
         </div>
       )}
       <DeleteConfirmDialog isOpen={!!deleteTarget}
