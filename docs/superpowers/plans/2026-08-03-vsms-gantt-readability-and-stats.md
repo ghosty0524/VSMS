@@ -28,6 +28,18 @@ export MYSQL_PWD="$(node -e 'const m=require("fs").readFileSync(".env","utf8").m
 
 之後即可用 `mysql -u root vsms -e "..."` 與 `mysqldump -u root vsms ...`（不加 `-p`）。
 
+- **`npx tsc -p tsconfig.app.json --noEmit` 在此專案本來就有 9 個既有錯誤**（`excel-diff.test.ts`、`App.tsx`、`LoadSection.tsx`、`GanttChart.tsx` 的未使用變數、`ScheduleFormModal.tsx` 等），與本計畫無關。判準是「**沒有新增**錯誤」，不是「零錯誤」。要確認有無新增，比對基準：
+
+```bash
+npx tsc -p tsconfig.app.json --noEmit 2>&1 | grep -E "error TS" | sed -E 's/\(.*//' | sort > /tmp/after.txt
+git stash -q -u; git checkout -q vsms-stable-20260803
+npx tsc -p tsconfig.app.json --noEmit 2>&1 | grep -E "error TS" | sed -E 's/\(.*//' | sort > /tmp/before.txt
+git checkout -q feat/guest-role-and-uiux; git stash pop -q 2>/dev/null
+diff /tmp/before.txt /tmp/after.txt && echo "no new type errors"
+```
+
+  比對成本高，只在改動較大的 Task（動到既有元件的 Task 3、5、8、12）做；其餘 Task 只需確認新檔案本身沒有錯誤即可。
+
 ---
 
 ## Task 1: 建立還原點
@@ -662,7 +674,7 @@ npx tsc -p tsconfig.app.json --noEmit
 npm test
 ```
 
-預期：無型別錯誤；所有測試 PASS。
+預期：型別錯誤數量與基準相同（見 Global Constraints 的既有錯誤說明）；所有測試 PASS。
 
 - [ ] **Step 9: 目視驗證**
 
@@ -1001,7 +1013,7 @@ npx tsc -p tsconfig.app.json --noEmit
 npm test
 ```
 
-預期：無型別錯誤；所有測試 PASS。
+預期：型別錯誤數量與基準相同（見 Global Constraints 的既有錯誤說明）；所有測試 PASS。
 
 - [ ] **Step 8: 目視驗證**
 
@@ -1300,7 +1312,7 @@ npx tsc -p server/tsconfig.json --noEmit
 npm run test:all
 ```
 
-預期：無型別錯誤；所有測試 PASS。
+預期：型別錯誤數量與基準相同（見 Global Constraints 的既有錯誤說明）；所有測試 PASS。
 
 - [ ] **Step 14: Commit**
 
@@ -1573,7 +1585,7 @@ npx tsc -p tsconfig.app.json --noEmit
 npm test
 ```
 
-預期：無型別錯誤；所有測試 PASS。
+預期：型別錯誤數量與基準相同（見 Global Constraints 的既有錯誤說明）；所有測試 PASS。
 
 - [ ] **Step 9: Commit**
 
@@ -1761,7 +1773,7 @@ npx tsc -p server/tsconfig.json --noEmit
 npm run test:all
 ```
 
-預期：無型別錯誤；所有測試 PASS。
+預期：型別錯誤數量與基準相同（見 Global Constraints 的既有錯誤說明）；所有測試 PASS。
 
 - [ ] **Step 8: 建置與重啟**
 
@@ -2054,7 +2066,7 @@ npx tsc -p server/tsconfig.json --noEmit
 npm run test:all
 ```
 
-預期：無型別錯誤；所有測試 PASS。
+預期：型別錯誤數量與基準相同（見 Global Constraints 的既有錯誤說明）；所有測試 PASS。
 
 - [ ] **Step 12: Commit**
 
@@ -2385,7 +2397,7 @@ npx tsc -p tsconfig.app.json --noEmit
 npm test
 ```
 
-預期：無型別錯誤；所有測試 PASS。
+預期：型別錯誤數量與基準相同（見 Global Constraints 的既有錯誤說明）；所有測試 PASS。
 
 - [ ] **Step 9: 目視驗證**
 
@@ -2604,7 +2616,7 @@ npx tsc -p tsconfig.app.json --noEmit
 npm test
 ```
 
-預期：無型別錯誤；所有測試 PASS。
+預期：型別錯誤數量與基準相同（見 Global Constraints 的既有錯誤說明）；所有測試 PASS。
 
 - [ ] **Step 6: 目視驗證**
 
