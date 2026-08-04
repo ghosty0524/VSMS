@@ -5,6 +5,7 @@ import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
 import { api } from '../../lib/api'
 import { getUnitColor, STATUS_COLORS, OVERFLOW_COLOR } from '../../constants'
+import { resolveEngineerColor, readableTextColor } from '../../lib/colors'
 import { computeStatus } from '../../lib/status'
 import { isRestDay } from '../../lib/restDays'
 import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
@@ -28,6 +29,17 @@ const HEADER_MONTH = 30
 const HEADER_WEEK  = 20
 const HEADER_DAY   = 40
 const PX_PER_DAY   = 22
+
+// 左欄寬度達此值才顯示完整 PDN Number；未達則只顯示編號段（如 PDN-250061）。
+// 實際資料最長達 33 字元（PDN-210079 NCA-5220A-NZ1 [Nozomi]），
+// 預設 260px 塞不下人員徽章、PDN 與四顆操作按鈕。
+export const PDN_FULL_THRESHOLD = 340
+
+export function pdnDisplay(projectName: string, leftWidth: number): string {
+  if (leftWidth >= PDN_FULL_THRESHOLD) return projectName
+  // 不含空白的舊資料沒有「編號段」可取，整串保留交由 CSS 截斷
+  return projectName.split(' ')[0] || projectName
+}
 
 // ── Tooltip 定位常數 ──────────────────────────────────────
 const TOOLTIP_ESTIMATE_W = 220
@@ -816,116 +828,137 @@ export function GanttChart({
                     const status      = computeStatus(s)
                     const statusColor = STATUS_COLORS[status]
                     const evenFill = i % 2 === 0 ? '#fafbfc' : '#f1f5f9'
+                    const engColor = s.testEngineer
+                      ? resolveEngineerColor(s.testEngineer, s.testUnit, options)
+                      : '#e2e8f0'
+                    const engTextColor = s.testEngineer ? readableTextColor(engColor) : '#64748b'
                     return (
                       <div key={s.id} className="relative border-b"
                         style={{ height: ROW_H, background: evenFill }}>
-                        <div className="flex items-center gap-2 px-2 pt-[6px]">
-                          <div className="flex-shrink-0 w-[84px] h-[24px] rounded-[5px] text-xs font-bold flex items-center justify-center"
-                            style={{ background: statusColor.bg, color: statusColor.text, letterSpacing: '0.02em' }}>
-                            {STATUS_GLYPH[status]} {status}
-                          </div>
-                          <div className="min-w-0 text-[13px] font-semibold text-slate-800 truncate pr-28">
-                            {s.projectName}
-                          </div>
-                        </div>
-                        {s.taskDescription && <div className="text-xs text-slate-500 truncate pl-[98px] -mt-[2px] pr-28">{s.taskDescription}</div>}
-                        {/* ★ 旗標圖示 + 操作按鈕：對齊第一行（狀態籤中線），避免壓到第二行文字 */}
-                        <div className="absolute right-2 top-[7px] flex gap-1">
-                          {/* Admin 旗標（Admin/SA 限定） */}
-                          {canWrite && (
-                            <div className="relative">
-                              <button
-                                type="button"
-                                title={s.adminFlag ? (s.adminFlagNote || 'Admin 旗標已標記') : '設定 Admin 旗標'}
-                                onClick={(e) => {
-                                  if (flagPopover?.scheduleId === s.id && flagPopover.type === 'admin') {
-                                    setFlagPopover(null)
-                                  } else {
-                                    setFlagPopover({ scheduleId: s.id, type: 'admin', anchorEl: e.currentTarget })
-                                  }
-                                }}
-                                className={`w-[22px] h-[22px] flex items-center justify-center rounded-md transition-colors duration-100
-                                  ${s.adminFlag
-                                    ? 'bg-orange-500 text-white shadow-sm ring-1 ring-orange-600/30 hover:bg-orange-600'
-                                    : 'bg-white text-gray-400 border border-gray-200 hover:text-orange-500 hover:bg-orange-50 hover:border-orange-300'
-                                  }`}
-                              >
-                                <ShieldCheck size={14} strokeWidth={2.2} />
-                              </button>
-                              {flagPopover?.scheduleId === s.id && flagPopover.type === 'admin' && (
-                                <FlagPopover
-                                  flagged={s.adminFlag ?? false}
-                                  note={s.adminFlagNote ?? ''}
-                                  color="orange"
-                                  anchorEl={flagPopover.anchorEl}
-                                  onClose={closeFlagPopover}
-                                  onSave={async (note) => {
-                                    await update(s.id, { adminFlag: true, adminFlagNote: note })
-                                    setFlagPopover(null)
-                                  }}
-                                  onRemove={async () => {
-                                    await update(s.id, { adminFlag: false, adminFlagNote: '' })
-                                    setFlagPopover(null)
-                                  }}
-                                />
-                              )}
-                            </div>
-                          )}
 
-                          {/* 使用者旗標（登入帳號皆可，guest 唯讀不可） */}
-                          {role !== 'guest' && (
-                          <div className="relative">
-                            <button
-                              type="button"
-                              title={s.userFlag ? (s.userFlagNote || '旗標已標記') : '設定旗標'}
-                              onClick={(e) => {
-                                if (flagPopover?.scheduleId === s.id && flagPopover.type === 'user') {
-                                  setFlagPopover(null)
-                                } else {
-                                  setFlagPopover({ scheduleId: s.id, type: 'user', anchorEl: e.currentTarget })
-                                }
-                              }}
-                              className={`w-[22px] h-[22px] flex items-center justify-center rounded-md transition-colors duration-100
-                                ${s.userFlag
-                                  ? 'bg-blue-500 text-white shadow-sm ring-1 ring-blue-600/30 hover:bg-blue-600'
-                                  : 'bg-white text-gray-400 border border-gray-200 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-300'
-                                }`}
-                            >
-                              <Bookmark size={14} strokeWidth={2.2} fill={s.userFlag ? 'currentColor' : 'none'} />
-                            </button>
-                            {flagPopover?.scheduleId === s.id && flagPopover.type === 'user' && (
-                              <FlagPopover
-                                flagged={s.userFlag ?? false}
-                                note={s.userFlagNote ?? ''}
-                                color="blue"
-                                anchorEl={flagPopover.anchorEl}
-                                onClose={closeFlagPopover}
-                                onSave={async (note) => {
-                                  await update(s.id, { userFlag: true, userFlagNote: note })
-                                  setFlagPopover(null)
-                                }}
-                                onRemove={async () => {
-                                  await update(s.id, { userFlag: false, userFlagNote: '' })
-                                  setFlagPopover(null)
-                                }}
-                              />
+                        {/* 第一行：人員徽章 → PDN Number → 操作按鈕 */}
+                        <div className="flex items-center gap-1.5 px-2 pt-[5px]">
+                          <span
+                            className="flex-shrink-0 h-5 px-[7px] rounded-[5px] text-xs font-bold flex items-center"
+                            style={{ background: engColor, color: engTextColor }}
+                            title={s.testEngineer ? engLabel(s.testEngineer) : '未指派測試人員'}>
+                            {s.testEngineer ? engLabel(s.testEngineer) : '未指派'}
+                          </span>
+                          <span className="flex-1 min-w-0 text-xs font-semibold text-slate-800 truncate"
+                            title={s.projectName}>
+                            {pdnDisplay(s.projectName, leftWidth)}
+                          </span>
+
+                          <div className="flex-shrink-0 flex gap-[3px]">
+                            {/* Admin 旗標（Admin/SA 限定） */}
+                            {canWrite && (
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  title={s.adminFlag ? (s.adminFlagNote || 'Admin 旗標已標記') : '設定 Admin 旗標'}
+                                  onClick={(e) => {
+                                    if (flagPopover?.scheduleId === s.id && flagPopover.type === 'admin') {
+                                      setFlagPopover(null)
+                                    } else {
+                                      setFlagPopover({ scheduleId: s.id, type: 'admin', anchorEl: e.currentTarget })
+                                    }
+                                  }}
+                                  className={`w-[19px] h-[19px] flex items-center justify-center rounded-[5px] transition-colors duration-100
+                                    ${s.adminFlag
+                                      ? 'bg-orange-500 text-white shadow-sm ring-1 ring-orange-600/30 hover:bg-orange-600'
+                                      : 'bg-white text-gray-400 border border-gray-200 hover:text-orange-500 hover:bg-orange-50 hover:border-orange-300'
+                                    }`}
+                                >
+                                  <ShieldCheck size={12} strokeWidth={2.2} />
+                                </button>
+                                {flagPopover?.scheduleId === s.id && flagPopover.type === 'admin' && (
+                                  <FlagPopover
+                                    flagged={s.adminFlag ?? false}
+                                    note={s.adminFlagNote ?? ''}
+                                    color="orange"
+                                    anchorEl={flagPopover.anchorEl}
+                                    onClose={closeFlagPopover}
+                                    onSave={async (note) => {
+                                      await update(s.id, { adminFlag: true, adminFlagNote: note })
+                                      setFlagPopover(null)
+                                    }}
+                                    onRemove={async () => {
+                                      await update(s.id, { adminFlag: false, adminFlagNote: '' })
+                                      setFlagPopover(null)
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            )}
+
+                            {/* 使用者旗標（登入帳號皆可，guest 唯讀不可） */}
+                            {role !== 'guest' && (
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  title={s.userFlag ? (s.userFlagNote || '旗標已標記') : '設定旗標'}
+                                  onClick={(e) => {
+                                    if (flagPopover?.scheduleId === s.id && flagPopover.type === 'user') {
+                                      setFlagPopover(null)
+                                    } else {
+                                      setFlagPopover({ scheduleId: s.id, type: 'user', anchorEl: e.currentTarget })
+                                    }
+                                  }}
+                                  className={`w-[19px] h-[19px] flex items-center justify-center rounded-[5px] transition-colors duration-100
+                                    ${s.userFlag
+                                      ? 'bg-blue-500 text-white shadow-sm ring-1 ring-blue-600/30 hover:bg-blue-600'
+                                      : 'bg-white text-gray-400 border border-gray-200 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-300'
+                                    }`}
+                                >
+                                  <Bookmark size={12} strokeWidth={2.2} fill={s.userFlag ? 'currentColor' : 'none'} />
+                                </button>
+                                {flagPopover?.scheduleId === s.id && flagPopover.type === 'user' && (
+                                  <FlagPopover
+                                    flagged={s.userFlag ?? false}
+                                    note={s.userFlagNote ?? ''}
+                                    color="blue"
+                                    anchorEl={flagPopover.anchorEl}
+                                    onClose={closeFlagPopover}
+                                    onSave={async (note) => {
+                                      await update(s.id, { userFlag: true, userFlagNote: note })
+                                      setFlagPopover(null)
+                                    }}
+                                    onRemove={async () => {
+                                      await update(s.id, { userFlag: false, userFlagNote: '' })
+                                      setFlagPopover(null)
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            )}
+
+                            {/* 編輯按鈕：user 只能編輯指派給自己的排程；guest 不可編輯 */}
+                            {(canWrite || (role === 'user' && s.testEngineer === linkedEngineer)) && (
+                              <button type="button" title="編輯" onClick={() => setEditTarget(s)}
+                                className="w-[19px] h-[19px] flex items-center justify-center rounded-[5px] bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors duration-100">
+                                <Pencil size={11} strokeWidth={2.5} />
+                              </button>
+                            )}
+                            {canWrite && (
+                              <button type="button" title="刪除" onClick={() => setDeleteTarget(s)}
+                                className="w-[19px] h-[19px] flex items-center justify-center rounded-[5px] bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 transition-colors duration-100">
+                                <Trash2 size={11} strokeWidth={2.5} />
+                              </button>
                             )}
                           </div>
-                          )}
+                        </div>
 
-                          {/* 編輯按鈕：user 只能編輯指派給自己的排程；guest 不可編輯 */}
-                          {(canWrite || (role === 'user' && s.testEngineer === linkedEngineer)) && (
-                            <button type="button" title="編輯" onClick={() => setEditTarget(s)}
-                              className="w-[22px] h-[22px] flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors duration-100">
-                              <Pencil size={12} strokeWidth={2.5} />
-                            </button>
-                          )}
-                          {canWrite && (
-                            <button type="button" title="刪除" onClick={() => setDeleteTarget(s)}
-                              className="w-[22px] h-[22px] flex items-center justify-center rounded-md bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 transition-colors duration-100">
-                              <Trash2 size={12} strokeWidth={2.5} />
-                            </button>
-                          )}
+                        {/* 第二行：狀態籤 → 工作內容。狀態籤在此，故此行必須恆常渲染 */}
+                        <div className="flex items-center gap-1.5 px-2 pt-[2px]">
+                          <span
+                            className="flex-shrink-0 h-[17px] px-1.5 rounded text-[11px] font-bold flex items-center"
+                            style={{ background: statusColor.bg, color: statusColor.text, letterSpacing: '0.02em' }}>
+                            {STATUS_GLYPH[status]} {status}
+                          </span>
+                          <span className="min-w-0 text-[11px] text-slate-500 truncate"
+                            title={s.taskDescription}>
+                            {s.taskDescription}
+                          </span>
                         </div>
                       </div>
                     )
