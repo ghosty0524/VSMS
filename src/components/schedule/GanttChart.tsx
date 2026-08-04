@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange, Maximize2, Minimize2 } from 'lucide-react'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
@@ -19,7 +19,8 @@ import type { Role, Schedule, VtmsProgress } from '../../types'
 import type { ScheduleStatus } from '../../lib/status'
 
 // 狀態非顏色指示：色弱使用者可藉符號辨識
-const STATUS_GLYPH: Record<ScheduleStatus, string> = {
+// 匯出（ScheduleListView）與 script.ts 亦需相同對照，此處為唯一權威來源
+export const STATUS_GLYPH: Record<ScheduleStatus, string> = {
   Cancelled: '✕', Completed: '✓', Delayed: '!', Testing: '▶', Planned: '○',
 }
 
@@ -151,6 +152,9 @@ function applyFilter(
     if (fs.ganttEnd   && s.startDate > fs.ganttEnd) return false
     if (fs.showUserFlagged  && !s.userFlag)  return false
     if (fs.showAdminFlagged && !s.adminFlag) return false
+    // ★ 設備篩選：devices 為空表示不篩選（顯示全部）；非空則需命中其一。
+    //   套用在此處而非只在 deviceRows，才能讓列表視圖與設備視角共用同一份 filtered 結果。
+    if (fs.devices.length && !fs.devices.includes(s.device)) return false
     return true
   })
 
@@ -330,6 +334,15 @@ export function GanttChart({
     return () => window.removeEventListener('resize', updateVisibleRange)
   }, [updateVisibleRange])
 
+  // viewMode（甘特圖／列表）或 groupBy（工程師／設備）切換時，甘特圖主體會卸載
+  // 再重新掛載一個全新的捲動容器（scrollTop 重置為 0），但 visibleRange 是元件層級
+  // state，不會跟著卸載重置。若不同步重算，殘留的舊可視範圍會撐出比實際內容還高的
+  // spacer，導致切回甘特圖時整片空白，需使用者手動捲動觸發 handleRightBodyScroll
+  // 才會自我修正。用 useLayoutEffect 在瀏覽器繪製前同步重算，避免這一格空白閃現。
+  useLayoutEffect(() => {
+    updateVisibleRange()
+  }, [viewMode, groupBy, updateVisibleRange])
+
   useEffect(() => {
     // 全螢幕切換會改變容器高度，重算虛擬化可視範圍
     const raf = requestAnimationFrame(updateVisibleRange)
@@ -432,8 +445,10 @@ export function GanttChart({
       rightBodyRef.current.scrollLeft = 0
     }
     handleRightBodyScroll()
+    // viewMode/groupBy 也要重新觸發：切換視圖會掛載全新的捲動容器（scrollLeft 重置為
+    // 0），若不把它們列為 deps，回到甘特圖時就不會重新置中今日，停在 scrollLeft: 0。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSort.ganttStart, filterSort.ganttEnd])
+  }, [filterSort.ganttStart, filterSort.ganttEnd, viewMode, groupBy])
 
   // ── 空資料 ────────────────────────────────────────────
   if (schedules.length === 0) {

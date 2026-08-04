@@ -20,6 +20,10 @@ export const DASHBOARD_JS = `
     'Planned':   { bg:'#F1F5F9', text:'#475569' },
     'Cancelled': { bg:'#111827', text:'#F9FAFB' },
   };
+  /* 狀態非顏色指示：色弱使用者可藉符號辨識。對照 src/components/schedule/GanttChart.tsx 的 STATUS_GLYPH */
+  var STATUS_GLYPH = {
+    'Cancelled': '✕', 'Completed': '✓', 'Delayed': '!', 'Testing': '▶', 'Planned': '○',
+  };
 
   /* ── 工具函式 ── */
   /* 顏色解析：與主系統 src/lib/colors.ts 同規則。
@@ -555,15 +559,17 @@ export const DASHBOARD_JS = `
     var allUnits = OPTIONS.testUnits.map(function(u){ return u.value; });
 
     tbody.innerHTML = data.map(function(s, i) {
-      var color    = getColor(s.testUnit, allUnits);
-      var status   = computeStatus(s);
+      var color     = getColor(s.testUnit, allUnits);
+      var unitText  = textColorOn(color);
+      var status    = computeStatus(s);
+      var glyph     = STATUS_GLYPH[status] || '';
       var restClass = isRestDay(parseDate(s.startDate)) ? ' rest-day' : '';
       return '<tr class="list-row'+restClass+'" data-idx="'+i+'" style="cursor:pointer">'
-        +'<td><span class="status-badge status-'+status+'">'+status+'</span></td>'
+        +'<td><span class="status-badge status-'+status+'">'+glyph+' '+status+'</span></td>'
         +'<td>'+escapeHtml(s.category)+'</td>'
         +'<td title="'+escapeHtml(s.projectName)+'">'+escapeHtml(s.projectName)+'</td>'
         +'<td title="'+escapeHtml(s.taskDescription||'')+'">'+escapeHtml(s.taskDescription||'—')+'</td>'
-        +'<td><span class="unit-badge" style="background:'+color+'">'+escapeHtml(s.testUnit)+'</span></td>'
+        +'<td><span class="unit-badge" style="background:'+color+';color:'+unitText+'">'+escapeHtml(s.testUnit)+'</span></td>'
         +'<td>'+escapeHtml(s.testEngineer)+'</td>'
         +'<td>'+s.startDate+'</td>'
         +'<td>'+s.endDate+'</td>'

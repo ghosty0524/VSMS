@@ -7,6 +7,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import { computeStatus } from '../../lib/status'
 import { STATUS_COLORS } from '../../constants'
 import { resolveUnitColor, readableTextColor } from '../../lib/colors'
+import { STATUS_GLYPH } from './GanttChart'
 import type { Schedule, Role, OptionsMap } from '../../types'
 
 const LIST_ROW_H = 36
@@ -112,7 +113,7 @@ export default function ScheduleListView({
                 <td className="px-2 whitespace-nowrap">
                   <span className="px-1.5 py-0.5 rounded text-[11px] font-bold"
                     style={{ background: statusColor.bg, color: statusColor.text }}>
-                    {status}
+                    {STATUS_GLYPH[status]} {status}
                   </span>
                 </td>
                 <td className="px-2 whitespace-nowrap text-slate-600">{s.category}</td>
