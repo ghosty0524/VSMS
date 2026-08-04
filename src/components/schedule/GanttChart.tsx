@@ -7,7 +7,7 @@ import { api } from '../../lib/api'
 import { STATUS_COLORS, OVERFLOW_COLOR, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../../lib/colors'
 import { computeStatus } from '../../lib/status'
-import { schedulesToTsv } from '../../lib/tsv'
+import { schedulesToTsv, schedulesToHtmlTable } from '../../lib/clipboardTable'
 import { isRestDay } from '../../lib/restDays'
 import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
 import { ScheduleFormModal } from './ScheduleFormModal'
@@ -371,9 +371,9 @@ export function GanttChart({
 
   const engLabel = (value: string) => engineerLabelMap.get(value) ?? value
 
-  // 列表模式「複製表格」：把「當前 filtered 陣列的全部資料」（非可視列）轉為
-  // TSV 寫入剪貼簿，這是它存在的唯一理由——虛擬化只渲染可視列 ± 緩衝，若照
-  // DOM 內容複製，篩選出的 599 筆會只拿到畫面上那 20～30 列且不會有任何警示。
+  // 列表模式「複製表格」：把「當前 filtered 陣列的全部資料」（非可視列）同時轉為
+  // TSV 與 HTML 表格寫入剪貼簿，這是它存在的唯一理由——虛擬化只渲染可視列 ± 緩衝，
+  // 若照 DOM 內容複製，篩選出的 599 筆會只拿到畫面上那 20～30 列且不會有任何警示。
   const handleCopyList = async () => {
     if (copyNoticeTimer.current) clearTimeout(copyNoticeTimer.current)
 
@@ -383,7 +383,28 @@ export function GanttChart({
       try {
         // 轉換也放在 try 內：需求要求任何失敗都要看得見，不能只守剪貼簿那一段
         const tsv = schedulesToTsv(filtered, engLabel)
-        await navigator.clipboard.writeText(tsv)
+        const html = schedulesToHtmlTable(filtered, engLabel)
+
+        // 同時放上 text/plain（TSV）與 text/html（<table>）兩種表示法，讓貼上的
+        // 應用程式各自選用看得懂的格式：Excel／Google 試算表吃 TSV 還原成欄位，
+        // Word／Outlook／Google Docs 吃 HTML 還原成真正的表格。
+        // ClipboardItem／navigator.clipboard.write 並非所有環境都有，且 write
+        // 可能在 writeText 會成功的情況下 reject，因此這裡失敗時退回只寫 TSV
+        // 的舊行為，確保既有的試算表貼上體驗不會因為這次新增而退步。
+        try {
+          if (typeof ClipboardItem === 'undefined' || !navigator.clipboard.write) {
+            throw new Error('ClipboardItem unsupported')
+          }
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'text/plain': new Blob([tsv], { type: 'text/plain' }),
+              'text/html': new Blob([html], { type: 'text/html' }),
+            }),
+          ])
+        } catch {
+          await navigator.clipboard.writeText(tsv)
+        }
+
         setCopyNotice({ kind: 'success', text: `已複製 ${filtered.length} 筆到剪貼簿` })
       } catch {
         // navigator.clipboard.writeText 在非安全來源（非 HTTPS/localhost）或權限被拒時會 reject，
@@ -631,7 +652,7 @@ export function GanttChart({
           {viewMode === 'list' && (
             <button
               type="button"
-              title="複製目前篩選結果的完整列表（TSV，可直接貼到 Excel）"
+              title="複製目前篩選結果的完整列表（可直接貼到 Excel／Google 試算表，或貼到 Word／Outlook 等文書處理器）"
               onClick={e => { e.stopPropagation(); handleCopyList() }}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-300 bg-white
                          text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors"

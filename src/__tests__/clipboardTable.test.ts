@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { schedulesToTsv } from '../lib/tsv'
+import { schedulesToTsv, schedulesToHtmlTable } from '../lib/clipboardTable'
 import type { Schedule } from '../types'
 
 function makeSchedule(over: Partial<Schedule>): Schedule {
@@ -89,5 +89,59 @@ describe('schedulesToTsv', () => {
     const cells = tsv.split('\n')[1].split('\t')
     expect(cells[6]).toBe('2026/03/01')
     expect(cells[7]).toBe('2026/03/10')
+  })
+})
+
+describe('schedulesToHtmlTable', () => {
+  it('標題列文字與順序同 TSV', () => {
+    const html = schedulesToHtmlTable([makeSchedule({})], identityLabel)
+    const headerCells = [...html.matchAll(/<th\b[^>]*>(.*?)<\/th>/g)].map(m => m[1])
+    expect(headerCells).toEqual([
+      '狀態', '工作類別', 'PDN Number', '工作內容', '測試單位', '測試人員',
+      '起始日', '完成日', '需求人員', '測試報告',
+    ])
+  })
+
+  it('輸出結構為 <table> 內含 <thead> 與 <tbody>', () => {
+    const html = schedulesToHtmlTable([makeSchedule({})], identityLabel)
+    expect(html).toMatch(/<table[^>]*>[\s\S]*<thead>[\s\S]*<\/thead>[\s\S]*<tbody>[\s\S]*<\/tbody>[\s\S]*<\/table>/)
+  })
+
+  it('儲存格內的 &、< 與 > 會被跳脫，不破壞表格結構', () => {
+    const html = schedulesToHtmlTable(
+      [makeSchedule({ taskDescription: 'A<B> & C' })],
+      identityLabel,
+    )
+    expect(html).toContain('A&lt;B&gt; &amp; C')
+    expect(html).not.toContain('A<B> & C')
+  })
+
+  it('儲存格內含 tab 或換行不破壞列結構（僅一個 <tr> 對應一筆資料）', () => {
+    const html = schedulesToHtmlTable(
+      [makeSchedule({ taskDescription: 'line1\nline2\ttab\r\nline3' })],
+      identityLabel,
+    )
+    const bodyMatch = html.match(/<tbody>([\s\S]*)<\/tbody>/)
+    expect(bodyMatch).not.toBeNull()
+    const trCount = (bodyMatch![1].match(/<tr>/g) ?? []).length
+    expect(trCount).toBe(1)
+  })
+
+  it('輸入的每一列都出現在輸出中（虛擬化陷阱的防迴歸測試）', () => {
+    const schedules = Array.from({ length: 250 }, (_, i) =>
+      makeSchedule({ id: String(i), projectName: `PDN-${i}` }),
+    )
+    const html = schedulesToHtmlTable(schedules, identityLabel)
+    const trCount = (html.match(/<tr>/g) ?? []).length
+    // 250 筆資料列 + 1 列標題列
+    expect(trCount).toBe(251)
+    for (const s of schedules) {
+      expect(html).toContain(s.projectName)
+    }
+  })
+
+  it('空清單回傳空字串', () => {
+    const html = schedulesToHtmlTable([], identityLabel)
+    expect(html).toBe('')
   })
 })
