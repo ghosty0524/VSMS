@@ -20,6 +20,7 @@ interface OptionsState {
   deleteTestUnit: (id: string) => Promise<void>
   addEngineer: (unitId: string, name: string) => Promise<void>
   updateEngineer: (unitId: string, engId: string, name: string) => Promise<void>
+  toggleEngineer: (unitId: string, engId: string, isActive: boolean) => Promise<void>
   removeEngineer: (unitId: string, engId: string) => Promise<void>
   setTestUnitColor: (id: string, color: string | null) => Promise<void>
   setEngineerColor: (unitId: string, engId: string, color: string | null) => Promise<void>
@@ -149,6 +150,18 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
         if (u.id !== unitId) return u
         // ★ 只更新 label，不動 value（value 是識別碼，改名不應影響排程參照，比照 updateDevice）
         return { ...u, engineers: u.engineers.map((e) => e.id === engId ? { ...e, label: name } : e) }
+      }),
+    }
+    await persistOptions(next)
+    set({ options: next })
+  },
+
+  toggleEngineer: async (unitId, engId, isActive) => {
+    const next = {
+      ...get().options,
+      testUnits: get().options.testUnits.map((u) => {
+        if (u.id !== unitId) return u
+        return { ...u, engineers: u.engineers.map((e) => e.id === engId ? { ...e, isActive } : e) }
       }),
     }
     await persistOptions(next)

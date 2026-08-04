@@ -3,7 +3,7 @@ import { useOptionsStore } from '../../store/optionsStore'
 import { resolveEngineerColor } from '../../lib/colors'
 
 export function EngineerManager() {
-  const { options, addEngineer, updateEngineer, removeEngineer, setEngineerColor } = useOptionsStore()
+  const { options, addEngineer, updateEngineer, toggleEngineer, removeEngineer, setEngineerColor } = useOptionsStore()
   const [newNames, setNewNames] = useState<Record<string, string>>({})
   const [editKeys, setEditKeys] = useState<Record<string, string>>({})
   // 拖曳色盤期間的暫存值（依 engineer id 分開），避免每個 input 事件都寫回並觸發整表重寫
@@ -62,9 +62,13 @@ export function EngineerManager() {
                           onClick={() => { setEngineerColor(unit.id, eng.id, null); clearDraftColor(eng.id) }}
                           className="text-xs px-2 py-0.5 border rounded hover:bg-gray-50 text-gray-500">還原</button>
                       )}
-                      <span className="flex-1 text-sm">{eng.label}</span>
+                      <span className={`flex-1 text-sm ${!eng.isActive ? 'line-through text-gray-400' : ''}`}>{eng.label}</span>
                       <button type="button" onClick={() => setEditKeys(k => ({ ...k, [eng.id]: eng.label }))}
                         className="text-xs px-2 py-0.5 border rounded hover:bg-gray-50">編輯</button>
+                      <button type="button" onClick={() => toggleEngineer(unit.id, eng.id, !eng.isActive)}
+                        className={`text-xs px-2 py-0.5 rounded ${eng.isActive ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                        {eng.isActive ? '停用' : '啟用'}
+                      </button>
                       <button type="button" onClick={() => removeEngineer(unit.id, eng.id)}
                         className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded hover:bg-red-200">刪除</button>
                     </>
