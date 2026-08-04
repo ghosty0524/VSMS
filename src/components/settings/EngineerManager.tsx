@@ -1,14 +1,18 @@
 import { useState } from 'react'
 import { useOptionsStore } from '../../store/optionsStore'
+import { resolveEngineerColor } from '../../lib/colors'
 
 export function EngineerManager() {
-  const { options, addEngineer, updateEngineer, removeEngineer } = useOptionsStore()
+  const { options, addEngineer, updateEngineer, removeEngineer, setEngineerColor } = useOptionsStore()
   const [newNames, setNewNames] = useState<Record<string, string>>({})
   const [editKeys, setEditKeys] = useState<Record<string, string>>({})
 
   return (
     <div>
       <h3 className="font-semibold text-gray-700 mb-3">測試人員</h3>
+      <p className="text-xs text-gray-400 mb-3">
+        人員色預設由所屬單位色衍生，因此同單位為同色系。按「還原」即可回到預設。
+      </p>
       <div className="space-y-6">
         {options.testUnits.map(unit => (
           <div key={unit.id} className="border rounded p-3">
@@ -27,6 +31,17 @@ export function EngineerManager() {
                     </>
                   ) : (
                     <>
+                      <input
+                        type="color"
+                        className="w-6 h-6 rounded border border-gray-200 cursor-pointer p-0.5"
+                        title="自訂人員色（甘特圖 bar 內裡與左欄徽章）"
+                        value={eng.color ?? resolveEngineerColor(eng.value, unit.value, options)}
+                        onChange={e => setEngineerColor(unit.id, eng.id, e.target.value)}
+                      />
+                      {eng.color && (
+                        <button type="button" onClick={() => setEngineerColor(unit.id, eng.id, null)}
+                          className="text-xs px-2 py-0.5 border rounded hover:bg-gray-50 text-gray-500">還原</button>
+                      )}
                       <span className="flex-1 text-sm">{eng.label}</span>
                       <button type="button" onClick={() => setEditKeys(k => ({ ...k, [eng.id]: eng.label }))}
                         className="text-xs px-2 py-0.5 border rounded hover:bg-gray-50">編輯</button>

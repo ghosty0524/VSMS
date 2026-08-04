@@ -1,9 +1,10 @@
 // src/components/settings/TestUnitManager.tsx
 import { useState } from 'react'
 import { useOptionsStore } from '../../store/optionsStore'
+import { resolveUnitColor } from '../../lib/colors'
 
 export function TestUnitManager() {
-  const { options, addTestUnit, updateTestUnit, toggleTestUnit, deleteTestUnit } = useOptionsStore()
+  const { options, addTestUnit, updateTestUnit, toggleTestUnit, deleteTestUnit, setTestUnitColor } = useOptionsStore()
   const [newValue, setNewValue] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
@@ -41,6 +42,17 @@ export function TestUnitManager() {
               </>
             ) : (
               <>
+                <input
+                  type="color"
+                  className="w-7 h-7 rounded border border-gray-200 cursor-pointer p-0.5"
+                  title="自訂單位色（甘特圖 bar 外框）"
+                  value={u.color ?? resolveUnitColor(u.value, options)}
+                  onChange={e => setTestUnitColor(u.id, e.target.value)}
+                />
+                {u.color && (
+                  <button type="button" onClick={() => setTestUnitColor(u.id, null)}
+                    className="text-xs px-2 py-1 border rounded hover:bg-gray-50 text-gray-500">還原</button>
+                )}
                 <span className={`flex-1 text-sm ${!u.isActive ? "line-through text-gray-400" : ""}`}>
                   {u.label}
                   <span className="ml-1 text-xs text-gray-400">（{u.engineers.length} 人）</span>
