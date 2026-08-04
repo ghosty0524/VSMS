@@ -31,3 +31,8 @@ dist-ssr
 
 # Runtime data (generated at server startup, not source)
 server/data/
+
+# Rollback snapshots and table backups (see plans/2026-08-03-vsms-gantt-readability-and-stats.md)
+dist.stable-*/
+server/dist.stable-*/
+backup-options-*.sql
