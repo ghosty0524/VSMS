@@ -147,7 +147,8 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       testUnits: get().options.testUnits.map((u) => {
         if (u.id !== unitId) return u
-        return { ...u, engineers: u.engineers.map((e) => e.id === engId ? { ...e, value: name, label: name } : e) }
+        // ★ 只更新 label，不動 value（value 是識別碼，改名不應影響排程參照，比照 updateDevice）
+        return { ...u, engineers: u.engineers.map((e) => e.id === engId ? { ...e, label: name } : e) }
       }),
     }
     await persistOptions(next)
