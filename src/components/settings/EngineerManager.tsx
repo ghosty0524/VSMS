@@ -10,6 +10,8 @@ export function EngineerManager() {
   const [draftColors, setDraftColors] = useState<Record<string, string>>({})
   // 刪除失敗訊息（依 engineer id 分開，例如後端擋下的 ENGINEER_IN_USE）
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({})
+  // 改名／停用失敗訊息（同樣依 engineer id 分開，避免無聲失敗）
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
 
   const clearDraftColor = (id: string) => {
     setDraftColors(d => {
@@ -27,6 +29,31 @@ export function EngineerManager() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       setDeleteErrors(d => ({ ...d, [engId]: msg }))
+    }
+  }
+
+  // Critical 2 / Important 4：toggleEngineer 與 updateEngineer 都會先 await
+  // persistOptions 再 set()，後端 400 時會 reject。呼叫端若不 await／不 catch，
+  // 就是無聲失敗（使用者點了沒反應、也看不到原因）且留下 unhandled rejection。
+  // 比照 handleRemove 的既有模式，統一吞下例外並顯示訊息。
+  const handleToggle = async (unitId: string, engId: string, isActive: boolean) => {
+    setActionErrors(d => { const n = { ...d }; delete n[engId]; return n })
+    try {
+      await toggleEngineer(unitId, engId, isActive)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setActionErrors(d => ({ ...d, [engId]: msg }))
+    }
+  }
+
+  const handleRename = async (unitId: string, engId: string, name: string) => {
+    setActionErrors(d => { const n = { ...d }; delete n[engId]; return n })
+    try {
+      await updateEngineer(unitId, engId, name)
+      setEditKeys(k => { const n = { ...k }; delete n[engId]; return n })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setActionErrors(d => ({ ...d, [engId]: msg }))
     }
   }
 
@@ -48,7 +75,7 @@ export function EngineerManager() {
                       <>
                         <input className="border rounded px-2 py-0.5 text-sm flex-1"
                           value={editKeys[eng.id]} onChange={e => setEditKeys(k => ({ ...k, [eng.id]: e.target.value }))} />
-                        <button type="button" onClick={async () => { await updateEngineer(unit.id, eng.id, editKeys[eng.id].trim()); setEditKeys(k => { const n = { ...k }; delete n[eng.id]; return n }) }}
+                        <button type="button" onClick={() => handleRename(unit.id, eng.id, editKeys[eng.id].trim())}
                           className="text-xs px-2 py-0.5 bg-blue-500 text-white rounded">確認</button>
                         <button type="button" onClick={() => setEditKeys(k => { const n = { ...k }; delete n[eng.id]; return n })}
                           className="text-xs px-2 py-0.5 border rounded">取消</button>
@@ -78,7 +105,7 @@ export function EngineerManager() {
                         <span className={`flex-1 text-sm ${!eng.isActive ? 'line-through text-gray-400' : ''}`}>{eng.label}</span>
                         <button type="button" onClick={() => setEditKeys(k => ({ ...k, [eng.id]: eng.label }))}
                           className="text-xs px-2 py-0.5 border rounded hover:bg-gray-50">編輯</button>
-                        <button type="button" onClick={() => toggleEngineer(unit.id, eng.id, !eng.isActive)}
+                        <button type="button" onClick={() => handleToggle(unit.id, eng.id, !eng.isActive)}
                           className={`text-xs px-2 py-0.5 rounded ${eng.isActive ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
                           {eng.isActive ? '停用' : '啟用'}
                         </button>
@@ -89,6 +116,9 @@ export function EngineerManager() {
                   </div>
                   {deleteErrors[eng.id] && (
                     <p className="text-xs text-red-500 pl-8">{deleteErrors[eng.id]}</p>
+                  )}
+                  {actionErrors[eng.id] && (
+                    <p className="text-xs text-red-500 pl-8">{actionErrors[eng.id]}</p>
                   )}
                 </div>
               ))}
