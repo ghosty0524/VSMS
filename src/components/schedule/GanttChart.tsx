@@ -380,8 +380,9 @@ export function GanttChart({
     if (filtered.length === 0) {
       setCopyNotice({ kind: 'error', text: '沒有可複製的資料' })
     } else {
-      const tsv = schedulesToTsv(filtered, engLabel)
       try {
+        // 轉換也放在 try 內：需求要求任何失敗都要看得見，不能只守剪貼簿那一段
+        const tsv = schedulesToTsv(filtered, engLabel)
         await navigator.clipboard.writeText(tsv)
         setCopyNotice({ kind: 'success', text: `已複製 ${filtered.length} 筆到剪貼簿` })
       } catch {
