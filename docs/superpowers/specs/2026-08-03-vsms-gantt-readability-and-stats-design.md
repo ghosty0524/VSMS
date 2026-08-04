@@ -47,6 +47,10 @@ const pdnDisplay = leftWidth >= PDN_FULL_THRESHOLD
 
 `projectName` 不含空白時（不符 `PDN-xxxxxx 機種名` 慣例的舊資料），`split(' ')[0]` 回傳原字串，由 CSS `text-overflow: ellipsis` 截斷。
 
+**已知限制**（2026-08-04 以正式資料實測後決定維持現狀）：預設 260px 下，連編號段本身也會被截掉幾個字元。實測數字——人員徽章佔 72–78px（`Alancc_Yen`、`Darius_Chang` 等實際 `testEngineer` 值長 10–12 字元，而非 `options.json` 裡 `Eric`、`Darius` 那種 4–6 字元的 label），扣掉左右內距 16px、間距 12px 與四顆 19px 操作按鈕共 85px 後，PDN 只剩約 69px，而編號段需要 72–74px。差距約 5–10px。
+
+後果是 `PDN-260024` 與 `PDN-260034` 在預設寬度下看起來相同。使用者可拖曳左欄至 340px 以上顯示完整專案名，或滑鼠停留看 `title`。曾評估的解法為「徽章只顯示名字段」與「預設寬度改 300px」，皆未採用。
+
 ### 狀態籤縮小
 
 從 `84×24 / 12px 字` 縮為 `高 17px / padding 0 6px / 11px 字`。第二行本來就只有灰色小字，不需維持原尺寸。`STATUS_GLYPH` 保留（色弱使用者的非顏色指示）。
