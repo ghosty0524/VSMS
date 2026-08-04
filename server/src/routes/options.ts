@@ -9,10 +9,18 @@ import {
   toCategoryResponse, toCategoryCreateData,
   toTestUnitResponse, toTestUnitCreateData, toEngineerCreateData,
 } from './optionsMapping.js'
-import { findMissingReferencedEngineers, formatEngineerInUseMessage } from '../lib/engineerInUse.js'
+import { findMissingReferencedEngineers, formatEngineerInUseMessage, type MissingEngineer } from '../lib/engineerInUse.js'
 
 const router = Router()
 router.use(requireAuth)
+
+// ★ 需求三／finding 1+7：guard 只能擋「這次請求真的要移除、且仍被引用」的人員；
+// 用丟例外的方式讓 $transaction 自動 rollback，路由再攔截並回 400。
+class EngineerInUseError extends Error {
+  constructor(public readonly missing: MissingEngineer[]) {
+    super('ENGINEER_IN_USE')
+  }
+}
 
 // GET /api/options
 router.get('/', async (_req, res) => {
@@ -45,58 +53,80 @@ router.get('/', async (_req, res) => {
 router.put('/', async (req, res) => {
   const username = req.session.username ?? 'unknown'
   const body = req.body as OptionsMap
-
-  // ★ 需求三：人員的移除是全刪重建（不在 body 中即等同刪除），沒有 DELETE
-  // 端點可掛引用檢查，因此在進入交易前先擋下仍被排程引用、卻即將消失的人員。
   const bodyEngineerValues = body.testUnits.flatMap(u => u.engineers.map(e => e.value))
-  const schedules = await prisma.schedule.findMany({ select: { testEngineer: true } })
-  const missing = findMissingReferencedEngineers(schedules.map(s => s.testEngineer), bodyEngineerValues)
-  if (missing.length > 0) {
-    res.status(400).json({
-      ok: false,
-      message: formatEngineerInUseMessage(missing),
-      code: 'ENGINEER_IN_USE',
-    })
-    return
-  }
 
-  await prisma.$transaction(async (tx) => {
-    // Delete in dependency order (engineers are cascade-deleted with testUnits)
-    await tx.engineer.deleteMany()
-    await tx.testUnit.deleteMany()
-    await tx.category.deleteMany()
+  try {
+    await prisma.$transaction(async (tx) => {
+      // ★ 需求三：人員的移除是全刪重建（不在 body 中即等同刪除），沒有 DELETE
+      // 端點可掛引用檢查，因此在交易內、寫入之前先擋下「這次請求真的要移除、且
+      // 仍被排程引用」的人員。
+      //
+      // ★ finding 1：只比對 body 會誤判——正式資料庫已有 18 筆排程引用
+      // Ben_Ko，但 Ben_Ko 早就不在 engineers 表中（不是這次請求要移除的，而是
+      // 已存在的孤兒）。所以先取得「目前仍在 engineers 表中」的 value 集合，
+      // 把排程引用篩到只剩「引用到現行人員」的部分，再交給既有的純函式判斷
+      // 是否被 body 移除。孤兒對這道防線因此完全不可見。
+      //
+      // ★ finding 7：讀取與寫入必須在同一筆交易內完成，避免讀完到刪除之間有
+      // 新排程插入而繞過檢查的競態視窗；guard 失敗時用丟例外觸發 rollback。
+      const existingEngineers = await tx.engineer.findMany({ select: { value: true } })
+      const existingEngineerValues = new Set(existingEngineers.map(e => e.value))
+      const schedules = await tx.schedule.findMany({ select: { testEngineer: true } })
+      const referencedExistingEngineers = schedules
+        .map(s => s.testEngineer)
+        .filter(v => existingEngineerValues.has(v))
+      const missing = findMissingReferencedEngineers(referencedExistingEngineers, bodyEngineerValues)
+      if (missing.length > 0) {
+        throw new EngineerInUseError(missing)
+      }
 
-    // Create new categories
-    if (body.categories.length > 0) {
-      await tx.category.createMany({
-        data: body.categories.map(toCategoryCreateData),
-      })
-    }
+      // Delete in dependency order (engineers are cascade-deleted with testUnits)
+      await tx.engineer.deleteMany()
+      await tx.testUnit.deleteMany()
+      await tx.category.deleteMany()
 
-    // Create new testUnits with nested engineers
-    for (const unit of body.testUnits) {
-      await tx.testUnit.create({
-        data: {
-          ...toTestUnitCreateData(unit),
-          engineers: { create: unit.engineers.map(toEngineerCreateData) },
+      // Create new categories
+      if (body.categories.length > 0) {
+        await tx.category.createMany({
+          data: body.categories.map(toCategoryCreateData),
+        })
+      }
+
+      // Create new testUnits with nested engineers
+      for (const unit of body.testUnits) {
+        await tx.testUnit.create({
+          data: {
+            ...toTestUnitCreateData(unit),
+            engineers: { create: unit.engineers.map(toEngineerCreateData) },
+          },
+        })
+      }
+
+      // Upsert restDaysConfig singleton
+      await tx.restDaysConfig.upsert({
+        where: { id: 1 },
+        create: {
+          id: 1,
+          weekends: body.restDays.weekends,
+          specificDates: body.restDays.specificDates,
+        },
+        update: {
+          weekends: body.restDays.weekends,
+          specificDates: body.restDays.specificDates,
         },
       })
-    }
-
-    // Upsert restDaysConfig singleton
-    await tx.restDaysConfig.upsert({
-      where: { id: 1 },
-      create: {
-        id: 1,
-        weekends: body.restDays.weekends,
-        specificDates: body.restDays.specificDates,
-      },
-      update: {
-        weekends: body.restDays.weekends,
-        specificDates: body.restDays.specificDates,
-      },
     })
-  })
+  } catch (err) {
+    if (err instanceof EngineerInUseError) {
+      res.status(400).json({
+        ok: false,
+        message: formatEngineerInUseMessage(err.missing),
+        code: 'ENGINEER_IN_USE',
+      })
+      return
+    }
+    throw err
+  }
 
   const dbUser = await prisma.user.findUnique({ where: { username } })
   await appendAudit(username, dbUser?.displayName ?? username, 'UPDATE_SETTINGS', 'options', [])
