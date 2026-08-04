@@ -52,12 +52,14 @@ export function EngineerManager() {
                           const draft = draftColors[eng.id]
                           if (draft === undefined) return
                           const base = eng.color ?? resolveEngineerColor(eng.value, unit.value, options)
-                          if (draft !== base) setEngineerColor(unit.id, eng.id, draft)
+                          if (draft.toLowerCase() !== base.toLowerCase()) setEngineerColor(unit.id, eng.id, draft)
                           clearDraftColor(eng.id)
                         }}
                       />
                       {eng.color && (
-                        <button type="button" onClick={() => { setEngineerColor(unit.id, eng.id, null); clearDraftColor(eng.id) }}
+                        <button type="button"
+                          onMouseDown={() => clearDraftColor(eng.id)}
+                          onClick={() => { setEngineerColor(unit.id, eng.id, null); clearDraftColor(eng.id) }}
                           className="text-xs px-2 py-0.5 border rounded hover:bg-gray-50 text-gray-500">還原</button>
                       )}
                       <span className="flex-1 text-sm">{eng.label}</span>

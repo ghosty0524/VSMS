@@ -63,12 +63,14 @@ export function TestUnitManager() {
                     const draft = draftColors[u.id]
                     if (draft === undefined) return
                     const base = u.color ?? resolveUnitColor(u.value, options)
-                    if (draft !== base) setTestUnitColor(u.id, draft)
+                    if (draft.toLowerCase() !== base.toLowerCase()) setTestUnitColor(u.id, draft)
                     clearDraftColor(u.id)
                   }}
                 />
                 {u.color && (
-                  <button type="button" onClick={() => { setTestUnitColor(u.id, null); clearDraftColor(u.id) }}
+                  <button type="button"
+                    onMouseDown={() => clearDraftColor(u.id)}
+                    onClick={() => { setTestUnitColor(u.id, null); clearDraftColor(u.id) }}
                     className="text-xs px-2 py-1 border rounded hover:bg-gray-50 text-gray-500">還原</button>
                 )}
                 <span className={`flex-1 text-sm ${!u.isActive ? "line-through text-gray-400" : ""}`}>
