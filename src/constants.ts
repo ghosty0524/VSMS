@@ -1,6 +1,6 @@
 // src/constants.ts
 import { v4 as uuidv4 } from 'uuid'
-import type { OptionsMap, Option, TestUnitOption } from './types'
+import type { OptionsMap, Option, CategoryOption, TestUnitOption } from './types'
 
 export const MIN_DATE = new Date('2026-01-01')
 
@@ -53,6 +53,10 @@ function makeOption(value: string, sortOrder: number): Option {
   return { id: uuidv4(), value, label: value, isActive: true, sortOrder }
 }
 
+function makeCategory(value: string, sortOrder: number): CategoryOption {
+  return { ...makeOption(value, sortOrder), statsMode: 'counted' }
+}
+
 function makeEngineer(name: string, idx: number): Option {
   return { id: uuidv4(), value: name, label: name, isActive: true, sortOrder: idx }
 }
@@ -60,7 +64,7 @@ function makeEngineer(name: string, idx: number): Option {
 export const DEFAULT_OPTIONS: OptionsMap = {
   categories: [
     'NPI', 'AVL', '2nd Source', 'Security', 'Regression',
-  ].map((v, i) => makeOption(v, i)),
+  ].map((v, i) => makeCategory(v, i)),
   testUnits: [
     {
       ...makeOption('SIT-HW', 0),

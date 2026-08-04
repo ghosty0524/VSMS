@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
 import { api } from '../lib/api'
 import { DEFAULT_OPTIONS } from '../constants'
-import type { OptionsMap, Option, TestUnitOption, RestDaysConfig } from '../types'
+import type { OptionsMap, Option, CategoryOption, CategoryStatsMode, TestUnitOption, RestDaysConfig } from '../types'
 
 interface OptionsState {
   options: OptionsMap
@@ -13,6 +13,7 @@ interface OptionsState {
   updateCategory: (id: string, label: string) => Promise<void>
   toggleCategory: (id: string, isActive: boolean) => Promise<void>
   deleteCategory: (id: string) => Promise<void>
+  setCategoryStatsMode: (id: string, statsMode: CategoryStatsMode) => Promise<void>
   addTestUnit: (value: string) => Promise<void>
   updateTestUnit: (id: string, label: string) => Promise<void>
   toggleTestUnit: (id: string, isActive: boolean) => Promise<void>
@@ -46,7 +47,10 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
 
   addCategory: async (value) => {
     const cats = get().options.categories
-    const newCat: Option = { id: uuidv4(), value, label: value, isActive: true, sortOrder: cats.length }
+    const newCat: CategoryOption = {
+      id: uuidv4(), value, label: value, isActive: true, sortOrder: cats.length,
+      statsMode: 'counted',
+    }
     const next = { ...get().options, categories: [...cats, newCat] }
     await persistOptions(next)
     set({ options: next })
@@ -74,6 +78,15 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
     const next = {
       ...get().options,
       categories: get().options.categories.filter((c) => c.id !== id),
+    }
+    await persistOptions(next)
+    set({ options: next })
+  },
+
+  setCategoryStatsMode: async (id, statsMode) => {
+    const next = {
+      ...get().options,
+      categories: get().options.categories.map((c) => c.id === id ? { ...c, statsMode } : c),
     }
     await persistOptions(next)
     set({ options: next })

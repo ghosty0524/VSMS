@@ -37,6 +37,13 @@ export interface Option {
   sortOrder: number
 }
 
+/** 工作類別在統計中的計入方式。'workload_only' 不計專案數但仍計人力負載。 */
+export type CategoryStatsMode = 'counted' | 'workload_only' | 'excluded'
+
+export interface CategoryOption extends Option {
+  statsMode: CategoryStatsMode
+}
+
 export interface TestUnitOption extends Option {
   engineers: Option[]
 }
@@ -47,7 +54,7 @@ export interface RestDaysConfig {
 }
 
 export interface OptionsMap {
-  categories: Option[]
+  categories: CategoryOption[]
   testUnits: TestUnitOption[]
   restDays: RestDaysConfig
   devices: Option[]

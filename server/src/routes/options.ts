@@ -5,6 +5,7 @@ import { prisma } from '../lib/db.js'
 import { appendAudit } from '../lib/storage.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import type { OptionsMap } from '../types.js'
+import { toCategoryResponse, toCategoryCreateData } from './optionsMapping.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -22,9 +23,7 @@ router.get('/', async (_req, res) => {
   ])
 
   const result: OptionsMap = {
-    categories: categories.map(({ id, value, label, isActive, sortOrder }) => ({
-      id, value, label, isActive, sortOrder,
-    })),
+    categories: categories.map(toCategoryResponse),
     testUnits: testUnits.map(({ id, value, label, isActive, sortOrder, engineers }) => ({
       id, value, label, isActive, sortOrder,
       engineers: engineers.map(({ id, value, label, isActive, sortOrder }) => ({
@@ -57,10 +56,7 @@ router.put('/', async (req, res) => {
     // Create new categories
     if (body.categories.length > 0) {
       await tx.category.createMany({
-        data: body.categories.map(c => ({
-          id: c.id, value: c.value, label: c.label,
-          isActive: c.isActive, sortOrder: c.sortOrder,
-        })),
+        data: body.categories.map(toCategoryCreateData),
       })
     }
 

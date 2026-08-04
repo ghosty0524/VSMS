@@ -69,6 +69,7 @@ model Category {
   label     String  @db.VarChar(100)
   isActive  Boolean @default(true)
   sortOrder Int
+  statsMode String  @db.VarChar(20) @default("counted")
 
   @@map("categories")
 }
