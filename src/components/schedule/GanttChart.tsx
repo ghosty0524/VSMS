@@ -12,6 +12,7 @@ import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortB
 import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { FlagPopover } from './FlagPopover'
+import ScheduleListView from './ScheduleListView'
 import type { FilterSortState, SortRule, SortableField } from './FilterSortBar'
 import type { Role, Schedule, VtmsProgress } from '../../types'
 import type { ScheduleStatus } from '../../lib/status'
@@ -216,6 +217,11 @@ export function GanttChart({
 
   const [groupBy, setGroupBy] = useState<'engineer' | 'device'>(() =>
     (localStorage.getItem('vsms-gantt-group-by') as 'engineer' | 'device') ?? 'engineer'
+  )
+
+  // 視圖模式。與 filterSort 同層，因此切換時篩選與排序完全不受影響
+  const [viewMode, setViewMode] = useState<'gantt' | 'list'>(() =>
+    (localStorage.getItem('vsms-main-view-mode') as 'gantt' | 'list') ?? 'gantt'
   )
 
   // ── 全螢幕檢視 ────────────────────────────────────────
@@ -515,14 +521,35 @@ export function GanttChart({
 
       {/* ── 甘特圖收合控制列 ── */}
       <div
-        className="flex-shrink-0 flex items-center justify-between px-4 py-2
-                   bg-slate-50 border-b cursor-pointer
-                   hover:bg-slate-100 transition-colors duration-150 select-none"
-        onClick={onToggleGantt}
+        className={`flex-shrink-0 flex items-center justify-between px-4 py-2
+                   bg-slate-50 border-b hover:bg-slate-100 transition-colors duration-150 select-none
+                   ${viewMode === 'gantt' ? 'cursor-pointer' : ''}`}
+        onClick={viewMode === 'gantt' ? onToggleGantt : undefined}
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-slate-600">甘特圖</span>
-          {hasGanttRange && (
+          {/* 視圖切換：甘特圖 / 列表 */}
+          <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-medium"
+            onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => { setViewMode('gantt'); localStorage.setItem('vsms-main-view-mode', 'gantt') }}
+              className={`px-2.5 py-1 transition-colors ${
+                viewMode === 'gantt' ? 'bg-slate-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              甘特圖
+            </button>
+            <button
+              type="button"
+              onClick={() => { setViewMode('list'); localStorage.setItem('vsms-main-view-mode', 'list') }}
+              className={`px-2.5 py-1 transition-colors border-l border-slate-300 ${
+                viewMode === 'list' ? 'bg-slate-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              列表
+            </button>
+          </div>
+          {hasGanttRange && viewMode === 'gantt' && (
             <span className="flex items-center gap-1 text-xs text-blue-600
                              bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full font-medium">
               <CalendarRange size={11} />
@@ -531,38 +558,40 @@ export function GanttChart({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* ★ 分組切換按鈕 */}
-          <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-medium"
-            onClick={e => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => {
-                setGroupBy('engineer')
-                localStorage.setItem('vsms-gantt-group-by', 'engineer')
-              }}
-              className={`px-2.5 py-1 transition-colors ${
-                groupBy === 'engineer'
-                  ? 'bg-slate-600 text-white'
-                  : 'bg-white text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              按工程師
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setGroupBy('device')
-                localStorage.setItem('vsms-gantt-group-by', 'device')
-              }}
-              className={`px-2.5 py-1 transition-colors border-l border-slate-300 ${
-                groupBy === 'device'
-                  ? 'bg-slate-600 text-white'
-                  : 'bg-white text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              按設備
-            </button>
-          </div>
+          {/* ★ 分組切換按鈕：列表模式下沒有分組概念，隱藏 */}
+          {viewMode === 'gantt' && (
+            <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-medium"
+              onClick={e => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => {
+                  setGroupBy('engineer')
+                  localStorage.setItem('vsms-gantt-group-by', 'engineer')
+                }}
+                className={`px-2.5 py-1 transition-colors ${
+                  groupBy === 'engineer'
+                    ? 'bg-slate-600 text-white'
+                    : 'bg-white text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                按工程師
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGroupBy('device')
+                  localStorage.setItem('vsms-gantt-group-by', 'device')
+                }}
+                className={`px-2.5 py-1 transition-colors border-l border-slate-300 ${
+                  groupBy === 'device'
+                    ? 'bg-slate-600 text-white'
+                    : 'bg-white text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                按設備
+              </button>
+            </div>
+          )}
           {/* ★ 全螢幕切換 */}
           <button
             type="button"
@@ -574,14 +603,26 @@ export function GanttChart({
             {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             {isFullscreen ? '離開全螢幕' : '全螢幕'}
           </button>
-          <span className="text-slate-400 text-sm">
-            {ganttCollapsed ? '▼ 展開' : '▲ 收合'}
-          </span>
+          {viewMode === 'gantt' && (
+            <span className="text-slate-400 text-sm">
+              {ganttCollapsed ? '▼ 展開' : '▲ 收合'}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* ══ 甘特圖主體（四象限凍結窗格） ══ */}
-      {!ganttCollapsed && (
+      {/* ══ 甘特圖主體（四象限凍結窗格）／列表主體 ══ */}
+      {viewMode === 'list' ? (
+        <ScheduleListView
+          schedules={filtered}
+          role={role}
+          linkedEngineer={linkedEngineer}
+          engLabel={engLabel}
+          options={options}
+          onEdit={setEditTarget}
+          onDelete={setDeleteTarget}
+        />
+      ) : !ganttCollapsed && (
         groupBy === 'device' ? (
           // ── 設備視角 ──────────────────────────────────────────
           deviceRows.length === 0 ? (
