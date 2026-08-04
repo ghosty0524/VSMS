@@ -17,6 +17,25 @@ describe('categories options round-trip', () => {
     })
   })
 
+  it('GET 映射遇到缺漏或非法的 statsMode 時退回 counted 而非帶出垃圾值', () => {
+    const baseRow = {
+      id: 'c1', value: 'NPI', label: 'NPI', isActive: true, sortOrder: 0,
+    }
+
+    // 缺漏的 statsMode 欄位應退回 counted
+    const missingRow = {
+      ...baseRow,
+    } as any
+    expect(toCategoryResponse(missingRow).statsMode).toBe('counted')
+
+    // 非法的 statsMode 值應退回 counted
+    const bogusRow = {
+      ...baseRow,
+      statsMode: 'nonsense',
+    }
+    expect(toCategoryResponse(bogusRow).statsMode).toBe('counted')
+  })
+
   it('PUT 映射寫回 statsMode', () => {
     const input: OptionsMap['categories'][number] = {
       id: 'c1', value: '出國', label: '出國', isActive: true, sortOrder: 3,
