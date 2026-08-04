@@ -246,7 +246,9 @@ const [viewMode, setViewMode] = useState<'gantt' | 'list'>(...)
 - `thead` 使用 sticky 定位
 - `LIST_ROW_H = 36`，沿用甘特圖既有的 `visibleRange` 虛擬化模式（上下以 spacer `<tr>` 撐開捲動高度）
 - 測試單位欄以 `resolveUnitColor` 上色的徽章呈現
-- 操作欄的旗標／編輯／刪除權限規則與甘特圖左欄完全一致：`canWrite` 才有 admin 旗標與刪除；`role === 'user' && s.testEngineer === linkedEngineer` 可編輯自己的排程；guest 唯讀
+- 操作欄的編輯／刪除權限規則與甘特圖左欄完全一致：`canWrite` 才有刪除；`role === 'user' && s.testEngineer === linkedEngineer` 可編輯自己的排程；guest 唯讀
+
+**列表不提供旗標操作**（2026-08-04 決定，刻意的範圍縮減）。`FlagPopover` 需要 `anchorEl` 並與甘特圖左欄共用同一份 popover 狀態，在表格中再開一套的維護成本高於效益。影響：使用者在列表模式下無法設定或取消旗標，若以「只看已標記」篩選後想取消標記，必須切回甘特圖。若日後旗標使用頻率提高，這是第一個該補的缺口。
 
 ## 資料模型變更彙整
 
