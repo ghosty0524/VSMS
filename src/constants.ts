@@ -29,12 +29,6 @@ export const EXTRA_COLORS = [
 /** 時間資源溢出色（實際天數超過 timeResource 工作天時使用） */
 export const OVERFLOW_COLOR = '#86EFAC'   // green-300
 
-export function getUnitColor(unitValue: string, allUnits: string[]): string {
-  if (UNIT_COLORS[unitValue]) return UNIT_COLORS[unitValue]
-  const extras = allUnits.filter(u => !UNIT_COLORS[u])
-  return EXTRA_COLORS[extras.indexOf(unitValue) % EXTRA_COLORS.length]
-}
-
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   Cancelled: { bg: '#111827', text: '#FFFFFF' },
   Completed: { bg: '#16A34A', text: '#FFFFFF' },
