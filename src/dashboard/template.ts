@@ -3,10 +3,13 @@ import { DASHBOARD_CSS } from './styles'
 import { DASHBOARD_JS } from './script'
 import { UNIT_COLORS, EXTRA_COLORS, OVERFLOW_COLOR } from '../constants'
 
-function getUnitColor(unit: string, allUnits: string[]): string {
+function getUnitColor(unit: string, allUnits: string[], options: OptionsMap): string {
+  const custom = options.testUnits.find(u => u.value === unit)?.color
+  if (custom) return custom
   if (UNIT_COLORS[unit]) return UNIT_COLORS[unit]
   const extras = allUnits.filter(u => !UNIT_COLORS[u])
-  return EXTRA_COLORS[extras.indexOf(unit) % EXTRA_COLORS.length]
+  const idx = extras.indexOf(unit)
+  return EXTRA_COLORS[(idx < 0 ? 0 : idx) % EXTRA_COLORS.length]
 }
 
 function escapeAttr(s: string): string {
@@ -57,8 +60,8 @@ export function generateDashboardHTML(schedules: Schedule[], options: OptionsMap
   const optionsJson = JSON.stringify(options)
 
   const legendItems = activeUnits.map(u => {
-    const color = getUnitColor(u, activeUnits)
-    return `<span class="legend-item"><span class="legend-dot" style="background:${color}"></span>${escapeAttr(u)}</span>`
+    const color = getUnitColor(u, activeUnits, options)
+    return `<span class="legend-item"><span class="legend-dot" style="background:transparent;border:2px solid ${color}"></span>${escapeAttr(u)}</span>`
   }).join('')
   // ★ 溢出色圖例
   + `<span class="legend-item"><span class="legend-dot" style="background:${OVERFLOW_COLOR}"></span>超出時間資源</span>`

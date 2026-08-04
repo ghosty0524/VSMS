@@ -2,6 +2,12 @@
 // 甘特圖的顏色解析：單位色決定 bar 外框，工程師色決定 bar 內裡與左欄人員徽章。
 // 兩者皆可在設定頁自訂；未自訂時工程師色由所屬單位色衍生（僅調整明度、
 // 不動色相與飽和度），因此同單位必為同色系——這是「預設一致」的來源。
+//
+// ⚠ src/dashboard/script.ts 內的 DASHBOARD_JS 有一份同規則的 vanilla JS 複本
+// （hexToHsl / hslToHex / relLum / contrast / textColorOn / getColor /
+// getEngineerColor）。匯出的 HTML 需離線運作、無法 import 此檔，故必須複製
+// 演算法。修改本檔的顏色邏輯（位移表、夾限範圍、對比判斷規則）時，請同步
+// 更新 script.ts 那一份，保持數值結果一致。
 import { UNIT_COLORS, EXTRA_COLORS } from '../constants'
 import type { OptionsMap } from '../types'
 

@@ -22,10 +22,94 @@ export const DASHBOARD_JS = `
   };
 
   /* ── 工具函式 ── */
+  /* 顏色解析：與主系統 src/lib/colors.ts 同規則。
+     OPTIONS 由匯出時整份序列化帶入，故自訂色會一併帶出。 */
+  var LIGHTNESS_OFFSETS = [0, 14, -12, 24, -20, 8, -6, 32];
+
+  function hexToHsl(hex) {
+    var h = hex.replace('#','');
+    var r = parseInt(h.slice(0,2),16)/255, g = parseInt(h.slice(2,4),16)/255, b = parseInt(h.slice(4,6),16)/255;
+    var max = Math.max(r,g,b), min = Math.min(r,g,b), l = (max+min)/2;
+    if (max === min) return { h:0, s:0, l:l*100 };
+    var d = max-min;
+    var s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+    var hh;
+    if (max === r) hh = ((g-b)/d + (g<b ? 6 : 0))/6;
+    else if (max === g) hh = ((b-r)/d + 2)/6;
+    else hh = ((r-g)/d + 4)/6;
+    return { h: hh*360, s: s*100, l: l*100 };
+  }
+
+  function hslToHex(h, s, l) {
+    var sN = s/100, lN = l/100;
+    var c = (1-Math.abs(2*lN-1))*sN;
+    var x = c*(1-Math.abs(((h/60)%2)-1));
+    var m = lN - c/2;
+    var seg = Math.floor((((h%360)+360)%360)/60);
+    var rgb = seg===0?[c,x,0]:seg===1?[x,c,0]:seg===2?[0,c,x]:seg===3?[0,x,c]:seg===4?[x,0,c]:[c,0,x];
+    return '#' + rgb.map(function(v){
+      var n = Math.round((v+m)*255).toString(16);
+      return n.length < 2 ? '0'+n : n;
+    }).join('');
+  }
+
+  function relLum(hex) {
+    var h = hex.replace('#','');
+    var ch = [0,2,4].map(function(i){
+      var v = parseInt(h.slice(i,i+2),16)/255;
+      return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
+    });
+    return 0.2126*ch[0] + 0.7152*ch[1] + 0.0722*ch[2];
+  }
+
+  function contrast(a, b) {
+    var la = relLum(a), lb = relLum(b);
+    var hi = Math.max(la, lb), lo = Math.min(la, lb);
+    return (hi+0.05)/(lo+0.05);
+  }
+
+  function textColorOn(bg) {
+    return contrast(bg, '#1e293b') >= contrast(bg, '#ffffff') ? '#1e293b' : '#ffffff';
+  }
+
   function getColor(unit, allUnits) {
+    var units = OPTIONS.testUnits || [];
+    for (var i = 0; i < units.length; i++) {
+      if (units[i].value === unit && units[i].color) return units[i].color;
+    }
     if (UNIT_COLORS[unit]) return UNIT_COLORS[unit];
     var extras = allUnits.filter(function(u){ return !UNIT_COLORS[u]; });
-    return EXTRA_COLORS[extras.indexOf(unit) % EXTRA_COLORS.length];
+    var idx = extras.indexOf(unit);
+    return EXTRA_COLORS[(idx < 0 ? 0 : idx) % EXTRA_COLORS.length];
+  }
+
+  function getEngineerColor(engineer, unitValue, allUnits) {
+    var units = OPTIONS.testUnits || [];
+    var unit = null;
+    for (var i = 0; i < units.length; i++) {
+      if (units[i].value === unitValue) { unit = units[i]; break; }
+    }
+    if (!unit) {
+      for (var j = 0; j < units.length; j++) {
+        var engs = units[j].engineers || [];
+        for (var k = 0; k < engs.length; k++) {
+          if (engs[k].value === engineer) { unit = units[j]; break; }
+        }
+        if (unit) break;
+      }
+    }
+    if (!unit) return getColor(unitValue, allUnits);
+    var list = unit.engineers || [];
+    for (var m = 0; m < list.length; m++) {
+      if (list[m].value === engineer) {
+        if (list[m].color) return list[m].color;
+        var base = getColor(unit.value, allUnits);
+        var hsl = hexToHsl(base);
+        var off = LIGHTNESS_OFFSETS[m % LIGHTNESS_OFFSETS.length];
+        return hslToHex(hsl.h, hsl.s, Math.min(88, Math.max(24, hsl.l + off)));
+      }
+    }
+    return getColor(unit.value, allUnits);
   }
   function parseDate(s) {
     var p = s.split('/').map(Number);
@@ -304,29 +388,35 @@ export const DASHBOARD_JS = `
     var leftRows = data.map(function(s, i) {
       var status = computeStatus(s);
       var sc = STATUS_COLORS[status];
-      var projName = escapeHtml(s.projectName.length > 18 ? s.projectName.slice(0,18)+'…' : s.projectName);
+      var allUnitsL = (OPTIONS.testUnits || []).map(function(u){ return u.value; });
+      var engColor = s.testEngineer ? getEngineerColor(s.testEngineer, s.testUnit, allUnitsL) : '#e2e8f0';
+      var engText  = s.testEngineer ? textColorOn(engColor) : '#64748b';
+      var engName  = escapeHtml(s.testEngineer ? engLabel(s.testEngineer) : '未指派');
+      /* 匯出頁左欄固定 LEFT_W=260，比照主系統窄欄行為只顯示 PDN 編號段，
+         完整字串放 title 供滑鼠停留時檢視 */
+      var pdnFull  = s.projectName;
+      var pdn      = escapeHtml(pdnFull.split(' ')[0] || pdnFull);
       var taskDesc = s.taskDescription
-        ? escapeHtml(s.taskDescription.length > 20 ? s.taskDescription.slice(0,20)+'…' : s.taskDescription) : '';
-      var engName = escapeHtml(engLabel(s.testEngineer));
+        ? escapeHtml(s.taskDescription.length > 26 ? s.taskDescription.slice(0,26)+'…' : s.taskDescription) : '';
       var evenFill = i % 2 === 0 ? '#ffffff' : '#f8fafc';
-      var chipHtml = '<span style="flex-shrink:0;font-size:11px;font-weight:600;color:#1d4ed8;'
-        +'background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;'
-        +'padding:0 6px;line-height:18px;white-space:nowrap;">'+engName+'</span>';
-      var secondLine = '<div style="display:flex;align-items:center;gap:5px;padding-left:80px;margin-top:-1px;overflow:hidden;">'
-        +chipHtml
-        +(taskDesc ? '<span style="font-size:11px;color:#64748b;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+taskDesc+'</span>' : '')
-        +'</div>';
       return '<div data-idx="'+i+'" class="left-row-hover" style="'
         +'height:'+ROW_H+'px;background:'+evenFill+';'
         +'box-shadow:inset 0 -1px 0 #e2e8f0;'
-        +'position:relative;padding:7px 6px 0;box-sizing:border-box;cursor:default;">'
-        +'<div style="display:flex;align-items:center;gap:6px;">'
-        +'<div style="flex-shrink:0;width:74px;height:24px;border-radius:5px;font-size:11px;font-weight:700;'
-        +'text-align:center;line-height:24px;overflow:hidden;white-space:nowrap;letter-spacing:0.02em;'
-        +'background:'+sc.bg+';color:'+sc.text+';">'+status+'</div>'
-        +'<div style="font-size:13px;font-weight:600;color:#1e293b;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+projName+'</div>'
+        +'position:relative;padding:5px 8px 0;box-sizing:border-box;cursor:default;">'
+        +'<div style="display:flex;align-items:center;gap:6px;overflow:hidden;">'
+          +'<span style="flex-shrink:0;height:20px;padding:0 7px;border-radius:5px;font-size:12px;'
+          +'font-weight:700;line-height:20px;white-space:nowrap;'
+          +'background:'+engColor+';color:'+engText+';">'+engName+'</span>'
+          +'<span title="'+escapeHtml(pdnFull)+'" style="flex:1;min-width:0;font-size:12px;font-weight:600;'
+          +'color:#1e293b;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+pdn+'</span>'
         +'</div>'
-        +secondLine
+        +'<div style="display:flex;align-items:center;gap:6px;padding-top:2px;overflow:hidden;">'
+          +'<span style="flex-shrink:0;height:17px;padding:0 6px;border-radius:4px;font-size:11px;'
+          +'font-weight:700;line-height:17px;white-space:nowrap;letter-spacing:0.02em;'
+          +'background:'+sc.bg+';color:'+sc.text+';">'+status+'</span>'
+          +(taskDesc ? '<span style="font-size:11px;color:#64748b;overflow:hidden;white-space:nowrap;'
+            +'text-overflow:ellipsis;">'+taskDesc+'</span>' : '')
+        +'</div>'
         +'</div>';
     }).join('');
 
@@ -338,35 +428,26 @@ export const DASHBOARD_JS = `
       var bx = daysBetween(tS, sDate) * PX_PER_DAY;
       var totalBarDays = daysBetween(sDate, eDate) + 1;
       var bw = Math.max(totalBarDays * PX_PER_DAY, 6);
-      var color = getColor(s.testUnit, allUnits);
       var evenFA = i % 2 === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(248,250,252,0.5)';
       var barY = y + Math.floor((ROW_H - 22) / 2);
 
       var workDayOff = getWorkDayOffset(sDate, s.timeResource || 0);
       var hasOverflow = totalBarDays > workDayOff && workDayOff > 0;
 
+      var unitColor = getColor(s.testUnit, allUnits);
+      var engColor  = s.testEngineer ? getEngineerColor(s.testEngineer, s.testUnit, allUnits) : unitColor;
+
       var html = '<rect x="0" y="'+y+'" width="'+timelineW+'" height="'+ROW_H+'" fill="'+evenFA+'"/>'
         +'<line x1="0" y1="'+(y+ROW_H)+'" x2="'+timelineW+'" y2="'+(y+ROW_H)+'" stroke="#e2e8f0" stroke-width="1"/>';
 
+      html += '<rect x="'+(bx+1)+'" y="'+(barY+1)+'" width="'+Math.max(bw-2,4)+'" height="20"'
+        +' fill="'+engColor+'" stroke="'+unitColor+'" stroke-width="2" rx="4"'
+        +' data-idx="'+i+'" class="gantt-bar" style="cursor:pointer;opacity:0.92"/>';
+
       if (hasOverflow) {
-        var w1 = Math.max(workDayOff * PX_PER_DAY, 4);
-        var w2 = Math.max((totalBarDays - workDayOff) * PX_PER_DAY, 4);
-        html += '<rect x="'+bx+'" y="'+barY+'" width="'+w1+'" height="22"'
-          +' fill="'+color+'" rx="4" data-idx="'+i+'" class="gantt-bar"'
-          +' style="cursor:pointer;opacity:0.88"/>';
-        html += '<rect x="'+(bx + workDayOff * PX_PER_DAY)+'" y="'+barY+'" width="'+w2+'" height="22"'
-          +' fill="'+OVERFLOW_COLOR+'" rx="4" data-idx="'+i+'" class="gantt-bar"'
-          +' style="cursor:pointer;opacity:0.88"/>';
-      } else {
-        html += '<rect x="'+bx+'" y="'+barY+'" width="'+bw+'" height="22"'
-          +' fill="'+color+'" rx="4" data-idx="'+i+'" class="gantt-bar"'
-          +' style="cursor:pointer;opacity:0.88"/>';
-      }
-      if (bw > 24) {
-        var clipId = 'bc'+i;
-        html += '<defs><clipPath id="'+clipId+'"><rect x="'+(bx+4)+'" y="'+barY+'" width="'+(bw-8)+'" height="22"/></clipPath></defs>'
-          +'<text x="'+(bx+6)+'" y="'+(barY+14)+'" font-size="11" fill="#ffffff" font-weight="600"'
-          +' clip-path="url(#'+clipId+')" style="pointer-events:none">'+escapeHtml(engLabel(s.testEngineer))+'</text>';
+        var ow = Math.max((totalBarDays - workDayOff) * PX_PER_DAY - 3, 3);
+        html += '<rect x="'+(bx + workDayOff * PX_PER_DAY)+'" y="'+(barY+3)+'" width="'+ow+'"'
+          +' height="16" rx="3" fill="'+OVERFLOW_COLOR+'" style="pointer-events:none"/>';
       }
       return html;
     }).join('');
