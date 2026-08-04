@@ -4,7 +4,7 @@ import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
 import { api } from '../../lib/api'
-import { STATUS_COLORS, OVERFLOW_COLOR } from '../../constants'
+import { STATUS_COLORS, OVERFLOW_COLOR, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../../lib/colors'
 import { computeStatus } from '../../lib/status'
 import { isRestDay } from '../../lib/restDays'
@@ -17,12 +17,6 @@ import GanttBar from './GanttBar'
 import type { FilterSortState, SortRule, SortableField } from './FilterSortBar'
 import type { Role, Schedule, VtmsProgress } from '../../types'
 import type { ScheduleStatus } from '../../lib/status'
-
-// 狀態非顏色指示：色弱使用者可藉符號辨識
-// 匯出（ScheduleListView）與 script.ts 亦需相同對照，此處為唯一權威來源
-export const STATUS_GLYPH: Record<ScheduleStatus, string> = {
-  Cancelled: '✕', Completed: '✓', Delayed: '!', Testing: '▶', Planned: '○',
-}
 
 // ── 尺寸常數 ──────────────────────────────────────────
 const LEFT_W       = 260  // 狀態籤加寬 12px（72→84），預設欄寬同步補償

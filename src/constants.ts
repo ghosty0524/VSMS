@@ -1,6 +1,7 @@
 // src/constants.ts
 import { v4 as uuidv4 } from 'uuid'
 import type { OptionsMap, Option, CategoryOption, TestUnitOption } from './types'
+import type { ScheduleStatus } from './lib/status'
 
 export const MIN_DATE = new Date('2026-01-01')
 
@@ -40,6 +41,12 @@ export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   Delayed:   { bg: '#DC2626', text: '#FFFFFF' },
   Testing:   { bg: '#2563EB', text: '#FFFFFF' },
   Planned:   { bg: '#6B7280', text: '#FFFFFF' },
+}
+
+// 狀態非顏色指示：色弱使用者可藉符號辨識
+// 匯出（ScheduleListView）與 script.ts 亦需相同對照，此處為唯一權威來源
+export const STATUS_GLYPH: Record<ScheduleStatus, string> = {
+  Cancelled: '✕', Completed: '✓', Delayed: '!', Testing: '▶', Planned: '○',
 }
 
 // 統計圖表類別色盤：dataviz validator 驗證通過（白底、最差相鄰 CVD ΔE 12.9）。

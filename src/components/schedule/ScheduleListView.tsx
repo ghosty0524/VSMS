@@ -5,9 +5,8 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { computeStatus } from '../../lib/status'
-import { STATUS_COLORS } from '../../constants'
+import { STATUS_COLORS, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, readableTextColor } from '../../lib/colors'
-import { STATUS_GLYPH } from './GanttChart'
 import type { Schedule, Role, OptionsMap } from '../../types'
 
 const LIST_ROW_H = 36
