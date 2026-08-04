@@ -4,8 +4,8 @@ import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
 import { api } from '../../lib/api'
-import { getUnitColor, STATUS_COLORS, OVERFLOW_COLOR } from '../../constants'
-import { resolveEngineerColor, readableTextColor } from '../../lib/colors'
+import { STATUS_COLORS, OVERFLOW_COLOR } from '../../constants'
+import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../../lib/colors'
 import { computeStatus } from '../../lib/status'
 import { isRestDay } from '../../lib/restDays'
 import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
@@ -13,6 +13,7 @@ import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { FlagPopover } from './FlagPopover'
 import ScheduleListView from './ScheduleListView'
+import GanttBar from './GanttBar'
 import type { FilterSortState, SortRule, SortableField } from './FilterSortBar'
 import type { Role, Schedule, VtmsProgress } from '../../types'
 import type { ScheduleStatus } from '../../lib/status'
@@ -343,7 +344,6 @@ export function GanttChart({
     return () => { cancelAnimationFrame(raf); window.removeEventListener('keydown', onKey) }
   }, [isFullscreen, editTarget, deleteTarget, flagPopover, showAddModal, updateVisibleRange])
 
-  const allUnits  = options.testUnits.map(u => u.value)
   const filtered  = applyFilter(schedules, filterSort, role, allowedUnits, linkedEngineer)
   // guest 唯讀：所有寫入操作（旗標/編輯/刪除）一律隱藏
   const canWrite  = role === 'super_admin' || role === 'admin'
@@ -506,16 +506,18 @@ export function GanttChart({
       <div className="flex-shrink-0 flex flex-wrap gap-4 px-4 py-2.5 border-b bg-slate-50">
         {options.testUnits.filter(u => u.isActive).map(u => (
           <span key={u.id} className="flex items-center gap-1.5 text-sm text-gray-700 font-medium">
-            <span className="inline-block w-3.5 h-3.5 rounded-sm flex-shrink-0"
-              style={{ background: getUnitColor(u.value, allUnits) }} />
+            <span className="inline-block w-3.5 h-3.5 rounded-sm flex-shrink-0 bg-transparent"
+              style={{ border: `2px solid ${resolveUnitColor(u.value, options)}` }} />
             {u.label}
           </span>
         ))}
-        {/* ★ 溢出色圖例 */}
         <span className="flex items-center gap-1.5 text-sm text-gray-700 font-medium">
           <span className="inline-block w-3.5 h-3.5 rounded-sm flex-shrink-0"
             style={{ background: OVERFLOW_COLOR }} />
           超出時間資源
+        </span>
+        <span className="text-xs text-gray-500 self-center">
+          外框為測試單位，內裡為測試人員
         </span>
       </div>
 
@@ -729,44 +731,26 @@ export function GanttChart({
                             const barX = daysBetween(timelineStart, sDate) * PX_PER_DAY
                             const totalBarDays = daysBetween(sDate, eDate) + 1
                             const barW = Math.max(totalBarDays * PX_PER_DAY, 6)
-                            const color = getUnitColor(s.testUnit, allUnits)
+                            const unitColor = resolveUnitColor(s.testUnit, options)
+                            const engColor  = s.testEngineer
+                              ? resolveEngineerColor(s.testEngineer, s.testUnit, options)
+                              : unitColor
                             const barY = y + Math.floor((ROW_H - 22) / 2)
                             const workDayOffset = getWorkDayOffset(sDate, s.timeResource, restDayConfig)
                             const hasOverflow = totalBarDays > workDayOffset && workDayOffset > 0
                             const overflowX = barX + workDayOffset * PX_PER_DAY
                             return (
                               <g key={s.id}>
-                                {hasOverflow ? (
-                                  <>
-                                    <rect x={barX} y={barY} width={workDayOffset * PX_PER_DAY} height={22} rx={4} fill={color} opacity={0.85}
-                                      style={{ cursor: 'pointer' }}
-                                      onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
-                                      onMouseLeave={() => setTooltip(null)} />
-                                    <rect x={overflowX} y={barY} width={barW - workDayOffset * PX_PER_DAY} height={22} rx={4} fill={OVERFLOW_COLOR} opacity={0.85}
-                                      style={{ cursor: 'pointer' }}
-                                      onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
-                                      onMouseLeave={() => setTooltip(null)} />
-                                  </>
-                                ) : (
-                                  <rect x={barX} y={barY} width={barW} height={22} rx={4} fill={color} opacity={0.85}
-                                    style={{ cursor: 'pointer' }}
-                                    onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
-                                    onMouseLeave={() => setTooltip(null)} />
-                                )}
-                                {barW > 24 && (
-                                  <>
-                                    <defs>
-                                      <clipPath id={`bc-${s.id}`}>
-                                        <rect x={barX + 4} y={barY} width={barW - 8} height={22} />
-                                      </clipPath>
-                                    </defs>
-                                    <text x={barX + 6} y={barY + 14} fontSize={12} fill="#ffffff" fontWeight="600"
-                                      clipPath={`url(#bc-${s.id})`}
-                                      style={{ pointerEvents: 'none' }}>
-                                      {engLabel(s.testEngineer)}
-                                    </text>
-                                  </>
-                                )}
+                                {/* 設備視角的左欄是設備名稱，bar 上的人名是此視角唯一的人員線索，
+                                    因此傳入 label（工程師視角已由左欄徽章提供，故傳 null）。 */}
+                                <GanttBar
+                                  barX={barX} barW={barW} barY={barY}
+                                  unitColor={unitColor} engColor={engColor}
+                                  overflowStartX={hasOverflow ? overflowX : null}
+                                  label={engLabel(s.testEngineer)}
+                                  clipId={`bc-dev-${s.id}`}
+                                  onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
+                                  onMouseLeave={() => setTooltip(null)} />
                               </g>
                             )
                           })}
@@ -1028,7 +1012,10 @@ export function GanttChart({
                     const barX   = daysBetween(timelineStart, sDate) * PX_PER_DAY
                     const totalBarDays = daysBetween(sDate, eDate) + 1
                     const barW   = Math.max(totalBarDays * PX_PER_DAY, 6)
-                    const color  = getUnitColor(s.testUnit, allUnits)
+                    const unitColor = resolveUnitColor(s.testUnit, options)
+                    const engColor  = s.testEngineer
+                      ? resolveEngineerColor(s.testEngineer, s.testUnit, options)
+                      : unitColor
                     const evenFillAlpha = i % 2 === 0 ? 'rgba(250,251,252,0.5)' : 'rgba(241,245,249,0.5)'
                     const barY   = y + Math.floor((ROW_H - 22) / 2)
 
@@ -1040,45 +1027,14 @@ export function GanttChart({
                       <g key={s.id}>
                         <rect x={0} y={y} width={svgWidth} height={ROW_H} fill={evenFillAlpha} />
                         <line x1={0} y1={y + ROW_H} x2={svgWidth} y2={y + ROW_H} stroke="#e2e8f0" strokeWidth={1} />
-
-                        {hasOverflow ? (
-                          <>
-                            {/* 前段：單位色 */}
-                            <rect x={barX} y={barY}
-                              width={Math.max(workDayOffset * PX_PER_DAY, 4)}
-                              height={22} fill={color} rx={4}
-                              style={{ cursor: 'pointer', opacity: 0.88 }}
-                              onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
-                              onMouseLeave={() => setTooltip(null)} />
-                            {/* 後段：淺綠色 */}
-                            <rect x={barX + workDayOffset * PX_PER_DAY} y={barY}
-                              width={Math.max((totalBarDays - workDayOffset) * PX_PER_DAY, 4)}
-                              height={22} fill={OVERFLOW_COLOR} rx={4}
-                              style={{ cursor: 'pointer', opacity: 0.88 }}
-                              onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
-                              onMouseLeave={() => setTooltip(null)} />
-                          </>
-                        ) : (
-                          <rect x={barX} y={barY} width={barW} height={22}
-                            fill={color} rx={4}
-                            style={{ cursor: 'pointer', opacity: 0.88 }}
-                            onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
-                            onMouseLeave={() => setTooltip(null)} />
-                        )}
-                        {barW > 24 && (
-                          <>
-                            <defs>
-                              <clipPath id={`bc-${s.id}`}>
-                                <rect x={barX + 4} y={barY} width={barW - 8} height={22} />
-                              </clipPath>
-                            </defs>
-                            <text x={barX + 6} y={barY + 14} fontSize={12} fill="#ffffff" fontWeight="600"
-                              clipPath={`url(#bc-${s.id})`}
-                              style={{ pointerEvents: 'none' }}>
-                              {engLabel(s.testEngineer)}
-                            </text>
-                          </>
-                        )}
+                        <GanttBar
+                          barX={barX} barW={barW} barY={barY}
+                          unitColor={unitColor} engColor={engColor}
+                          overflowStartX={hasOverflow ? barX + workDayOffset * PX_PER_DAY : null}
+                          label={null}
+                          clipId={`bc-${s.id}`}
+                          onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
+                          onMouseLeave={() => setTooltip(null)} />
                       </g>
                     )
                   })}
