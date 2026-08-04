@@ -6,6 +6,17 @@ export function EngineerManager() {
   const { options, addEngineer, updateEngineer, removeEngineer, setEngineerColor } = useOptionsStore()
   const [newNames, setNewNames] = useState<Record<string, string>>({})
   const [editKeys, setEditKeys] = useState<Record<string, string>>({})
+  // 拖曳色盤期間的暫存值（依 engineer id 分開），避免每個 input 事件都寫回並觸發整表重寫
+  const [draftColors, setDraftColors] = useState<Record<string, string>>({})
+
+  const clearDraftColor = (id: string) => {
+    setDraftColors(d => {
+      if (!(id in d)) return d
+      const next = { ...d }
+      delete next[id]
+      return next
+    })
+  }
 
   return (
     <div>
@@ -35,11 +46,18 @@ export function EngineerManager() {
                         type="color"
                         className="w-6 h-6 rounded border border-gray-200 cursor-pointer p-0.5"
                         title="自訂人員色（甘特圖 bar 內裡與左欄徽章）"
-                        value={eng.color ?? resolveEngineerColor(eng.value, unit.value, options)}
-                        onChange={e => setEngineerColor(unit.id, eng.id, e.target.value)}
+                        value={draftColors[eng.id] ?? eng.color ?? resolveEngineerColor(eng.value, unit.value, options)}
+                        onChange={e => setDraftColors(d => ({ ...d, [eng.id]: e.target.value }))}
+                        onBlur={() => {
+                          const draft = draftColors[eng.id]
+                          if (draft === undefined) return
+                          const base = eng.color ?? resolveEngineerColor(eng.value, unit.value, options)
+                          if (draft !== base) setEngineerColor(unit.id, eng.id, draft)
+                          clearDraftColor(eng.id)
+                        }}
                       />
                       {eng.color && (
-                        <button type="button" onClick={() => setEngineerColor(unit.id, eng.id, null)}
+                        <button type="button" onClick={() => { setEngineerColor(unit.id, eng.id, null); clearDraftColor(eng.id) }}
                           className="text-xs px-2 py-0.5 border rounded hover:bg-gray-50 text-gray-500">還原</button>
                       )}
                       <span className="flex-1 text-sm">{eng.label}</span>

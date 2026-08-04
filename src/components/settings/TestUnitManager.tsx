@@ -9,6 +9,17 @@ export function TestUnitManager() {
   const [editId, setEditId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  // 拖曳色盤期間的暫存值（依 unit id 分開），避免每個 input 事件都寫回並觸發整表重寫
+  const [draftColors, setDraftColors] = useState<Record<string, string>>({})
+
+  const clearDraftColor = (id: string) => {
+    setDraftColors(d => {
+      if (!(id in d)) return d
+      const next = { ...d }
+      delete next[id]
+      return next
+    })
+  }
 
   const handleAdd = async () => {
     const v = newValue.trim()
@@ -46,11 +57,18 @@ export function TestUnitManager() {
                   type="color"
                   className="w-7 h-7 rounded border border-gray-200 cursor-pointer p-0.5"
                   title="自訂單位色（甘特圖 bar 外框）"
-                  value={u.color ?? resolveUnitColor(u.value, options)}
-                  onChange={e => setTestUnitColor(u.id, e.target.value)}
+                  value={draftColors[u.id] ?? u.color ?? resolveUnitColor(u.value, options)}
+                  onChange={e => setDraftColors(d => ({ ...d, [u.id]: e.target.value }))}
+                  onBlur={() => {
+                    const draft = draftColors[u.id]
+                    if (draft === undefined) return
+                    const base = u.color ?? resolveUnitColor(u.value, options)
+                    if (draft !== base) setTestUnitColor(u.id, draft)
+                    clearDraftColor(u.id)
+                  }}
                 />
                 {u.color && (
-                  <button type="button" onClick={() => setTestUnitColor(u.id, null)}
+                  <button type="button" onClick={() => { setTestUnitColor(u.id, null); clearDraftColor(u.id) }}
                     className="text-xs px-2 py-1 border rounded hover:bg-gray-50 text-gray-500">還原</button>
                 )}
                 <span className={`flex-1 text-sm ${!u.isActive ? "line-through text-gray-400" : ""}`}>
