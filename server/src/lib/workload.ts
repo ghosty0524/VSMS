@@ -3,7 +3,7 @@
 // 每日強度 = timeResource ÷ 排程完整區間工作日數
 //（類別調整：NPI +3、AVL/2nd Source -1、其餘如 Regression 不調整，夾底 0），
 // 同日多筆加總、單日 1.2 封頂，月基礎分為目標月各工作日分數總和；
-// 加班加分 = 時數 × 0.125（獨立、不封頂）。
+// 加班加分 = 時數 ÷ 6，即 6 小時折 1 分（獨立、不封頂）。
 
 export interface WorkloadScheduleInput {
   category: string
@@ -39,7 +39,7 @@ export interface WorkloadResult {
 }
 
 const DAILY_CAP = 1.2
-const OVERTIME_FACTOR = 0.125
+const OVERTIME_HOURS_PER_POINT = 6 // 每 6 小時加班折 1 分
 // 類別對 timeResource 的調整量；調整後不得為負
 const CATEGORY_ADJUSTMENT: Record<string, number> = { NPI: 3, AVL: -1, '2nd Source': -1 }
 
@@ -133,7 +133,7 @@ export function analyzeWorkload(opts: {
     }
 
     const overtimeHours = overtime && name in overtime ? overtime[name] : null
-    const overtimeBonus = overtimeHours === null ? null : round2(overtimeHours * OVERTIME_FACTOR)
+    const overtimeBonus = overtimeHours === null ? null : round2(overtimeHours / OVERTIME_HOURS_PER_POINT)
     const limitations = [...acc.limitations]
     if (overtimeBonus === null) {
       limitations.push('查無加班紀錄，總分未含加班加分')

@@ -57,6 +57,8 @@ components:
         delayReason:     { type: string, nullable: true }
         vtmsPlanId:      { type: string, nullable: true }
         completedAt:     { type: string, format: date-time, nullable: true, description: 'Timestamp when isCompleted last transitioned to true' }
+        userFlag:        { type: boolean, description: 'User (non-admin) mark 標記' }
+        userFlagNote:    { type: string, nullable: true, description: 'Note attached to the user mark' }
 
     ScheduleWithProgress:
       allOf:
@@ -78,6 +80,7 @@ paths:
         - { in: query, name: isCompleted,  schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: isDelayed,    schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: isCancelled,  schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: userFlag,     schema: { type: string, enum: ['true','false'] }, description: 'Filter by user (non-admin) mark' }
         - { in: query, name: dateFrom,     schema: { type: string, description: 'YYYY-MM-DD (matches startDate >=)' } }
         - { in: query, name: dateTo,       schema: { type: string, description: 'YYYY-MM-DD (matches startDate <=)' } }
       responses:
@@ -115,6 +118,49 @@ paths:
         '401':
           description: Unauthorized
 
+  /engineers:
+    get:
+      summary: Resolve a loose engineer name to the canonical testEngineer value
+      description: >
+        Users refer to engineers informally ("darius", "DARIUS", "darius chang") but
+        testEngineer is stored as 'Darius_Chang'. Matching is deterministic and lives
+        on the server so callers never guess a name — a wrong guess silently returns
+        another person's data (e.g. "will" overlaps Will_Wang / William_Wu / Willie_Lin).
+        Results are the roster (engineers table) unioned with any name that appears in
+        schedules, so historical engineers stay resolvable.
+      parameters:
+        - in: query
+          name: q
+          required: false
+          schema: { type: string }
+          description: >
+            How the user referred to the engineer. Case-insensitive; underscore, space
+            and hyphen are equivalent separators. Omit to list every engineer.
+      responses:
+        '200':
+          description: >
+            Candidates, strongest match first then by name. An exact full-name match is
+            returned alone; otherwise name/surname/prefix matches are returned together
+            so the caller can disambiguate. Empty array means no match — do not retry
+            with a different guess.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:     { type: string, description: 'Canonical value; use verbatim as testEngineer' }
+                    testUnit: { type: string, nullable: true }
+                    isActive: { type: boolean, description: 'false = has left; still appears in past schedules' }
+                    matchType:
+                      type: string
+                      nullable: true
+                      enum: [exact, firstName, lastName, prefix, contains]
+                      description: 'Match strength; null when q was omitted'
+        '401':
+          description: Unauthorized
+
   /schedules/by-plan/{planId}:
     get:
       summary: Find schedule linked to a VTMS test plan
@@ -145,6 +191,8 @@ paths:
         - { in: query, name: projectName,  schema: { type: string }, description: 'Partial project name match' }
         - { in: query, name: isCompleted,  schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: isDelayed,    schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: isCancelled,  schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: userFlag,     schema: { type: string, enum: ['true','false'] }, description: 'Filter by user (non-admin) mark' }
         - { in: query, name: dateFrom,     schema: { type: string } }
         - { in: query, name: dateTo,       schema: { type: string } }
       responses:
@@ -161,7 +209,7 @@ paths:
 
   /workload-analysis:
     get:
-      summary: Engineer workload analysis for one month (algorithm runs server-side)
+      summary: Engineer workload analysis for one month (algorithm runs server-side; cancelled schedules excluded)
       parameters:
         - { in: query, name: month,        required: true, schema: { type: string }, description: 'Target month, YYYY-MM' }
         - { in: query, name: testEngineer, schema: { type: string }, description: 'Exact test engineer name' }
@@ -190,7 +238,7 @@ paths:
                         scheduleCount:   { type: integer }
                         baseScore:       { type: number, description: 'Σ min(daily intensity sum, 1.2) over month workdays' }
                         overtimeHours:   { type: number, nullable: true }
-                        overtimeBonus:   { type: number, nullable: true, description: 'hours × 0.125, uncapped' }
+                        overtimeBonus:   { type: number, nullable: true, description: 'hours ÷ 6 (6h = 1 point), uncapped' }
                         total:           { type: number }
                         rate:            { type: number, description: 'total ÷ month workdays × 100 (%)' }
                         level:           { type: string, enum: ['超載', '滿載', '中等', '偏低'] }

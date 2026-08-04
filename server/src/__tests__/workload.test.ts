@@ -119,15 +119,15 @@ describe('analyzeWorkload 負載分析', () => {
     expect(r.workdays).toBe(22)
   })
 
-  it('加班加分＝時數×0.125，獨立於封頂；查無加班者標註資料限制', () => {
+  it('加班加分＝時數÷6（6 小時折 1 分），獨立於封頂；查無加班者標註資料限制', () => {
     const r = analyzeWorkload({
       month: MONTH,
       schedules: [sched(), sched({ testEngineer: 'Bob' })],
-      overtime: { Alice: 8 },
+      overtime: { Alice: 6 },
     })
     const alice = r.engineers.find(e => e.testEngineer === 'Alice')!
     const bob = r.engineers.find(e => e.testEngineer === 'Bob')!
-    expect(alice.overtimeHours).toBe(8)
+    expect(alice.overtimeHours).toBe(6)
     expect(alice.overtimeBonus).toBe(1)
     expect(alice.total).toBe(6) // base 5 + 1
     expect(bob.overtimeHours).toBeNull()

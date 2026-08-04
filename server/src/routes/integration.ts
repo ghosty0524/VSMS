@@ -3,6 +3,7 @@ import { prisma } from '../lib/db.js';
 import { requireApiKey } from '../middleware/requireApiKey.js';
 import { getTestPlanProgressBatch } from '../lib/vtmsClient.js';
 import { analyzeWorkload } from '../lib/workload.js';
+import { matchEngineers, compareOrdinal, type EngineerRecord } from '../lib/engineerMatch.js';
 import { completedAtPatch } from '../lib/completedAt.js';
 
 const router = Router();
@@ -41,6 +42,9 @@ function buildWhereClause(query: Record<string, unknown>) {
   if (isDelayed !== undefined) where.isDelayed = isDelayed === 'true';
   const isCancelled = qs(query.isCancelled);
   if (isCancelled !== undefined) where.isCancelled = isCancelled === 'true';
+  // userFlag = 一般使用者標記（非 admin 標記）；供 Agent 查詢被標記的排程
+  const userFlag = qs(query.userFlag);
+  if (userFlag !== undefined) where.userFlag = userFlag === 'true';
   const dateFrom = qs(query.dateFrom);
   const dateTo = qs(query.dateTo);
   if (dateFrom || dateTo) {
@@ -133,6 +137,7 @@ router.get('/workload-analysis', requireApiKey, async (req, res) => {
   const where: Record<string, unknown> = {
     startDate: { lte: monthEnd },
     endDate: { gte: monthStart },
+    isCancelled: false, // 已取消的排程不計入負載
   };
   const testEngineer = qs(req.query.testEngineer);
   if (testEngineer) where.testEngineer = testEngineer;
@@ -171,6 +176,47 @@ router.get('/workload-analysis', requireApiKey, async (req, res) => {
   });
   res.json({ ...result, limitations });
 });
+
+// GET /engineers — resolve a loose engineer name to the canonical one.
+// Users say "darius" / "DARIUS" / "darius chang", but testEngineer is stored as
+// 'Darius_Chang'. Matching lives in lib/engineerMatch.ts so it is deterministic
+// and shared; callers must never guess a name themselves (see the module note).
+router.get('/engineers', requireApiKey, async (req, res) => {
+  const units = await prisma.testUnit.findMany({
+    include: { engineers: { orderBy: { sortOrder: 'asc' } } },
+    orderBy: { sortOrder: 'asc' },
+  })
+  const roster: EngineerRecord[] = units.flatMap(u =>
+    u.engineers.map(e => ({ name: e.value, testUnit: u.value, isActive: e.isActive })),
+  )
+
+  // 名冊與排程可能不同步（例如手動改過 testEngineer）。補上只出現在排程裡的
+  // 姓名，否則會出現「查得到排程卻解析不出這個人」的狀況。
+  // 排序後取每位工程師的第一筆，等同 C# 版的 GROUP BY testEngineer + MIN(testUnit)，
+  // 兩邊才會挑到同一個 testUnit。
+  const known = new Set(roster.map(r => r.name.toLowerCase()))
+  const scheduled = await prisma.schedule.findMany({
+    select: { testEngineer: true, testUnit: true },
+    orderBy: [{ testEngineer: 'asc' }, { testUnit: 'asc' }],
+  })
+  for (const s of scheduled) {
+    const name = s.testEngineer
+    if (!name || known.has(name.toLowerCase())) continue
+    known.add(name.toLowerCase())
+    roster.push({ name, testUnit: s.testUnit ?? null, isActive: true })
+  }
+
+  const q = qs(req.query.q)
+  if (!q) {
+    res.json(
+      roster
+        .map(r => ({ name: r.name, testUnit: r.testUnit ?? null, isActive: r.isActive ?? true, matchType: null }))
+        .sort((a, b) => compareOrdinal(a.name, b.name)),
+    )
+    return
+  }
+  res.json(matchEngineers(roster, q))
+})
 
 // PATCH /schedules/:id/delay — called by VTMS when Delay log is saved
 router.patch('/schedules/:id/delay', requireApiKey, async (req, res) => {

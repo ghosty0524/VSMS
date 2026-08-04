@@ -15,10 +15,20 @@ function parseDbUrl(raw: string) {
 }
 
 function createPrisma() {
+  // Fail fast with a clear message when the connection string is missing,
+  // instead of a cryptic crash deeper in when DATABASE_URL is undefined.
+  const url = process.env.DATABASE_URL
+  if (!url) {
+    throw new Error(
+      '[db] Missing required environment variable: DATABASE_URL.\n' +
+      'Add it to your .env file:\n' +
+      '  DATABASE_URL="mysql://<user>:<password>@<host>:3306/vsms"'
+    )
+  }
   // PrismaMariaDb is a factory — pass connection config (not a pre-built pool)
   // allowPublicKeyRetrieval: MySQL 8+ uses caching_sha2_password which requires RSA key exchange
   const adapter = new PrismaMariaDb({
-    ...parseDbUrl(process.env.DATABASE_URL!),
+    ...parseDbUrl(url),
     allowPublicKeyRetrieval: true,
   })
   return new PrismaClient({ adapter })
