@@ -9,6 +9,7 @@ import {
   toCategoryResponse, toCategoryCreateData,
   toTestUnitResponse, toTestUnitCreateData, toEngineerCreateData,
 } from './optionsMapping.js'
+import { findMissingReferencedEngineers, formatEngineerInUseMessage } from '../lib/engineerInUse.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -44,6 +45,20 @@ router.get('/', async (_req, res) => {
 router.put('/', async (req, res) => {
   const username = req.session.username ?? 'unknown'
   const body = req.body as OptionsMap
+
+  // ★ 需求三：人員的移除是全刪重建（不在 body 中即等同刪除），沒有 DELETE
+  // 端點可掛引用檢查，因此在進入交易前先擋下仍被排程引用、卻即將消失的人員。
+  const bodyEngineerValues = body.testUnits.flatMap(u => u.engineers.map(e => e.value))
+  const schedules = await prisma.schedule.findMany({ select: { testEngineer: true } })
+  const missing = findMissingReferencedEngineers(schedules.map(s => s.testEngineer), bodyEngineerValues)
+  if (missing.length > 0) {
+    res.status(400).json({
+      ok: false,
+      message: formatEngineerInUseMessage(missing),
+      code: 'ENGINEER_IN_USE',
+    })
+    return
+  }
 
   await prisma.$transaction(async (tx) => {
     // Delete in dependency order (engineers are cascade-deleted with testUnits)
