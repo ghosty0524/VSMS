@@ -67,8 +67,13 @@ router.put('/', async (req, res) => {
       // 把排程引用篩到只剩「引用到現行人員」的部分，再交給既有的純函式判斷
       // 是否被 body 移除。孤兒對這道防線因此完全不可見。
       //
-      // ★ finding 7：讀取與寫入必須在同一筆交易內完成，避免讀完到刪除之間有
-      // 新排程插入而繞過檢查的競態視窗；guard 失敗時用丟例外觸發 rollback。
+      // ★ finding 7：讀取與寫入必須在同一筆交易內完成，讓 guard 看到的是與
+      // 後續刪除同一份一致的快照，且不會被寫入操作重排到後面；guard 失敗時
+      // 用丟例外觸發 rollback。注意這並未完全關閉競態視窗——tx.schedule.findMany
+      // 只是普通、不加鎖的 SELECT，交易本身也沒有寫入 schedules 表，因此在
+      // REPEATABLE READ 下，仍可能有另一筆交易在此刻插入排程並提交、引用到
+      // 這裡即將刪除的人員。真要完全關閉需要 SELECT ... FOR UPDATE 或外鍵約束，
+      // 兩者都超出本次範圍，這裡先接受此殘餘視窗。
       const existingEngineers = await tx.engineer.findMany({ select: { value: true } })
       const existingEngineerValues = new Set(existingEngineers.map(e => e.value))
       const schedules = await tx.schedule.findMany({ select: { testEngineer: true } })
