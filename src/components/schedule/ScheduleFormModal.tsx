@@ -25,6 +25,24 @@ export function serverFieldErrors(err: unknown): Partial<Record<keyof ScheduleFo
   return err.fieldErrors as Partial<Record<keyof ScheduleFormValues, string>>
 }
 
+/**
+ * 需求四：表單保底顯示孤兒值。人員異動（停用／改名／刪除）可能讓既有排程
+ * 的 testEngineer 找不到對應的現行人員選項，此時下拉會誤導使用者「這格
+ * 沒填」。只在編輯既有排程、testEngineer 非空、且不在現行選項中時，額外
+ * 插入一個標註「已停用或已刪除」的選項並讓它被選中；value 為原值，因此
+ * 不動下拉直接儲存時會原樣寫回，換人與否是使用者的有意識決定。
+ * 新增排程時 testEngineer 恆為空字串，isEditingExisting 為 false 時也不插入。
+ */
+export function buildEngineerSelectOptions<T extends { value: string; label: string }>(
+  activeEngineers: T[],
+  testEngineer: string,
+  isEditingExisting: boolean,
+): (T | { value: string; label: string })[] {
+  if (!isEditingExisting || !testEngineer) return activeEngineers
+  if (activeEngineers.some(e => e.value === testEngineer)) return activeEngineers
+  return [...activeEngineers, { value: testEngineer, label: `${testEngineer}（已停用或已刪除）` }]
+}
+
 const EMPTY: ScheduleFormValues = {
   category: '', projectName: '', taskDescription: '',
   testUnit: '', testEngineer: '', timeResource: '',
@@ -95,6 +113,8 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
   const activeEngineers = form.testUnit
     ? (activeUnits.find(u => u.value === form.testUnit)?.engineers.filter(e => e.isActive) ?? [])
     : []
+  // ★ 需求四：孤兒值保底 —— 已停用或已刪除的人員仍要在編輯既有排程時可見
+  const engineerOptions = buildEngineerSelectOptions(activeEngineers, form.testEngineer, !!schedule)
 
   const validate = (): boolean => {
     const e: typeof errors = {}
@@ -236,7 +256,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
                   ${!form.testUnit || isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}
               >
                 <option value="">請選擇</option>
-                {activeEngineers.map(e => <option key={e.id} value={e.value}>{e.label}</option>)}
+                {engineerOptions.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
               </select>
             ), true)}
           </div>
