@@ -40,8 +40,13 @@ export interface Option {
   sortOrder: number
 }
 
+export interface EngineerOption extends Option {
+  color?: string | null
+}
+
 export interface TestUnitOption extends Option {
-  engineers: Option[]
+  color?: string | null
+  engineers: EngineerOption[]
 }
 
 export interface RestDaysConfig {
