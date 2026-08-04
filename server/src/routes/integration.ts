@@ -5,6 +5,7 @@ import { getTestPlanProgressBatch } from '../lib/vtmsClient.js';
 import { analyzeWorkload } from '../lib/workload.js';
 import { matchEngineers, compareOrdinal, type EngineerRecord } from '../lib/engineerMatch.js';
 import { completedAtPatch } from '../lib/completedAt.js';
+import type { CategoryStatsMode } from '../types.js';
 
 const router = Router();
 
@@ -168,11 +169,17 @@ router.get('/workload-analysis', requireApiKey, async (req, res) => {
     }
   }
 
+  const categories = await prisma.category.findMany();
+  const statsModes = Object.fromEntries(
+    categories.map(c => [c.value, c.statsMode as CategoryStatsMode]),
+  );
+
   const result = analyzeWorkload({
     month,
     schedules: schedules.filter(s => s.testEngineer),
     holidays,
     overtime,
+    statsModes,
   });
   res.json({ ...result, limitations });
 });

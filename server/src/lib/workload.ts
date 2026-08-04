@@ -5,6 +5,8 @@
 // 同日多筆加總、單日 1.2 封頂，月基礎分為目標月各工作日分數總和；
 // 加班加分 = 時數 ÷ 6，即 6 小時折 1 分（獨立、不封頂）。
 
+import type { CategoryStatsMode } from '../types.js'
+
 export interface WorkloadScheduleInput {
   category: string
   testEngineer: string
@@ -76,9 +78,13 @@ export function analyzeWorkload(opts: {
   schedules: WorkloadScheduleInput[]
   holidays?: string[] // ISO 例假日（非週末），來自 CalendarConfig
   overtime?: Record<string, number> // 工程師 → 當月加班時數
+  // 工作類別 → 統計模式。未提供或查無對應的類別一律視為 counted，
+  // 因此舊呼叫端的行為完全不變。
+  statsModes?: Record<string, CategoryStatsMode>
 }): WorkloadResult {
   const { month, schedules, overtime } = opts
   const holidays = new Set(opts.holidays ?? [])
+  const statsModes = opts.statsModes ?? {}
 
   const [y, m] = month.split('-').map(Number)
   const monthStart = `${month}-01`
@@ -98,12 +104,20 @@ export function analyzeWorkload(opts: {
     const end = toIso(s.endDate)
     if (end < monthStart || start > monthEnd || end < start) continue // 與目標月無重疊
 
+    const statsMode = statsModes[s.category] ?? 'counted'
+    if (statsMode === 'excluded') continue // 此類別既不計筆數也不佔產能
+
     let acc = byEngineer.get(s.testEngineer)
     if (!acc) {
       acc = { raw: new Map(), units: new Set(), scheduleCount: 0, limitations: [] }
       byEngineer.set(s.testEngineer, acc)
     }
-    acc.scheduleCount++
+    if (statsMode === 'counted') {
+      acc.scheduleCount++
+    } else {
+      // workload_only：佔用產能但不是專案，於此註明以免呼叫端誤判筆數
+      acc.limitations.push(`類別「${s.category}」設定為不計專案數，其排程未計入 scheduleCount`)
+    }
     if (s.testUnit) acc.units.add(s.testUnit)
 
     const spanWorkdays = datesBetween(start, end).filter(d => isWorkday(d, holidays))

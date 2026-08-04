@@ -165,3 +165,58 @@ describe('analyzeWorkload 負載分析', () => {
     expect(r.engineers.map(e => e.testEngineer)).toEqual(['High', 'Low'])
   })
 })
+
+describe('類別統計模式對負載分析的影響', () => {
+  const statsModes = {
+    Regression: 'counted' as const,
+    出國: 'workload_only' as const,
+    教育訓練: 'excluded' as const,
+  }
+
+  it('excluded 的排程既不計 scheduleCount 也不累計強度', () => {
+    const result = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ category: '教育訓練' })],
+      statsModes,
+    })
+    expect(result.engineers).toHaveLength(0)
+  })
+
+  it('workload_only 不計 scheduleCount 但仍累計強度', () => {
+    const result = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ category: '出國' })],
+      statsModes,
+    })
+    expect(result.engineers).toHaveLength(1)
+    expect(result.engineers[0].scheduleCount).toBe(0)
+    expect(result.engineers[0].baseScore).toBeGreaterThan(0)
+  })
+
+  it('counted 的排程行為不變', () => {
+    const result = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ category: 'Regression' })],
+      statsModes,
+    })
+    expect(result.engineers[0].scheduleCount).toBe(1)
+    expect(result.engineers[0].baseScore).toBeGreaterThan(0)
+  })
+
+  it('未提供 statsModes 時全部視為 counted，維持既有行為', () => {
+    const result = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ category: '出國' }), sched({ category: '教育訓練' })],
+    })
+    expect(result.engineers[0].scheduleCount).toBe(2)
+  })
+
+  it('被排除的排程會在 limitations 留下說明', () => {
+    const result = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ category: '出國' }), sched({ category: 'Regression' })],
+      statsModes,
+    })
+    expect(result.engineers[0].limitations.some(l => l.includes('出國'))).toBe(true)
+  })
+})
