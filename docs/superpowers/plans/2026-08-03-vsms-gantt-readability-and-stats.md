@@ -19,6 +19,14 @@
 - 前端變更只需 `npm run build`（`dist` 由磁碟即時服務）；後端變更需 `npm run build` 後 `pm2 restart vsms`
 - 專案語言為繁體中文，程式碼註解沿用既有中文風格
 - 現行分支：`feat/guest-role-and-uiux`
+- `mysql` / `mysqldump` 不在 PATH 上，且 `DATABASE_URL` 中的密碼是 URL 編碼的。需要用到 mysql 用戶端時，先在同一個 shell 執行以下兩行（不要把密碼寫進指令參數，會出現在行程清單）：
+
+```bash
+export PATH="/c/Program Files/MySQL/MySQL Server 8.0/bin:$PATH"
+export MYSQL_PWD="$(node -e 'const m=require("fs").readFileSync(".env","utf8").match(/mysql:\/\/root:([^@]*)@/);process.stdout.write(decodeURIComponent(m[1]))')"
+```
+
+之後即可用 `mysql -u root vsms -e "..."` 與 `mysqldump -u root vsms ...`（不加 `-p`）。
 
 ---
 
@@ -75,10 +83,10 @@ du -sh dist.stable-20260803 server/dist.stable-20260803
 - [ ] **Step 6: 備份受影響資料表**
 
 ```bash
-mysqldump -u root -p vsms categories test_units engineers > backup-options-20260803.sql
+export PATH="/c/Program Files/MySQL/MySQL Server 8.0/bin:$PATH"
+export MYSQL_PWD="$(node -e 'const m=require("fs").readFileSync(".env","utf8").match(/mysql:\/\/root:([^@]*)@/);process.stdout.write(decodeURIComponent(m[1]))')"
+mysqldump -u root vsms categories test_units engineers > backup-options-20260803.sql
 ```
-
-（密碼見 `.env` 的 `DATABASE_URL`。）
 
 - [ ] **Step 7: 把快照與備份排除於版控之外**
 
@@ -1038,16 +1046,16 @@ echo "ALTER TABLE categories ADD COLUMN statsMode VARCHAR(20) NOT NULL DEFAULT '
 
 - [ ] **Step 2: 確認欄位已建立**
 
-`prisma db execute` 不回傳查詢結果，改用 mysql 用戶端驗證（密碼見 `.env` 的 `DATABASE_URL`）。
+`prisma db execute` 不回傳查詢結果，改用 mysql 用戶端驗證（連線設定見 Global Constraints）。
 
 ```bash
-mysql -u root -p vsms -e "DESCRIBE categories;"
+mysql -u root vsms -e "DESCRIBE categories;"
 ```
 
 預期：出現 `statsMode` 欄位，型別 `varchar(20)`、`Null` 為 `NO`、`Default` 為 `counted`。
 
 ```bash
-mysql -u root -p vsms -e "SELECT value, statsMode FROM categories ORDER BY sortOrder;"
+mysql -u root vsms -e "SELECT value, statsMode FROM categories ORDER BY sortOrder;"
 ```
 
 預期：所有既有類別的 `statsMode` 皆為 `counted`。
@@ -1799,7 +1807,7 @@ echo "ALTER TABLE engineers ADD COLUMN color VARCHAR(7) NULL;" | npx prisma db e
 - [ ] **Step 2: 確認欄位已建立**
 
 ```bash
-mysql -u root -p vsms -e "SELECT value, color FROM test_units ORDER BY sortOrder; SELECT value, color FROM engineers ORDER BY sortOrder LIMIT 5;"
+mysql -u root vsms -e "SELECT value, color FROM test_units ORDER BY sortOrder; SELECT value, color FROM engineers ORDER BY sortOrder LIMIT 5;"
 ```
 
 預期：兩張表的 `color` 皆為 `NULL`。
@@ -2161,9 +2169,108 @@ git commit -m "feat: color pickers for test units and engineers in settings"
 ## Task 12: 甘特圖雙色 bar
 
 **Files:**
+- Create: `src/components/schedule/GanttBar.tsx`
 - Modify: `src/components/schedule/GanttChart.tsx`（工程師視角 bar 區、設備視角 bar 區、圖例）
 
-- [ ] **Step 1: 改寫工程師視角的 bar**
+**Interfaces:**
+- Produces: `GanttBar` 預設匯出
+
+```ts
+interface GanttBarProps {
+  barX: number
+  barW: number
+  barY: number
+  unitColor: string
+  engColor: string
+  overflowStartX: number | null  // null 表示無溢出
+  label: string | null           // null 表示不顯示人名（工程師視角）
+  clipId: string
+  onMouseEnter: (e: React.MouseEvent) => void
+  onMouseLeave: () => void
+}
+```
+
+bar 的幾何（內縮 1px、溢出層內縮 3px、高度 20/16、圓角 4/3）只在此元件出現一次。兩個視角的 bar 因此不可能長得不一樣。
+
+- [ ] **Step 1: 建立 GanttBar 元件**
+
+建立 `src/components/schedule/GanttBar.tsx`：
+
+```tsx
+// src/components/schedule/GanttBar.tsx
+// 甘特圖的單根 bar：外框編碼測試單位、內裡編碼工程師。
+// 工程師視角與設備視角共用此元件，幾何計算只寫一次以免兩者走樣。
+import type React from 'react'
+import { OVERFLOW_COLOR } from '../../constants'
+import { readableTextColor } from '../../lib/colors'
+
+const BAR_H = 22
+const STROKE_W = 2
+const OVERFLOW_INSET = 3
+
+interface Props {
+  barX: number
+  barW: number
+  barY: number
+  unitColor: string
+  engColor: string
+  /** 溢出段的起始 x；null 表示未溢出 */
+  overflowStartX: number | null
+  /** 顯示於 bar 上的人名；null 表示不顯示 */
+  label: string | null
+  clipId: string
+  onMouseEnter: (e: React.MouseEvent) => void
+  onMouseLeave: () => void
+}
+
+export default function GanttBar({
+  barX, barW, barY, unitColor, engColor, overflowStartX, label, clipId,
+  onMouseEnter, onMouseLeave,
+}: Props) {
+  const innerW = Math.max(barW - STROKE_W, 4)
+  return (
+    <>
+      {/* 一整根帶框的 bar。描邊置中於邊界，故內縮 1px 使總高仍為 BAR_H。 */}
+      <rect
+        x={barX + STROKE_W / 2} y={barY + STROKE_W / 2}
+        width={innerW} height={BAR_H - STROKE_W}
+        fill={engColor} stroke={unitColor} strokeWidth={STROKE_W} rx={4}
+        style={{ cursor: 'pointer', opacity: 0.92 }}
+        onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} />
+
+      {/* 溢出段疊在框內且不描邊，外框才會保持連續。
+          pointerEvents none 讓 hover 事件交由底下的外框處理。 */}
+      {overflowStartX !== null && (
+        <rect
+          x={overflowStartX}
+          y={barY + OVERFLOW_INSET}
+          width={Math.max(barX + barW - overflowStartX - OVERFLOW_INSET, OVERFLOW_INSET)}
+          height={BAR_H - OVERFLOW_INSET * 2}
+          rx={3} fill={OVERFLOW_COLOR}
+          style={{ pointerEvents: 'none' }} />
+      )}
+
+      {label !== null && barW > 24 && (
+        <>
+          <defs>
+            <clipPath id={clipId}>
+              <rect x={barX + 4} y={barY} width={barW - 8} height={BAR_H} />
+            </clipPath>
+          </defs>
+          <text x={barX + 6} y={barY + 15} fontSize={12}
+            fill={readableTextColor(engColor)} fontWeight="600"
+            clipPath={`url(#${clipId})`}
+            style={{ pointerEvents: 'none' }}>
+            {label}
+          </text>
+        </>
+      )}
+    </>
+  )
+}
+```
+
+- [ ] **Step 1b: 改寫工程師視角的 bar**
 
 將 `GanttChart.tsx` 工程師視角 bar 的 `.map` 回傳內容（現行 965–1009 行，自 `return (` 至 `)`）替換為：
 
@@ -2171,27 +2278,18 @@ git commit -m "feat: color pickers for test units and engineers in settings"
                       <g key={s.id}>
                         <rect x={0} y={y} width={svgWidth} height={ROW_H} fill={evenFillAlpha} />
                         <line x1={0} y1={y + ROW_H} x2={svgWidth} y2={y + ROW_H} stroke="#e2e8f0" strokeWidth={1} />
-
-                        {/* 一整根帶框的 bar：外框 = 測試單位，內裡 = 工程師。
-                            描邊置中於邊界，故內縮 1px 使總高仍為 22px。 */}
-                        <rect x={barX + 1} y={barY + 1} width={Math.max(barW - 2, 4)} height={20}
-                          fill={engColor} stroke={unitColor} strokeWidth={2} rx={4}
-                          style={{ cursor: 'pointer', opacity: 0.92 }}
+                        <GanttBar
+                          barX={barX} barW={barW} barY={barY}
+                          unitColor={unitColor} engColor={engColor}
+                          overflowStartX={hasOverflow ? barX + workDayOffset * PX_PER_DAY : null}
+                          label={null}
+                          clipId={`bc-${s.id}`}
                           onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
                           onMouseLeave={() => setTooltip(null)} />
-
-                        {/* 溢出段疊在框內且不描邊，外框才會保持連續。
-                            pointerEvents none 讓 hover 事件交由底下的外框處理。 */}
-                        {hasOverflow && (
-                          <rect
-                            x={barX + workDayOffset * PX_PER_DAY}
-                            y={barY + 3}
-                            width={Math.max((totalBarDays - workDayOffset) * PX_PER_DAY - 3, 3)}
-                            height={16} rx={3} fill={OVERFLOW_COLOR}
-                            style={{ pointerEvents: 'none' }} />
-                        )}
                       </g>
 ```
+
+工程師視角傳 `label={null}`：左欄徽章已具名，bar 上再放人名屬冗餘。
 
 - [ ] **Step 2: 補上該列所需的顏色變數**
 
@@ -2211,9 +2309,10 @@ git commit -m "feat: color pickers for test units and engineers in settings"
 ```ts
 import { STATUS_COLORS, OVERFLOW_COLOR } from '../../constants'
 import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../../lib/colors'
+import GanttBar from './GanttBar'
 ```
 
-`getUnitColor` 不再被引用。
+`getUnitColor` 不再被引用。若 `OVERFLOW_COLOR` 在移除舊 bar 繪製後也不再被 `GanttChart.tsx` 引用（圖例仍會用到），依實際情況保留或移除。
 
 - [ ] **Step 4: 改寫設備視角的 bar**
 
@@ -2221,36 +2320,16 @@ import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../..
 
 ```tsx
                               <g key={s.id}>
-                                <rect x={barX + 1} y={barY + 1} width={Math.max(barW - 2, 4)} height={20}
-                                  fill={engColor} stroke={unitColor} strokeWidth={2} rx={4}
-                                  style={{ cursor: 'pointer', opacity: 0.92 }}
+                                {/* 設備視角的左欄是設備名稱，bar 上的人名是此視角唯一的人員線索，
+                                    因此傳入 label（工程師視角已由左欄徽章提供，故傳 null）。 */}
+                                <GanttBar
+                                  barX={barX} barW={barW} barY={barY}
+                                  unitColor={unitColor} engColor={engColor}
+                                  overflowStartX={hasOverflow ? overflowX : null}
+                                  label={engLabel(s.testEngineer)}
+                                  clipId={`bc-dev-${s.id}`}
                                   onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
                                   onMouseLeave={() => setTooltip(null)} />
-                                {hasOverflow && (
-                                  <rect
-                                    x={overflowX}
-                                    y={barY + 3}
-                                    width={Math.max(barW - workDayOffset * PX_PER_DAY - 3, 3)}
-                                    height={16} rx={3} fill={OVERFLOW_COLOR}
-                                    style={{ pointerEvents: 'none' }} />
-                                )}
-                                {/* 設備視角的左欄是設備名稱，bar 上的人名是此視角唯一的人員線索，
-                                    因此保留（工程師視角已由左欄徽章提供，故該處移除）。 */}
-                                {barW > 24 && (
-                                  <>
-                                    <defs>
-                                      <clipPath id={`bc-${s.id}`}>
-                                        <rect x={barX + 4} y={barY} width={barW - 8} height={22} />
-                                      </clipPath>
-                                    </defs>
-                                    <text x={barX + 6} y={barY + 15} fontSize={12}
-                                      fill={readableTextColor(engColor)} fontWeight="600"
-                                      clipPath={`url(#bc-${s.id})`}
-                                      style={{ pointerEvents: 'none' }}>
-                                      {engLabel(s.testEngineer)}
-                                    </text>
-                                  </>
-                                )}
                               </g>
 ```
 
