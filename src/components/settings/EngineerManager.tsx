@@ -10,8 +10,10 @@ export function EngineerManager() {
   const [draftColors, setDraftColors] = useState<Record<string, string>>({})
   // 刪除失敗訊息（依 engineer id 分開，例如後端擋下的 ENGINEER_IN_USE）
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({})
-  // 改名／停用失敗訊息（同樣依 engineer id 分開，避免無聲失敗）
+  // 改名／停用／改色失敗訊息（同樣依 engineer id 分開，避免無聲失敗）
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
+  // Minor：新增人員失敗訊息（依 unit id 分開，因為新增是綁在單位底下的表單）
+  const [addErrors, setAddErrors] = useState<Record<string, string>>({})
 
   const clearDraftColor = (id: string) => {
     setDraftColors(d => {
@@ -57,6 +59,35 @@ export function EngineerManager() {
     }
   }
 
+  // Minor：setEngineerColor 也是先 await persistOptions 再 set()，同樣可能因
+  // 網路錯誤／500 reject。比照 handleToggle／handleRename，統一吞下例外並顯示
+  // 訊息，避免顏色在下次讀取時無聲還原卻沒有任何提示。
+  const handleSetColor = async (unitId: string, engId: string, color: string | null) => {
+    setActionErrors(d => { const n = { ...d }; delete n[engId]; return n })
+    try {
+      await setEngineerColor(unitId, engId, color)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setActionErrors(d => ({ ...d, [engId]: msg }))
+    }
+  }
+
+  // Minor：addEngineer（Enter 鍵與「新增」按鈕共用）同樣先 await 再 set()，
+  // 可能因網路錯誤／500 reject。錯誤時保留輸入框內容並顯示訊息，而非讓輸入
+  // 無聲消失或留下 unhandled rejection。
+  const handleAdd = async (unitId: string) => {
+    const v = (newNames[unitId] ?? '').trim()
+    if (!v) return
+    setAddErrors(d => { const n = { ...d }; delete n[unitId]; return n })
+    try {
+      await addEngineer(unitId, v)
+      setNewNames(n => ({ ...n, [unitId]: '' }))
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setAddErrors(d => ({ ...d, [unitId]: msg }))
+    }
+  }
+
   return (
     <div>
       <h3 className="font-semibold text-gray-700 mb-3">測試人員</h3>
@@ -92,14 +123,14 @@ export function EngineerManager() {
                             const draft = draftColors[eng.id]
                             if (draft === undefined) return
                             const base = eng.color ?? resolveEngineerColor(eng.value, unit.value, options)
-                            if (draft.toLowerCase() !== base.toLowerCase()) setEngineerColor(unit.id, eng.id, draft)
+                            if (draft.toLowerCase() !== base.toLowerCase()) handleSetColor(unit.id, eng.id, draft)
                             clearDraftColor(eng.id)
                           }}
                         />
                         {eng.color && (
                           <button type="button"
                             onMouseDown={() => clearDraftColor(eng.id)}
-                            onClick={() => { setEngineerColor(unit.id, eng.id, null); clearDraftColor(eng.id) }}
+                            onClick={() => { handleSetColor(unit.id, eng.id, null); clearDraftColor(eng.id) }}
                             className="text-xs px-2 py-0.5 border rounded hover:bg-gray-50 text-gray-500">還原</button>
                         )}
                         <span className={`flex-1 text-sm ${!eng.isActive ? 'line-through text-gray-400' : ''}`}>{eng.label}</span>
@@ -126,12 +157,13 @@ export function EngineerManager() {
             <div className="flex gap-2">
               <input className="border rounded px-2 py-1 text-xs flex-1" placeholder="新增人員姓名"
                 value={newNames[unit.id] ?? ''} onChange={e => setNewNames(n => ({ ...n, [unit.id]: e.target.value }))}
-                onKeyDown={async e => {
-                  if (e.key === 'Enter') { const v = (newNames[unit.id] ?? '').trim(); if (v) { await addEngineer(unit.id, v); setNewNames(n => ({ ...n, [unit.id]: '' })) } }
-                }} />
-              <button type="button" onClick={async () => { const v = (newNames[unit.id] ?? '').trim(); if (v) { await addEngineer(unit.id, v); setNewNames(n => ({ ...n, [unit.id]: '' })) } }}
+                onKeyDown={e => { if (e.key === 'Enter') handleAdd(unit.id) }} />
+              <button type="button" onClick={() => handleAdd(unit.id)}
                 className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">新增</button>
             </div>
+            {addErrors[unit.id] && (
+              <p className="text-xs text-red-500 mt-1">{addErrors[unit.id]}</p>
+            )}
           </div>
         ))}
       </div>
