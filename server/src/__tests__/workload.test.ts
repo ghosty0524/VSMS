@@ -219,4 +219,43 @@ describe('類別統計模式對負載分析的影響', () => {
     })
     expect(result.engineers[0].limitations.some(l => l.includes('出國'))).toBe(true)
   })
+
+  it('非法的 statsMode 值視為 counted（計入 scheduleCount，不留 limitations 說明）', () => {
+    const result = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ category: 'Regression' })],
+      statsModes: { Regression: 'nonsense' as unknown as 'counted' },
+    })
+    expect(result.engineers[0].scheduleCount).toBe(1)
+    expect(result.engineers[0].limitations.some(l => l.includes('類別「'))).toBe(false)
+  })
+
+  it('同一工程師同一類別多筆 workload_only 排程只留一則 limitations 說明', () => {
+    const result = analyzeWorkload({
+      month: MONTH,
+      schedules: [
+        sched({ category: '出國', startDate: '2026/07/06', endDate: '2026/07/06' }),
+        sched({ category: '出國', startDate: '2026/07/07', endDate: '2026/07/07' }),
+        sched({ category: '出國', startDate: '2026/07/08', endDate: '2026/07/08' }),
+      ],
+      statsModes,
+    })
+    const notes = result.engineers[0].limitations.filter(l => l.includes('出國'))
+    expect(notes).toHaveLength(1)
+  })
+
+  it('同一工程師兩個不同 workload_only 類別各留一則說明（共兩則）', () => {
+    const result = analyzeWorkload({
+      month: MONTH,
+      schedules: [
+        sched({ category: '出國', startDate: '2026/07/06', endDate: '2026/07/06' }),
+        sched({ category: '教育訓練2', startDate: '2026/07/07', endDate: '2026/07/07' }),
+      ],
+      statsModes: { ...statsModes, 教育訓練2: 'workload_only' as const },
+    })
+    const notes = result.engineers[0].limitations.filter(l => l.includes('類別「'))
+    expect(notes).toHaveLength(2)
+    expect(notes.some(l => l.includes('出國'))).toBe(true)
+    expect(notes.some(l => l.includes('教育訓練2'))).toBe(true)
+  })
 })

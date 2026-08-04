@@ -5,7 +5,7 @@ import type { CategoryOption, CategoryStatsMode } from '../types.js'
 
 const VALID_STATS_MODES: readonly CategoryStatsMode[] = ['counted', 'workload_only', 'excluded']
 
-function normalizeStatsMode(value: unknown): CategoryStatsMode {
+export function normalizeStatsMode(value: unknown): CategoryStatsMode {
   return VALID_STATS_MODES.includes(value as CategoryStatsMode)
     ? (value as CategoryStatsMode)
     : 'counted'

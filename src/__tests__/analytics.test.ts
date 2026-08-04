@@ -151,4 +151,13 @@ describe('splitByStatsMode', () => {
     expect(r.stats).toHaveLength(2)
     expect(r.workload).toHaveLength(2)
   })
+
+  it('statsMode 為非法值的類別視為 counted，寧可多算也不無聲漏掉', () => {
+    const badCategories = [
+      { id: 'X', value: 'X', label: 'X', isActive: true, sortOrder: 0, statsMode: 'nonsense' as CategoryOption['statsMode'] },
+    ]
+    const r = splitByStatsMode([makeSchedule({ category: 'X' })], badCategories)
+    expect(r.stats.map(s => s.category)).toEqual(['X'])
+    expect(r.workload.map(s => s.category)).toEqual(['X'])
+  })
 })

@@ -3,7 +3,7 @@ import type { OptionsMap, CategoryStatsMode } from '../types.js'
 
 // PUT /api/options 是全刪重建，任何未被映射帶過去的欄位都會被靜默重設為預設值。
 // 這兩個純函式把「GET 的映射」與「PUT 的映射」抽出來，讓不變式可被測試守住。
-import { toCategoryResponse, toCategoryCreateData } from '../routes/optionsMapping.js'
+import { toCategoryResponse, toCategoryCreateData, normalizeStatsMode } from '../routes/optionsMapping.js'
 
 describe('categories options round-trip', () => {
   it('GET 映射帶出 statsMode', () => {
@@ -52,5 +52,11 @@ describe('categories options round-trip', () => {
 
     const bogus = { ...input, statsMode: 'nonsense' as CategoryStatsMode }
     expect(toCategoryCreateData(bogus).statsMode).toBe('counted')
+  })
+
+  it('normalizeStatsMode 已匯出，供其他路由重用同一份驗證邏輯', () => {
+    expect(normalizeStatsMode('workload_only')).toBe('workload_only')
+    expect(normalizeStatsMode('nonsense')).toBe('counted')
+    expect(normalizeStatsMode(undefined)).toBe('counted')
   })
 })

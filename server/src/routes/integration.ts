@@ -5,7 +5,7 @@ import { getTestPlanProgressBatch } from '../lib/vtmsClient.js';
 import { analyzeWorkload } from '../lib/workload.js';
 import { matchEngineers, compareOrdinal, type EngineerRecord } from '../lib/engineerMatch.js';
 import { completedAtPatch } from '../lib/completedAt.js';
-import type { CategoryStatsMode } from '../types.js';
+import { normalizeStatsMode } from './optionsMapping.js';
 
 const router = Router();
 
@@ -170,8 +170,9 @@ router.get('/workload-analysis', requireApiKey, async (req, res) => {
   }
 
   const categories = await prisma.category.findMany();
+  // DB 欄位為未受限的 VARCHAR，非法或缺漏值一律退回 counted（寧可多算也不誤判為 workload_only）
   const statsModes = Object.fromEntries(
-    categories.map(c => [c.value, c.statsMode as CategoryStatsMode]),
+    categories.map(c => [c.value, normalizeStatsMode(c.statsMode)]),
   );
 
   const result = analyzeWorkload({

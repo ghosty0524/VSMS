@@ -7,6 +7,15 @@
 
 import type { CategoryStatsMode } from '../types.js'
 
+const VALID_STATS_MODES: readonly CategoryStatsMode[] = ['counted', 'workload_only', 'excluded']
+
+// DB 欄位為未受限的 VARCHAR，statsModes 表中可能混入非法值（呼叫端未經
+// optionsMapping 正規化）；查無對應或非法值一律視為 counted，寧可多算也不
+// 誤落入其他分支的行為（例如把非法值誤判為 workload_only）。
+function resolveStatsMode(value: CategoryStatsMode | undefined): CategoryStatsMode {
+  return value !== undefined && VALID_STATS_MODES.includes(value) ? value : 'counted'
+}
+
 export interface WorkloadScheduleInput {
   category: string
   testEngineer: string
@@ -96,6 +105,7 @@ export function analyzeWorkload(opts: {
     units: Set<string>
     scheduleCount: number
     limitations: string[]
+    workloadOnlyCategories: Set<string> // 已留過說明的 workload_only 類別，避免同一類別重複註記
   }
   const byEngineer = new Map<string, Acc>()
 
@@ -104,18 +114,20 @@ export function analyzeWorkload(opts: {
     const end = toIso(s.endDate)
     if (end < monthStart || start > monthEnd || end < start) continue // 與目標月無重疊
 
-    const statsMode = statsModes[s.category] ?? 'counted'
+    const statsMode = resolveStatsMode(statsModes[s.category])
     if (statsMode === 'excluded') continue // 此類別既不計筆數也不佔產能
 
     let acc = byEngineer.get(s.testEngineer)
     if (!acc) {
-      acc = { raw: new Map(), units: new Set(), scheduleCount: 0, limitations: [] }
+      acc = { raw: new Map(), units: new Set(), scheduleCount: 0, limitations: [], workloadOnlyCategories: new Set() }
       byEngineer.set(s.testEngineer, acc)
     }
     if (statsMode === 'counted') {
       acc.scheduleCount++
-    } else {
+    } else if (!acc.workloadOnlyCategories.has(s.category)) {
       // workload_only：佔用產能但不是專案，於此註明以免呼叫端誤判筆數
+      // 同一工程師、同一類別只留一則，避免同月多筆排程灌爆 limitations
+      acc.workloadOnlyCategories.add(s.category)
       acc.limitations.push(`類別「${s.category}」設定為不計專案數，其排程未計入 scheduleCount`)
     }
     if (s.testUnit) acc.units.add(s.testUnit)
