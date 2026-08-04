@@ -178,15 +178,12 @@ interface FlagPopoverState {
 interface Props {
   showAddModal:    boolean
   onCloseAddModal: () => void
-  ganttCollapsed:  boolean
-  onToggleGantt:   () => void
   filterCollapsed: boolean
   onToggleFilter:  () => void
 }
 
 export function GanttChart({
   showAddModal, onCloseAddModal,
-  ganttCollapsed, onToggleGantt,
   filterCollapsed, onToggleFilter,
 }: Props) {
   const { schedules, remove, update } = useScheduleStore()
@@ -530,12 +527,10 @@ export function GanttChart({
         </span>
       </div>
 
-      {/* ── 甘特圖收合控制列 ── */}
+      {/* ── 甘特圖控制列 ── */}
       <div
-        className={`flex-shrink-0 flex items-center justify-between px-4 py-2
-                   bg-slate-50 border-b hover:bg-slate-100 transition-colors duration-150 select-none
-                   ${viewMode === 'gantt' ? 'cursor-pointer' : ''}`}
-        onClick={viewMode === 'gantt' ? onToggleGantt : undefined}
+        className="flex-shrink-0 flex items-center justify-between px-4 py-2
+                   bg-slate-50 border-b hover:bg-slate-100 transition-colors duration-150 select-none"
       >
         <div className="flex items-center gap-2">
           {/* 視圖切換：甘特圖 / 列表 */}
@@ -614,11 +609,6 @@ export function GanttChart({
             {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             {isFullscreen ? '離開全螢幕' : '全螢幕'}
           </button>
-          {viewMode === 'gantt' && (
-            <span className="text-slate-400 text-sm">
-              {ganttCollapsed ? '▼ 展開' : '▲ 收合'}
-            </span>
-          )}
         </div>
       </div>
 
@@ -633,7 +623,7 @@ export function GanttChart({
           onEdit={setEditTarget}
           onDelete={setDeleteTarget}
         />
-      ) : !ganttCollapsed && (
+      ) : (
         groupBy === 'device' ? (
           // ── 設備視角 ──────────────────────────────────────────
           deviceRows.length === 0 ? (

@@ -17,7 +17,6 @@ export function App() {
   const {
     view, setView,
     showAddModal, setShowAddModal,
-    ganttCollapsed, setGanttCollapsed,
     filterCollapsed, setFilterCollapsed,
   } = useUIStore()
 
@@ -52,8 +51,6 @@ export function App() {
               <GanttChart
                 showAddModal={showAddModal}
                 onCloseAddModal={() => setShowAddModal(false)}
-                ganttCollapsed={ganttCollapsed}
-                onToggleGantt={() => setGanttCollapsed(!ganttCollapsed)}
                 filterCollapsed={filterCollapsed}
                 onToggleFilter={() => setFilterCollapsed(!filterCollapsed)}
               />
