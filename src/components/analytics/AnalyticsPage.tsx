@@ -121,11 +121,14 @@ const AnalyticsPage: React.FC = () => {
     () => options.testUnits.filter(u => u.isActive).map(u => u.label).sort(),
     [options.testUnits]
   )
+  // ★ finding 3：s.testEngineer 存的是 value，改名後 value 不再等於 label
+  // （比照 FilterSortBar.tsx 的 testEngineers 篩選，同樣以 value 建立選項），
+  // 否則改名後這裡選的是舊 label，比對 filtered 時永遠對不到任何排程。
   const engineerOptions = useMemo(
     () => options.testUnits
       .flatMap(u => u.engineers)
       .filter(e => e.isActive)
-      .map(e => e.label)
+      .map(e => e.value)
       .filter((v, i, arr) => arr.indexOf(v) === i)
       .sort(),
     [options.testUnits]
