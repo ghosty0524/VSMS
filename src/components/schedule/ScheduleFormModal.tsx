@@ -256,7 +256,12 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
                   ${!form.testUnit || isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}
               >
                 <option value="">請選擇</option>
-                {engineerOptions.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                {/* 需求四插入的孤兒選項沒有 id；人員姓名建立時未去重，同名的兩位
+                    正常人員 value 也可能相同，因此用 id 當 key（孤兒選項退回 value），
+                    避免兩者皆用 value 時 React key 碰撞 */}
+                {engineerOptions.map(e => (
+                  <option key={'id' in e ? e.id : e.value} value={e.value}>{e.label}</option>
+                ))}
               </select>
             ), true)}
           </div>
