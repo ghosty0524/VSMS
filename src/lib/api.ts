@@ -6,6 +6,8 @@ export class ApiError extends Error {
     message: string,
     /** 後端驗證(422)回傳的逐欄位錯誤,例如 { taskDescription: '任務描述不可超過 500 字' } */
     public readonly fieldErrors?: Record<string, string>,
+    /** 後端機器可讀錯誤代碼，例如 'ENGINEER_IN_USE'（並非所有錯誤回應都有） */
+    public readonly code?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -32,9 +34,9 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
     credentials: 'include',
   })
   if (!res.ok) {
-    const data = await res.json().catch(() => ({})) as { message?: string; errors?: Record<string, string> }
+    const data = await res.json().catch(() => ({})) as { message?: string; errors?: Record<string, string>; code?: string }
     const fieldErrors = res.status === 422 && data.errors && typeof data.errors === 'object' ? data.errors : undefined
-    throw new ApiError(res.status, data.message ?? `HTTP ${res.status}`, fieldErrors)
+    throw new ApiError(res.status, data.message ?? `HTTP ${res.status}`, fieldErrors, data.code)
   }
   return res.json() as Promise<T>
 }
