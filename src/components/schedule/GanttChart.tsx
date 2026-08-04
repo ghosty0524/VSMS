@@ -13,7 +13,7 @@ import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { FlagPopover } from './FlagPopover'
 import ScheduleListView from './ScheduleListView'
-import GanttBar from './GanttBar'
+import GanttBar, { BAR_H } from './GanttBar'
 import type { FilterSortState, SortRule, SortableField } from './FilterSortBar'
 import type { Role, Schedule, VtmsProgress } from '../../types'
 import type { ScheduleStatus } from '../../lib/status'
@@ -744,7 +744,7 @@ export function GanttChart({
                             const engColor  = s.testEngineer
                               ? resolveEngineerColor(s.testEngineer, s.testUnit, options)
                               : unitColor
-                            const barY = y + Math.floor((ROW_H - 22) / 2)
+                            const barY = y + Math.floor((ROW_H - BAR_H) / 2)
                             const workDayOffset = getWorkDayOffset(sDate, s.timeResource, restDayConfig)
                             const hasOverflow = totalBarDays > workDayOffset && workDayOffset > 0
                             const overflowX = barX + workDayOffset * PX_PER_DAY
@@ -1026,7 +1026,7 @@ export function GanttChart({
                       ? resolveEngineerColor(s.testEngineer, s.testUnit, options)
                       : unitColor
                     const evenFillAlpha = i % 2 === 0 ? 'rgba(250,251,252,0.5)' : 'rgba(241,245,249,0.5)'
-                    const barY   = y + Math.floor((ROW_H - 22) / 2)
+                    const barY   = y + Math.floor((ROW_H - BAR_H) / 2)
 
                     // ★ 溢出判定
                     const workDayOffset = getWorkDayOffset(sDate, s.timeResource, restDayConfig)

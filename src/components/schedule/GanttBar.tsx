@@ -5,7 +5,7 @@ import type React from 'react'
 import { OVERFLOW_COLOR } from '../../constants'
 import { readableTextColor } from '../../lib/colors'
 
-const BAR_H = 22
+export const BAR_H = 22
 const STROKE_W = 2
 const OVERFLOW_INSET = 3
 
