@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { computeStatus } from '../../lib/status'
+import { splitByStatsMode } from '../../lib/analytics'
 import { CATEGORY_COLORS } from '../../constants'
 import KpiSection from './KpiSection'
 import TrendSection from './TrendSection'
@@ -144,6 +145,13 @@ const AnalyticsPage: React.FC = () => {
     return true
   }), [schedules, filter])
 
+  // 依類別的 statsMode 分流：統計類元件吃 stats，負載元件吃 workload
+  const { stats: statsSchedules, workload: workloadSchedules } = useMemo(
+    () => splitByStatsMode(filtered, options.categories),
+    [filtered, options.categories],
+  )
+  const excludedCount = filtered.length - statsSchedules.length
+
   const hasFilter = !isFilterEmpty(filter)
 
   return (
@@ -167,36 +175,41 @@ const AnalyticsPage: React.FC = () => {
               重置
             </button>
           )}
+          {excludedCount > 0 && (
+            <span className="text-xs text-gray-500">
+              另有 {excludedCount} 筆因類別設定未計入專案統計
+            </span>
+          )}
         </div>
       </div>
 
       <div className="p-6 space-y-6">
         <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
           <h3 className="text-base font-semibold text-gray-700">整體概覽</h3>
-          <KpiSection schedules={filtered} />
+          <KpiSection schedules={statsSchedules} />
         </section>
 
         <section className="bg-white rounded-xl border shadow-sm p-5">
-          <TrendSection schedules={filtered} categories={categoryOptions} colorOf={colorOf} />
+          <TrendSection schedules={statsSchedules} categories={categoryOptions} colorOf={colorOf} />
         </section>
 
         <section className="bg-white rounded-xl border shadow-sm p-5">
-          <LoadSection schedules={filtered} categories={categoryOptions} colorOf={colorOf} />
+          <LoadSection schedules={workloadSchedules} categories={categoryOptions} colorOf={colorOf} />
         </section>
 
         <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
           <h3 className="text-base font-semibold text-gray-700">風險清單</h3>
-          <RiskList schedules={filtered} />
+          <RiskList schedules={statsSchedules} />
         </section>
 
         <div className="grid gap-6 xl:grid-cols-2">
           <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
             <h3 className="text-base font-semibold text-gray-700">單位執行比較</h3>
-            <UnitComparison schedules={filtered} />
+            <UnitComparison schedules={statsSchedules} />
           </section>
           <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
             <h3 className="text-base font-semibold text-gray-700">延遲分析</h3>
-            <DelayAnalysis schedules={filtered} />
+            <DelayAnalysis schedules={statsSchedules} />
           </section>
         </div>
       </div>

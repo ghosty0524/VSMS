@@ -1,7 +1,7 @@
 import { isRestDay } from './restDays'
 import { computeStatus } from './status'
 import type { ScheduleStatus } from './status'
-import type { Schedule, RestDaysConfig } from '../types'
+import type { Schedule, RestDaysConfig, CategoryOption } from '../types'
 
 export type TimeScale = 'month' | 'quarter' | 'year'
 
@@ -67,4 +67,25 @@ export function allocateTimeResource(
 
 export function daysBetweenYmd(a: string, b: string): number {
   return Math.round((parseYmd(b).getTime() - parseYmd(a).getTime()) / 86400000)
+}
+
+/**
+ * 依工作類別的 statsMode 把排程分成「計入專案統計」與「計入人力負載」兩份。
+ * 判斷集中於此，避免散落到各分析元件而彼此不一致。
+ * 類別在清單中查無對應時（類別被刪除後遺留的舊排程）一律視為 counted。
+ */
+export function splitByStatsMode(
+  schedules: Schedule[],
+  categories: CategoryOption[],
+): { stats: Schedule[]; workload: Schedule[] } {
+  const modeOf = new Map(categories.map(c => [c.value, c.statsMode ?? 'counted']))
+  const stats: Schedule[] = []
+  const workload: Schedule[] = []
+  for (const s of schedules) {
+    const mode = modeOf.get(s.category) ?? 'counted'
+    if (mode === 'excluded') continue
+    workload.push(s)
+    if (mode === 'counted') stats.push(s)
+  }
+  return { stats, workload }
 }

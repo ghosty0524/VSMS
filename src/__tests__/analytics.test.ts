@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   periodKey, parseYmd, isOverdue, statusCounts, dueCompletionRate,
-  allocateTimeResource, daysBetweenYmd,
+  allocateTimeResource, daysBetweenYmd, splitByStatsMode,
 } from '../lib/analytics'
-import type { Schedule, RestDaysConfig } from '../types'
+import type { Schedule, RestDaysConfig, CategoryOption } from '../types'
 
 function makeSchedule(over: Partial<Schedule>): Schedule {
   return {
@@ -105,5 +105,50 @@ describe('allocateTimeResource', () => {
 describe('daysBetweenYmd', () => {
   it('computes day difference', () => {
     expect(daysBetweenYmd('2026/07/10', '2026/07/16')).toBe(6)
+  })
+})
+
+function cat(value: string, statsMode: CategoryOption['statsMode']): CategoryOption {
+  return { id: value, value, label: value, isActive: true, sortOrder: 0, statsMode }
+}
+
+describe('splitByStatsMode', () => {
+  const categories = [
+    cat('NPI', 'counted'),
+    cat('出國', 'workload_only'),
+    cat('教育訓練', 'excluded'),
+  ]
+
+  it('counted 同時進入統計與負載', () => {
+    const r = splitByStatsMode([makeSchedule({ category: 'NPI' })], categories)
+    expect(r.stats.map(s => s.category)).toEqual(['NPI'])
+    expect(r.workload.map(s => s.category)).toEqual(['NPI'])
+  })
+
+  it('workload_only 不進統計但進負載', () => {
+    const r = splitByStatsMode([makeSchedule({ category: '出國' })], categories)
+    expect(r.stats).toHaveLength(0)
+    expect(r.workload.map(s => s.category)).toEqual(['出國'])
+  })
+
+  it('excluded 兩者皆不進', () => {
+    const r = splitByStatsMode([makeSchedule({ category: '教育訓練' })], categories)
+    expect(r.stats).toHaveLength(0)
+    expect(r.workload).toHaveLength(0)
+  })
+
+  it('類別已被刪除的排程視為 counted，寧可多算也不無聲漏掉', () => {
+    const r = splitByStatsMode([makeSchedule({ category: '已刪除的類別' })], categories)
+    expect(r.stats).toHaveLength(1)
+    expect(r.workload).toHaveLength(1)
+  })
+
+  it('空類別清單不崩潰，全部視為 counted', () => {
+    const r = splitByStatsMode(
+      [makeSchedule({ category: 'NPI' }), makeSchedule({ category: '出國' })],
+      [],
+    )
+    expect(r.stats).toHaveLength(2)
+    expect(r.workload).toHaveLength(2)
   })
 })
