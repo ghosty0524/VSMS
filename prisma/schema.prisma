@@ -80,6 +80,7 @@ model TestUnit {
   label     String     @db.VarChar(100)
   isActive  Boolean    @default(true)
   sortOrder Int
+  color     String?    @db.VarChar(7)
   engineers Engineer[]
 
   @@map("test_units")
@@ -91,6 +92,7 @@ model Engineer {
   label      String   @db.VarChar(100)
   isActive   Boolean  @default(true)
   sortOrder  Int
+  color      String?  @db.VarChar(7)
   testUnit   TestUnit @relation(fields: [testUnitId], references: [id], onDelete: Cascade)
   testUnitId String
 

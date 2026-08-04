@@ -44,8 +44,13 @@ export interface CategoryOption extends Option {
   statsMode: CategoryStatsMode
 }
 
+export interface EngineerOption extends Option {
+  color?: string | null
+}
+
 export interface TestUnitOption extends Option {
-  engineers: Option[]
+  color?: string | null
+  engineers: EngineerOption[]
 }
 
 export interface RestDaysConfig {

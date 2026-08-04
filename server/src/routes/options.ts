@@ -5,7 +5,10 @@ import { prisma } from '../lib/db.js'
 import { appendAudit } from '../lib/storage.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import type { OptionsMap } from '../types.js'
-import { toCategoryResponse, toCategoryCreateData } from './optionsMapping.js'
+import {
+  toCategoryResponse, toCategoryCreateData,
+  toTestUnitResponse, toTestUnitCreateData, toEngineerCreateData,
+} from './optionsMapping.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -24,12 +27,7 @@ router.get('/', async (_req, res) => {
 
   const result: OptionsMap = {
     categories: categories.map(toCategoryResponse),
-    testUnits: testUnits.map(({ id, value, label, isActive, sortOrder, engineers }) => ({
-      id, value, label, isActive, sortOrder,
-      engineers: engineers.map(({ id, value, label, isActive, sortOrder }) => ({
-        id, value, label, isActive, sortOrder,
-      })),
-    })),
+    testUnits: testUnits.map(toTestUnitResponse),
     restDays: {
       weekends: restDays?.weekends ?? true,
       specificDates: (restDays?.specificDates as string[]) ?? [],
@@ -64,14 +62,8 @@ router.put('/', async (req, res) => {
     for (const unit of body.testUnits) {
       await tx.testUnit.create({
         data: {
-          id: unit.id, value: unit.value, label: unit.label,
-          isActive: unit.isActive, sortOrder: unit.sortOrder,
-          engineers: {
-            create: unit.engineers.map(e => ({
-              id: e.id, value: e.value, label: e.label,
-              isActive: e.isActive, sortOrder: e.sortOrder,
-            })),
-          },
+          ...toTestUnitCreateData(unit),
+          engineers: { create: unit.engineers.map(toEngineerCreateData) },
         },
       })
     }

@@ -41,3 +41,59 @@ export function toCategoryCreateData(c: CategoryOption) {
     statsMode: normalizeStatsMode(c.statsMode),
   }
 }
+
+import type { EngineerOption, TestUnitOption } from '../types.js'
+
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+
+/** 只接受 #RRGGBB；其餘一律視為未自訂，避免把垃圾值寫進資料庫 */
+function normalizeColor(value: unknown): string | null {
+  return typeof value === 'string' && HEX_COLOR.test(value) ? value : null
+}
+
+interface EngineerRow {
+  id: string
+  value: string
+  label: string
+  isActive: boolean
+  sortOrder: number
+  color: string | null
+}
+
+interface TestUnitRow extends Omit<EngineerRow, 'color'> {
+  color: string | null
+  engineers: EngineerRow[]
+}
+
+export function toEngineerResponse(row: EngineerRow): EngineerOption {
+  return {
+    id: row.id, value: row.value, label: row.label,
+    isActive: row.isActive, sortOrder: row.sortOrder,
+    color: normalizeColor(row.color),
+  }
+}
+
+export function toTestUnitResponse(row: TestUnitRow): TestUnitOption {
+  return {
+    id: row.id, value: row.value, label: row.label,
+    isActive: row.isActive, sortOrder: row.sortOrder,
+    color: normalizeColor(row.color),
+    engineers: row.engineers.map(toEngineerResponse),
+  }
+}
+
+export function toEngineerCreateData(e: EngineerOption) {
+  return {
+    id: e.id, value: e.value, label: e.label,
+    isActive: e.isActive, sortOrder: e.sortOrder,
+    color: normalizeColor(e.color),
+  }
+}
+
+export function toTestUnitCreateData(u: TestUnitOption) {
+  return {
+    id: u.id, value: u.value, label: u.label,
+    isActive: u.isActive, sortOrder: u.sortOrder,
+    color: normalizeColor(u.color),
+  }
+}

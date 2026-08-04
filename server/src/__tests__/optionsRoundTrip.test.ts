@@ -60,3 +60,43 @@ describe('categories options round-trip', () => {
     expect(normalizeStatsMode(undefined)).toBe('counted')
   })
 })
+
+import { toTestUnitResponse, toTestUnitCreateData, toEngineerCreateData } from '../routes/optionsMapping.js'
+
+describe('test unit and engineer color round-trip', () => {
+  it('GET 映射帶出單位與工程師的 color', () => {
+    const row = {
+      id: 'u1', value: 'RA', label: 'RA', isActive: true, sortOrder: 1, color: '#123456',
+      engineers: [
+        { id: 'e1', value: 'Willie', label: 'Willie', isActive: true, sortOrder: 0, color: '#abcdef' },
+      ],
+    }
+    const out = toTestUnitResponse(row)
+    expect(out.color).toBe('#123456')
+    expect(out.engineers[0].color).toBe('#abcdef')
+  })
+
+  it('PUT 映射寫回 color', () => {
+    const unit = {
+      id: 'u1', value: 'RA', label: 'RA', isActive: true, sortOrder: 1, color: '#123456',
+      engineers: [],
+    }
+    expect(toTestUnitCreateData(unit).color).toBe('#123456')
+    expect(toEngineerCreateData({
+      id: 'e1', value: 'Willie', label: 'Willie', isActive: true, sortOrder: 0, color: '#abcdef',
+    }).color).toBe('#abcdef')
+  })
+
+  it('未自訂顏色時寫入 null 而非 undefined', () => {
+    const unit = { id: 'u1', value: 'RA', label: 'RA', isActive: true, sortOrder: 1, engineers: [] }
+    expect(toTestUnitCreateData(unit).color).toBeNull()
+  })
+
+  it('非法色碼一律落回 null，避免寫入垃圾值', () => {
+    const unit = {
+      id: 'u1', value: 'RA', label: 'RA', isActive: true, sortOrder: 1,
+      color: 'red', engineers: [],
+    }
+    expect(toTestUnitCreateData(unit).color).toBeNull()
+  })
+})

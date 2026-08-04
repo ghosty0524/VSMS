@@ -21,6 +21,8 @@ interface OptionsState {
   addEngineer: (unitId: string, name: string) => Promise<void>
   updateEngineer: (unitId: string, engId: string, name: string) => Promise<void>
   removeEngineer: (unitId: string, engId: string) => Promise<void>
+  setTestUnitColor: (id: string, color: string | null) => Promise<void>
+  setEngineerColor: (unitId: string, engId: string, color: string | null) => Promise<void>
   addDevice:    (value: string) => Promise<void>
   updateDevice: (id: string, label: string) => Promise<void>
   toggleDevice: (id: string, isActive: boolean) => Promise<void>
@@ -158,6 +160,27 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       testUnits: get().options.testUnits.map((u) => {
         if (u.id !== unitId) return u
         return { ...u, engineers: u.engineers.filter((e) => e.id !== engId) }
+      }),
+    }
+    await persistOptions(next)
+    set({ options: next })
+  },
+
+  setTestUnitColor: async (id, color) => {
+    const next = {
+      ...get().options,
+      testUnits: get().options.testUnits.map((u) => u.id === id ? { ...u, color } : u),
+    }
+    await persistOptions(next)
+    set({ options: next })
+  },
+
+  setEngineerColor: async (unitId, engId, color) => {
+    const next = {
+      ...get().options,
+      testUnits: get().options.testUnits.map((u) => {
+        if (u.id !== unitId) return u
+        return { ...u, engineers: u.engineers.map((e) => e.id === engId ? { ...e, color } : e) }
       }),
     }
     await persistOptions(next)
