@@ -8,7 +8,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        // 預設指向常駐的正式後端（pm2, 3001）。上線前想用新版前端搭配尚未部署的
+        // 新版後端實測時，另起一個後端（PORT=3002 npx tsx watch server/src/index.ts）
+        // 再以 VSMS_API_TARGET=http://localhost:3002 npm run dev:client 啟動即可，
+        // 全程不動 dist 與 pm2。此設定僅作用於 dev server，不影響正式建置。
+        target: process.env.VSMS_API_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,
       },
     },
