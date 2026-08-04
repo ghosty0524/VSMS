@@ -25,13 +25,6 @@ function baseOptions(): OptionsMap {
   }
 }
 
-function stubFetchEcho() {
-  vi.stubGlobal('fetch', vi.fn(async (_url: string, opts: RequestInit) => {
-    const body = opts.body ? JSON.parse(opts.body as string) : {}
-    return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
-  }))
-}
-
 function stubFetchEngineerInUse() {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(
     JSON.stringify({
@@ -60,9 +53,23 @@ describe('removeEngineer（需求三：後端錯誤需往上拋）', () => {
     expect(eng).toBeDefined()
   })
 
-  it('未被引用者可正常移除', async () => {
-    stubFetchEcho()
+  it('未被引用者可正常移除：送出的 body 已不含被移除者，本地狀態同步更新', async () => {
+    // Minor 7：舊版用 stubFetchEcho()（無條件回 200）加上只檢查本地狀態，
+    // 即使 removeEngineer 送出的 body 完全沒濾掉 e2，只要後端不擋，測試依然會過
+    // ——名稱聲稱驗證「未被引用者移除」，實際上完全沒碰引用邏輯。這裡改為同時
+    // 檢查實際送出的 PUT body 是否已排除 e2，讓測試名符其實。
+    let sentBody: { testUnits: { engineers: { id: string }[] }[] } | null = null
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, opts: RequestInit) => {
+      sentBody = opts.body ? JSON.parse(opts.body as string) : null
+      return new Response(JSON.stringify(sentBody), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }))
+
     await useOptionsStore.getState().removeEngineer('u1', 'e2')
+
+    expect(sentBody).not.toBeNull()
+    const sentIds = sentBody!.testUnits[0].engineers.map(e => e.id)
+    expect(sentIds).toEqual(['e1'])
+
     const remaining = useOptionsStore.getState().options.testUnits[0].engineers.map(e => e.id)
     expect(remaining).toEqual(['e1'])
   })
