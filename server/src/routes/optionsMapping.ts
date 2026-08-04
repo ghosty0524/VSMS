@@ -1,15 +1,11 @@
 // server/src/routes/optionsMapping.ts
 // PUT /api/options 是全刪重建：任何未被映射帶過去的欄位，
 // 都會在使用者存下一次設定時被靜默重設。映射抽在此處以便測試守住此不變式。
-import type { CategoryOption, CategoryStatsMode } from '../types.js'
-
-const VALID_STATS_MODES: readonly CategoryStatsMode[] = ['counted', 'workload_only', 'excluded']
-
-export function normalizeStatsMode(value: unknown): CategoryStatsMode {
-  return VALID_STATS_MODES.includes(value as CategoryStatsMode)
-    ? (value as CategoryStatsMode)
-    : 'counted'
-}
+import type { CategoryOption } from '../types.js'
+// 白名單與正規化邏輯集中於 lib/statsMode.ts，此處僅 re-export 以維持既有
+// import 路徑（integration.ts、測試皆從此檔匯入 normalizeStatsMode）。
+export { normalizeStatsMode } from '../lib/statsMode.js'
+import { normalizeStatsMode } from '../lib/statsMode.js'
 
 interface CategoryRow {
   id: string

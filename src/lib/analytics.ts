@@ -74,6 +74,8 @@ export function daysBetweenYmd(a: string, b: string): number {
  * 判斷集中於此，避免散落到各分析元件而彼此不一致。
  * 類別在清單中查無對應時（類別被刪除後遺留的舊排程）一律視為 counted。
  */
+// 前端無法從 server/ 匯入，此清單與 server/src/lib/statsMode.ts 為兩份獨立副本，
+// 修改其中一份（例如新增模式）務必同步另一份，否則會在該端被靜默視為 counted。
 const VALID_STATS_MODES: readonly CategoryOption['statsMode'][] = ['counted', 'workload_only', 'excluded']
 
 // DB 欄位無型別約束，statsMode 可能是非法字串；查無對應或非法值一律視為

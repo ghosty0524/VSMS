@@ -6,15 +6,10 @@
 // 加班加分 = 時數 ÷ 6，即 6 小時折 1 分（獨立、不封頂）。
 
 import type { CategoryStatsMode } from '../types.js'
-
-const VALID_STATS_MODES: readonly CategoryStatsMode[] = ['counted', 'workload_only', 'excluded']
-
 // DB 欄位為未受限的 VARCHAR，statsModes 表中可能混入非法值（呼叫端未經
-// optionsMapping 正規化）；查無對應或非法值一律視為 counted，寧可多算也不
-// 誤落入其他分支的行為（例如把非法值誤判為 workload_only）。
-function resolveStatsMode(value: CategoryStatsMode | undefined): CategoryStatsMode {
-  return value !== undefined && VALID_STATS_MODES.includes(value) ? value : 'counted'
-}
+// optionsMapping 正規化）；白名單與正規化邏輯集中於 lib/statsMode.ts，
+// 查無對應或非法值一律視為 counted，寧可多算也不誤落入其他分支。
+import { normalizeStatsMode as resolveStatsMode } from './statsMode.js'
 
 export interface WorkloadScheduleInput {
   category: string
