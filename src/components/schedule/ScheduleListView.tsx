@@ -12,6 +12,19 @@ import type { Schedule, Role, OptionsMap } from '../../types'
 const LIST_ROW_H = 36
 const VIRTUAL_BUFFER = 10
 
+// 純函式：把（可能過期的）可視範圍收斂到目前列數之內。
+// 篩選條件縮小 schedules 後，舊的 start/end 可能整段落在新列表之外，
+// 若不收斂會讓 padTop 撐出一大段空白（詳見本檔案的測試）。
+export function clampRange(
+  range: { start: number; end: number },
+  rowCount: number,
+): { start: number; end: number } {
+  if (rowCount <= 0) return { start: 0, end: 0 }
+  const end = Math.min(range.end, rowCount)
+  const start = Math.min(Math.max(0, range.start), end)
+  return { start, end }
+}
+
 interface Props {
   schedules: Schedule[]
   role: Role | null
@@ -48,13 +61,29 @@ export default function ScheduleListView({
     return () => window.removeEventListener('resize', updateVisibleRange)
   }, [updateVisibleRange])
 
+  // 篩選條件改變列數時（例如從 1000 列篩到 10 列），舊的 scrollTop 可能已經
+  // 超出新內容的高度，讓使用者停在一片空白裡且不會自行更新。這裡把捲動位置
+  // 收回新內容範圍內，並重新計算可視範圍。
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const maxScrollTop = Math.max(0, schedules.length * LIST_ROW_H - el.clientHeight)
+    if (el.scrollTop > maxScrollTop) {
+      el.scrollTop = maxScrollTop
+    }
+    updateVisibleRange()
+  }, [schedules.length, updateVisibleRange])
+
   if (schedules.length === 0) {
     return <div className="p-10 text-center text-gray-400 text-sm">無符合篩選條件的排程</div>
   }
 
-  const visible = schedules.slice(visibleRange.start, visibleRange.end)
-  const padTop = visibleRange.start * LIST_ROW_H
-  const padBottom = Math.max(0, (schedules.length - visibleRange.end) * LIST_ROW_H)
+  // 即使上面的 effect 還沒跑到，render 當下也不能讓過期的 visibleRange
+  // 產生超出實際列數的 padTop/padBottom（哪怕只是一個 frame）。
+  const { start: rangeStart, end: rangeEnd } = clampRange(visibleRange, schedules.length)
+  const visible = schedules.slice(rangeStart, rangeEnd)
+  const padTop = rangeStart * LIST_ROW_H
+  const padBottom = Math.max(0, (schedules.length - rangeEnd) * LIST_ROW_H)
 
   return (
     <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto" onScroll={updateVisibleRange}>
@@ -71,7 +100,7 @@ export default function ScheduleListView({
         <tbody>
           {padTop > 0 && <tr style={{ height: padTop }}><td colSpan={HEADERS.length} /></tr>}
           {visible.map((s, sliceIdx) => {
-            const i = visibleRange.start + sliceIdx
+            const i = rangeStart + sliceIdx
             const status = computeStatus(s)
             const statusColor = STATUS_COLORS[status]
             const unitColor = resolveUnitColor(s.testUnit, options)
