@@ -8,6 +8,7 @@ import { STATUS_COLORS, OVERFLOW_COLOR, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../../lib/colors'
 import { computeStatus } from '../../lib/status'
 import { schedulesToTsv, schedulesToHtmlTable } from '../../lib/clipboardTable'
+import { copyTableToClipboard } from '../../lib/copyToClipboard'
 import { isRestDay } from '../../lib/restDays'
 import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
 import { ScheduleFormModal } from './ScheduleFormModal'
@@ -387,29 +388,18 @@ export function GanttChart({
 
         // 同時放上 text/plain（TSV）與 text/html（<table>）兩種表示法，讓貼上的
         // 應用程式各自選用看得懂的格式：Excel／Google 試算表吃 TSV 還原成欄位，
-        // Word／Outlook／Google Docs 吃 HTML 還原成真正的表格。
-        // ClipboardItem／navigator.clipboard.write 並非所有環境都有，且 write
-        // 可能在 writeText 會成功的情況下 reject，因此這裡失敗時退回只寫 TSV
-        // 的舊行為，確保既有的試算表貼上體驗不會因為這次新增而退步。
-        try {
-          if (typeof ClipboardItem === 'undefined' || !navigator.clipboard.write) {
-            throw new Error('ClipboardItem unsupported')
-          }
-          await navigator.clipboard.write([
-            new ClipboardItem({
-              'text/plain': new Blob([tsv], { type: 'text/plain' }),
-              'text/html': new Blob([html], { type: 'text/html' }),
-            }),
-          ])
-        } catch {
-          await navigator.clipboard.writeText(tsv)
-        }
+        // Word／Outlook／Google Docs 吃 HTML 還原成真正的表格。三層退回（含
+        // 非安全來源可用的 execCommand 舊版路徑）交給 copyTableToClipboard，
+        // 這裡只負責準備兩種表示法與顯示結果提示。
+        const ok = await copyTableToClipboard(tsv, html)
+        if (!ok) throw new Error('copyTableToClipboard failed')
 
         setCopyNotice({ kind: 'success', text: `已複製 ${filtered.length} 筆到剪貼簿` })
       } catch {
-        // navigator.clipboard.writeText 在非安全來源（非 HTTPS/localhost）或權限被拒時會 reject，
-        // 需求明確要求「顯示提示而非無聲失敗」
-        setCopyNotice({ kind: 'error', text: '複製失敗，請確認瀏覽器剪貼簿權限或改用 HTTPS 連線' })
+        // 三層（Clipboard API 兩種寫法 + execCommand 舊版路徑）都失敗或不可用時才會到這裡，
+        // 需求明確要求「顯示提示而非無聲失敗」。HTTP 環境現在也有 execCommand 這條退路，
+        // 因此不再把矛頭指向「改用 HTTPS」，而是引導使用者檢查瀏覽器層級的複製權限。
+        setCopyNotice({ kind: 'error', text: '複製失敗，請確認瀏覽器是否允許此網站存取剪貼簿' })
       }
     }
     copyNoticeTimer.current = setTimeout(() => setCopyNotice(null), 4000)
