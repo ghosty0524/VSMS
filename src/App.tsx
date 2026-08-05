@@ -5,6 +5,7 @@ import { useUIStore } from './store/uiStore'
 import { LoginPage } from './components/layout/LoginPage'
 import { ProtectedLayout } from './components/ProtectedLayout'
 import { SessionExpiryWarning } from './components/shared/SessionExpiryWarning'
+import { StaleBuildBanner } from './components/shared/StaleBuildBanner'
 import { LoadingScreen } from './components/shared/LoadingScreen'
 import { Header } from './components/layout/Header'
 import { GanttChart } from './components/schedule/GanttChart'
@@ -73,6 +74,7 @@ export function App() {
           )}
         </main>
         <SessionExpiryWarning />
+        <StaleBuildBanner />
       </div>
     </ProtectedLayout>
   )
