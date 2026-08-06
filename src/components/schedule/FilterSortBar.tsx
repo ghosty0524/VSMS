@@ -7,7 +7,13 @@ import {
   Bookmark, ShieldCheck,
 } from 'lucide-react'
 import { useOptionsStore } from '../../store/optionsStore'
+import { useScheduleStore } from '../../store/scheduleStore'
 import { MultiSelectDropdown } from '../shared/MultiSelectDropdown'
+import {
+  buildFilterOptions, buildInactiveValueSet,
+  buildEngineerFilterOptions, buildEngineerInactiveValueSet,
+  buildOptionLabels,
+} from '../../lib/filterOptions'
 import type { ScheduleStatus } from '../../lib/status'
 import type { Role } from '../../types'
 
@@ -105,6 +111,7 @@ interface Props {
 
 export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, role, groupBy = 'engineer' }: Props) {
   const { options } = useOptionsStore()
+  const { schedules } = useScheduleStore()
   const [addOpen, setAddOpen] = useState(false)
   const addRef = useRef<HTMLDivElement>(null)
 
@@ -118,13 +125,20 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
     return () => document.removeEventListener('mousedown', handler)
   }, [addOpen])
 
-  const cats = options.categories.filter(c => c.isActive).map(c => c.value)
-  const units = options.testUnits.filter(u => u.isActive).map(u => u.value)
-  const engineers = Array.from(new Set(
-    options.testUnits
-      .filter(u => value.testUnits.length === 0 || value.testUnits.includes(u.value))
-      .flatMap(u => u.engineers.filter(e => e.isActive).map(e => e.value))
-  ))
+  // 選項清單 = 啟用中的設定 ∪ 排程資料中實際出現的值（含已停用/孤兒值），
+  // 這樣停用工作類別／測試單位／測試人員只會影響新增/編輯表單，
+  // 不會讓既有排程從篩選器中消失（停用者以「（已停用）」標示）。
+  const cats = buildFilterOptions(options.categories, schedules.map(s => s.category))
+  const catLabels = buildOptionLabels(cats, buildInactiveValueSet(options.categories))
+
+  const units = buildFilterOptions(options.testUnits, schedules.map(s => s.testUnit))
+  const unitLabels = buildOptionLabels(units, buildInactiveValueSet(options.testUnits))
+
+  const engineers = buildEngineerFilterOptions(options.testUnits, schedules, value.testUnits)
+  const engineerLabels = buildOptionLabels(
+    engineers,
+    buildEngineerInactiveValueSet(options.testUnits, value.testUnits),
+  )
 
   const set = (patch: Partial<FilterSortState>) => onChange({ ...value, ...patch })
 
@@ -207,11 +221,11 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
 
           {/* ═══ 第一排：篩選條件 ═══ */}
           <div className="flex flex-wrap gap-x-3 gap-y-2 items-end">
-            <MultiSelectDropdown label="工作類別" options={cats}
+            <MultiSelectDropdown label="工作類別" options={cats} optionLabels={catLabels}
               selected={value.categories} onChange={categories => set({ categories })} />
-            <MultiSelectDropdown label="測試單位" options={units}
+            <MultiSelectDropdown label="測試單位" options={units} optionLabels={unitLabels}
               selected={value.testUnits} onChange={testUnits => set({ testUnits, testEngineers: [] })} />
-            <MultiSelectDropdown label="測試人員" options={engineers}
+            <MultiSelectDropdown label="測試人員" options={engineers} optionLabels={engineerLabels}
               selected={value.testEngineers} onChange={testEngineers => set({ testEngineers })} />
             <MultiSelectDropdown label="狀態" options={ALL_STATUSES}
               selected={value.statuses} onChange={statuses => set({ statuses: statuses as ScheduleStatus[] })} />

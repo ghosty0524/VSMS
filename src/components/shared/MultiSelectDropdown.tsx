@@ -6,9 +6,12 @@ interface Props {
   selected: string[]
   onChange: (v: string[]) => void
   minWidth?: number
+  /** 選填：value → 顯示文字對照表（例如已停用項目加註「（已停用）」）。
+   *  只影響顯示文字，比對／勾選／onChange 一律仍用原始 value。 */
+  optionLabels?: Record<string, string>
 }
 
-export function MultiSelectDropdown({ label, options, selected, onChange, minWidth = 130 }: Props) {
+export function MultiSelectDropdown({ label, options, selected, onChange, minWidth = 130, optionLabels }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -54,7 +57,7 @@ export function MultiSelectDropdown({ label, options, selected, onChange, minWid
                   checked={selected.includes(opt)}
                   onChange={() => toggle(opt)}
                 />
-                {opt}
+                {optionLabels?.[opt] ?? opt}
               </label>
             ))}
           </div>

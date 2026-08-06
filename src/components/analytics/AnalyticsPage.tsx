@@ -3,6 +3,7 @@ import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { computeStatus } from '../../lib/status'
 import { splitByStatsMode } from '../../lib/analytics'
+import { buildFilterOptions, buildInactiveValueSet, buildOptionLabels } from '../../lib/filterOptions'
 import { CATEGORY_COLORS } from '../../constants'
 import KpiSection from './KpiSection'
 import TrendSection from './TrendSection'
@@ -42,9 +43,12 @@ interface MultiSelectProps {
   options: string[]
   selected: string[]
   onChange: (val: string[]) => void
+  /** 選填：value → 顯示文字對照表（例如已停用項目加註「（已停用）」）。
+   *  只影響顯示文字，比對／勾選／onChange 一律仍用原始 value。 */
+  optionLabels?: Record<string, string>
 }
 
-function MultiSelect({ label, options, selected, onChange }: MultiSelectProps) {
+function MultiSelect({ label, options, selected, onChange, optionLabels }: MultiSelectProps) {
   const [open, setOpen] = useState(false)
   const isAll = selected.length === 0
 
@@ -98,7 +102,7 @@ function MultiSelect({ label, options, selected, onChange }: MultiSelectProps) {
                 className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 text-gray-700"
               >
                 <span className="w-3">{selected.includes(opt) ? '✓' : ''}</span>
-                {opt}
+                {optionLabels?.[opt] ?? opt}
               </button>
             ))}
           </div>
@@ -113,25 +117,60 @@ const AnalyticsPage: React.FC = () => {
   const { options } = useOptionsStore()
   const [filter, setFilter] = useState<AnalyticsFilter>(emptyFilter)
 
+  // ── 篩選下拉的選項清單 ──────────────────────────────
+  // 選項清單 = 啟用中的設定 ∪ 排程資料中實際出現的值（含已停用/孤兒值），
+  // 這樣停用工作類別／測試單位／測試人員只會影響新增/編輯表單，
+  // 不會讓既有排程從篩選器中消失（停用者以「（已停用）」標示）。
+  // 工作類別／測試單位改名時 value 會跟著 label 同步更新（見 optionsStore.ts
+  // updateCategory / updateTestUnit），因此兩者恆相等，用 label 當 value 建選項是安全的。
+  const categoryConfigured = useMemo(
+    () => options.categories.map(c => ({ value: c.label, isActive: c.isActive })),
+    [options.categories]
+  )
+  const categoryFilterOptions = useMemo(
+    () => buildFilterOptions(categoryConfigured, schedules.map(s => s.category)).sort(),
+    [categoryConfigured, schedules]
+  )
+  const categoryFilterLabels = useMemo(
+    () => buildOptionLabels(categoryFilterOptions, buildInactiveValueSet(categoryConfigured)),
+    [categoryFilterOptions, categoryConfigured]
+  )
+
+  // 圖表用的類別清單（colorOf 配色 / TrendSection / LoadSection）維持只取啟用中類別，
+  // 與篩選下拉的選項清單分開計算，避免停用類別的配色/圖表分組跟著意外改變。
   const categoryOptions = useMemo(
     () => options.categories.filter(c => c.isActive).map(c => c.label).sort(),
     [options.categories]
   )
-  const unitOptions = useMemo(
-    () => options.testUnits.filter(u => u.isActive).map(u => u.label).sort(),
+
+  const unitConfigured = useMemo(
+    () => options.testUnits.map(u => ({ value: u.label, isActive: u.isActive })),
     [options.testUnits]
   )
+  const unitOptions = useMemo(
+    () => buildFilterOptions(unitConfigured, schedules.map(s => s.testUnit)).sort(),
+    [unitConfigured, schedules]
+  )
+  const unitLabels = useMemo(
+    () => buildOptionLabels(unitOptions, buildInactiveValueSet(unitConfigured)),
+    [unitOptions, unitConfigured]
+  )
+
   // ★ finding 3：s.testEngineer 存的是 value，改名後 value 不再等於 label
   // （比照 FilterSortBar.tsx 的 testEngineers 篩選，同樣以 value 建立選項），
   // 否則改名後這裡選的是舊 label，比對 filtered 時永遠對不到任何排程。
-  const engineerOptions = useMemo(
-    () => options.testUnits
-      .flatMap(u => u.engineers)
-      .filter(e => e.isActive)
-      .map(e => e.value)
-      .filter((v, i, arr) => arr.indexOf(v) === i)
-      .sort(),
+  // 此處不依 filter.testUnits narrow（與 FilterSortBar 不同，維持原有全單位範圍）。
+  const engineerConfigured = useMemo(
+    () => options.testUnits.flatMap(u => u.engineers),
     [options.testUnits]
+  )
+  const engineerOptions = useMemo(
+    () => buildFilterOptions(engineerConfigured, schedules.map(s => s.testEngineer)).sort(),
+    [engineerConfigured, schedules]
+  )
+  const engineerLabels = useMemo(
+    () => buildOptionLabels(engineerOptions, buildInactiveValueSet(engineerConfigured)),
+    [engineerOptions, engineerConfigured]
   )
 
   // 顏色跟著類別走（啟用類別清單索引），篩選不重排
@@ -164,11 +203,11 @@ const AnalyticsPage: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-lg font-bold text-gray-800 mr-2">統計分析</h2>
           <span className="text-xs text-gray-500">篩選</span>
-          <MultiSelect label="工作類別" options={categoryOptions}
+          <MultiSelect label="工作類別" options={categoryFilterOptions} optionLabels={categoryFilterLabels}
             selected={filter.categories} onChange={v => setFilter({ ...filter, categories: v })} />
-          <MultiSelect label="測試單位" options={unitOptions}
+          <MultiSelect label="測試單位" options={unitOptions} optionLabels={unitLabels}
             selected={filter.testUnits} onChange={v => setFilter({ ...filter, testUnits: v })} />
-          <MultiSelect label="測試人員" options={engineerOptions}
+          <MultiSelect label="測試人員" options={engineerOptions} optionLabels={engineerLabels}
             selected={filter.testEngineers} onChange={v => setFilter({ ...filter, testEngineers: v })} />
           <MultiSelect label="排程狀態" options={STATUS_OPTIONS}
             selected={filter.statuses} onChange={v => setFilter({ ...filter, statuses: v })} />
