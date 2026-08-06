@@ -12,7 +12,7 @@ import { MultiSelectDropdown } from '../shared/MultiSelectDropdown'
 import {
   buildFilterOptions, buildInactiveValueSet,
   buildEngineerFilterOptions, buildEngineerInactiveValueSet,
-  buildOptionLabels,
+  buildOptionLabels, buildLabelByValue, buildEngineerLabelByValue,
 } from '../../lib/filterOptions'
 import type { ScheduleStatus } from '../../lib/status'
 import type { Role } from '../../types'
@@ -129,15 +129,24 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
   // 這樣停用工作類別／測試單位／測試人員只會影響新增/編輯表單，
   // 不會讓既有排程從篩選器中消失（停用者以「（已停用）」標示）。
   const cats = buildFilterOptions(options.categories, schedules.map(s => s.category))
-  const catLabels = buildOptionLabels(cats, buildInactiveValueSet(options.categories))
+  const catLabels = buildOptionLabels(
+    cats,
+    buildInactiveValueSet(options.categories),
+    buildLabelByValue(options.categories),
+  )
 
   const units = buildFilterOptions(options.testUnits, schedules.map(s => s.testUnit))
-  const unitLabels = buildOptionLabels(units, buildInactiveValueSet(options.testUnits))
+  const unitLabels = buildOptionLabels(
+    units,
+    buildInactiveValueSet(options.testUnits),
+    buildLabelByValue(options.testUnits),
+  )
 
   const engineers = buildEngineerFilterOptions(options.testUnits, schedules, value.testUnits)
   const engineerLabels = buildOptionLabels(
     engineers,
     buildEngineerInactiveValueSet(options.testUnits, value.testUnits),
+    buildEngineerLabelByValue(options.testUnits, value.testUnits),
   )
 
   const set = (patch: Partial<FilterSortState>) => onChange({ ...value, ...patch })

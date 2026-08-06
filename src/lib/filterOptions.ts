@@ -10,24 +10,38 @@
 
 export interface ConfiguredOption {
   value: string
+  /** 目前的顯示名稱。engineers 改名只更新這個欄位，value（識別碼）維持不變，
+   *  好讓既有排程的參照不因改名而失效——見 buildOptionLabels。 */
+  label?: string
   isActive: boolean
 }
 
 /**
  * 選項清單 = 啟用中的設定值 ∪ 資料中實際使用的值（含孤兒值），去重。
+ *
+ * 順序：啟用中的設定值依 configured 原始順序排在前面（使用者依賴這個順序，
+ * 通常對應設定頁的排序）；後面附加的非設定值（已停用 + 孤兒值）沒有既定順序
+ * 可循——用掃描 usedValues 的先後順序並不穩定（隨資料變動而變），因此改用
+ * 字典序排序，確保兩個呼叫端（FilterSortBar／AnalyticsPage）給出一致、
+ * 可預期的結果。
  */
 export function buildFilterOptions(
   configured: ConfiguredOption[],
   usedValues: Iterable<string>,
 ): string[] {
-  const result = new Set<string>()
+  const activeValues: string[] = []
+  const known = new Set<string>()
   for (const o of configured) {
-    if (o.isActive) result.add(o.value)
+    if (o.isActive && !known.has(o.value)) {
+      activeValues.push(o.value)
+      known.add(o.value)
+    }
   }
+  const appended = new Set<string>()
   for (const v of usedValues) {
-    if (v) result.add(v)
+    if (v && !known.has(v)) appended.add(v)
   }
-  return Array.from(result)
+  return [...activeValues, ...Array.from(appended).sort()]
 }
 
 /**
@@ -81,13 +95,45 @@ export function buildEngineerInactiveValueSet(
 }
 
 /**
- * 由選項清單 + 停用值集合，組出給 MultiSelectDropdown/MultiSelect 用的
- * 顯示標籤對照表：停用值加註「（已停用）」，其餘（含孤兒值）維持原樣。
+ * value → 目前 label 的對照表。用於改名場景：schedule 上存的是穩定的 value，
+ * 改名（例如測試人員改名）只更新 label，value 不變，藉此保留既有排程的參照。
+ * 沒有 label（或不在 configured 中的孤兒值）的項目不會出現在這個表裡，
+ * 交由 buildOptionLabels 退回原始 value。
  */
-export function buildOptionLabels(options: string[], inactive: Set<string>): Record<string, string> {
+export function buildLabelByValue(configured: ConfiguredOption[]): Record<string, string> {
+  const labels: Record<string, string> = {}
+  for (const o of configured) {
+    if (o.label) labels[o.value] = o.label
+  }
+  return labels
+}
+
+/** buildLabelByValue 的測試人員版本：同樣先依選取單位 narrow 設定來源。 */
+export function buildEngineerLabelByValue(
+  testUnits: EngineerHolder[],
+  selectedUnits: string[],
+): Record<string, string> {
+  const narrowedUnits = testUnits.filter(
+    u => selectedUnits.length === 0 || selectedUnits.includes(u.value),
+  )
+  return buildLabelByValue(narrowedUnits.flatMap(u => u.engineers))
+}
+
+/**
+ * 由選項清單 + 停用值集合，組出給 MultiSelectDropdown/MultiSelect 用的
+ * 顯示標籤對照表：顯示文字優先採用該選項「目前的 label」（例如人員改名後的
+ * 新名字），沒有對應設定（孤兒值）才退回原始 value；停用值再加註「（已停用）」。
+ * 比對／勾選／onChange 一律仍用原始 value——labelByValue 只影響顯示文字。
+ */
+export function buildOptionLabels(
+  options: string[],
+  inactive: Set<string>,
+  labelByValue: Record<string, string> = {},
+): Record<string, string> {
   const labels: Record<string, string> = {}
   for (const v of options) {
-    labels[v] = inactive.has(v) ? `${v}（已停用）` : v
+    const current = labelByValue[v] ?? v
+    labels[v] = inactive.has(v) ? `${current}（已停用）` : current
   }
   return labels
 }

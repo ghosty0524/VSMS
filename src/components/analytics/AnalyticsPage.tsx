@@ -3,7 +3,7 @@ import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { computeStatus } from '../../lib/status'
 import { splitByStatsMode } from '../../lib/analytics'
-import { buildFilterOptions, buildInactiveValueSet, buildOptionLabels } from '../../lib/filterOptions'
+import { buildFilterOptions, buildInactiveValueSet, buildOptionLabels, buildLabelByValue } from '../../lib/filterOptions'
 import { CATEGORY_COLORS } from '../../constants'
 import KpiSection from './KpiSection'
 import TrendSection from './TrendSection'
@@ -124,15 +124,22 @@ const AnalyticsPage: React.FC = () => {
   // 工作類別／測試單位改名時 value 會跟著 label 同步更新（見 optionsStore.ts
   // updateCategory / updateTestUnit），因此兩者恆相等，用 label 當 value 建選項是安全的。
   const categoryConfigured = useMemo(
-    () => options.categories.map(c => ({ value: c.label, isActive: c.isActive })),
+    () => options.categories.map(c => ({ value: c.label, label: c.label, isActive: c.isActive })),
     [options.categories]
   )
+  // 排序交給 buildFilterOptions 內部處理（啟用中選項依設定順序在前、
+  // 其餘非設定值以穩定順序附加在後），這裡不再額外 .sort()，
+  // 才能跟 FilterSortBar.tsx 給出一致、可預期的順序。
   const categoryFilterOptions = useMemo(
-    () => buildFilterOptions(categoryConfigured, schedules.map(s => s.category)).sort(),
+    () => buildFilterOptions(categoryConfigured, schedules.map(s => s.category)),
     [categoryConfigured, schedules]
   )
   const categoryFilterLabels = useMemo(
-    () => buildOptionLabels(categoryFilterOptions, buildInactiveValueSet(categoryConfigured)),
+    () => buildOptionLabels(
+      categoryFilterOptions,
+      buildInactiveValueSet(categoryConfigured),
+      buildLabelByValue(categoryConfigured),
+    ),
     [categoryFilterOptions, categoryConfigured]
   )
 
@@ -144,15 +151,19 @@ const AnalyticsPage: React.FC = () => {
   )
 
   const unitConfigured = useMemo(
-    () => options.testUnits.map(u => ({ value: u.label, isActive: u.isActive })),
+    () => options.testUnits.map(u => ({ value: u.label, label: u.label, isActive: u.isActive })),
     [options.testUnits]
   )
   const unitOptions = useMemo(
-    () => buildFilterOptions(unitConfigured, schedules.map(s => s.testUnit)).sort(),
+    () => buildFilterOptions(unitConfigured, schedules.map(s => s.testUnit)),
     [unitConfigured, schedules]
   )
   const unitLabels = useMemo(
-    () => buildOptionLabels(unitOptions, buildInactiveValueSet(unitConfigured)),
+    () => buildOptionLabels(
+      unitOptions,
+      buildInactiveValueSet(unitConfigured),
+      buildLabelByValue(unitConfigured),
+    ),
     [unitOptions, unitConfigured]
   )
 
@@ -165,11 +176,15 @@ const AnalyticsPage: React.FC = () => {
     [options.testUnits]
   )
   const engineerOptions = useMemo(
-    () => buildFilterOptions(engineerConfigured, schedules.map(s => s.testEngineer)).sort(),
+    () => buildFilterOptions(engineerConfigured, schedules.map(s => s.testEngineer)),
     [engineerConfigured, schedules]
   )
   const engineerLabels = useMemo(
-    () => buildOptionLabels(engineerOptions, buildInactiveValueSet(engineerConfigured)),
+    () => buildOptionLabels(
+      engineerOptions,
+      buildInactiveValueSet(engineerConfigured),
+      buildLabelByValue(engineerConfigured),
+    ),
     [engineerOptions, engineerConfigured]
   )
 
