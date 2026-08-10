@@ -88,6 +88,12 @@ export function analyzeWorkload(opts: {
 }): WorkloadResult {
   const { month, schedules, overtime } = opts
   const holidays = new Set(opts.holidays ?? [])
+  // 加班來源（SPM ABS）的 LOGONID 是全大寫（WILL_WANG），testEngineer 則是
+  // Will_Wang。以正規化後的 key 查表，否則加班加分會靜默失效——不報錯，
+  // 只是所有人都拿不到加分。C# 版對應 StringComparer.OrdinalIgnoreCase。
+  const overtimeByName = overtime
+    ? new Map(Object.entries(overtime).map(([k, v]) => [k.toLowerCase(), v]))
+    : undefined
   const statsModes = opts.statsModes ?? {}
 
   const [y, m] = month.split('-').map(Number)
@@ -153,7 +159,7 @@ export function analyzeWorkload(opts: {
       if (raw >= DAILY_CAP) cappedDays++
     }
 
-    const overtimeHours = overtime && name in overtime ? overtime[name] : null
+    const overtimeHours = overtimeByName?.get(name.toLowerCase()) ?? null
     const overtimeBonus = overtimeHours === null ? null : round2(overtimeHours / OVERTIME_HOURS_PER_POINT)
     const limitations = [...acc.limitations]
     if (overtimeBonus === null) {
@@ -179,6 +185,10 @@ export function analyzeWorkload(opts: {
     }
   })
 
-  engineers.sort((a, b) => b.rate - a.rate)
+  // rate 相同時以姓名序數決勝負。少了這個 tie-break，兩邊的排序實作差異
+  // （JS sort 穩定、C# List.Sort 不穩定）會讓同分者的順序不一致。
+  engineers.sort(
+    (a, b) => b.rate - a.rate || (a.testEngineer < b.testEngineer ? -1 : a.testEngineer > b.testEngineer ? 1 : 0),
+  )
   return { month, workdays: monthWorkdays.length, engineers }
 }

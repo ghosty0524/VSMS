@@ -194,8 +194,9 @@ router.get('/engineers', requireApiKey, async (req, res) => {
     include: { engineers: { orderBy: { sortOrder: 'asc' } } },
     orderBy: { sortOrder: 'asc' },
   })
+  // value 是排程存的穩定識別碼、label 是顯示名稱；2026-08-04 起改名只動 label。
   const roster: EngineerRecord[] = units.flatMap(u =>
-    u.engineers.map(e => ({ name: e.value, testUnit: u.value, isActive: e.isActive })),
+    u.engineers.map(e => ({ name: e.value, label: e.label, testUnit: u.value, isActive: e.isActive })),
   )
 
   // 名冊與排程可能不同步（例如手動改過 testEngineer）。補上只出現在排程裡的
@@ -218,7 +219,13 @@ router.get('/engineers', requireApiKey, async (req, res) => {
   if (!q) {
     res.json(
       roster
-        .map(r => ({ name: r.name, testUnit: r.testUnit ?? null, isActive: r.isActive ?? true, matchType: null }))
+        .map(r => ({
+          name: r.name,
+          label: r.label ?? r.name,
+          testUnit: r.testUnit ?? null,
+          isActive: r.isActive ?? true,
+          matchType: null,
+        }))
         .sort((a, b) => compareOrdinal(a.name, b.name)),
     )
     return

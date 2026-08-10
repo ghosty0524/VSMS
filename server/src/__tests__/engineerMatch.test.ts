@@ -15,6 +15,41 @@ const ROSTER: EngineerRecord[] = [
 
 const names = (rows: { name: string }[]) => rows.map(r => r.name)
 
+// 2026-08-04 起人員改名只更新 label、value 保持不變，兩者自此可能不同。
+// value 是排程實際存的識別碼，label 是使用者在畫面上看到的名字。
+describe('matchEngineers 顯示名稱（label）', () => {
+  const RENAMED: EngineerRecord[] = [
+    { name: 'Darius_Chang', label: 'Darius_Chang', testUnit: 'RA' },
+    { name: 'Willie_Lin', label: 'Wilson_Lin', testUnit: 'EMC' }, // 已改名
+  ]
+
+  it('以改名後的顯示名稱查得到', () => {
+    const r = matchEngineers(RENAMED, 'wilson')
+    expect(names(r)).toEqual(['Willie_Lin'])
+    expect(r[0].matchType).toBe('firstName')
+  })
+
+  it('以原本的 value 仍查得到', () => {
+    expect(names(matchEngineers(RENAMED, 'willie'))).toEqual(['Willie_Lin'])
+  })
+
+  it('回傳同時帶 name 與 label，讓呼叫端查詢用 name、顯示用 label', () => {
+    const r = matchEngineers(RENAMED, 'wilson')
+    expect(r[0].name).toBe('Willie_Lin')
+    expect(r[0].label).toBe('Wilson_Lin')
+  })
+
+  it('value 與 label 都相符時取較強的比對', () => {
+    // value 為完整相符（exact）、label 僅前綴相符 → 應取 exact
+    const rows: EngineerRecord[] = [{ name: 'Amy_Ko', label: 'Amyrose_Ko', testUnit: 'RA' }]
+    expect(matchEngineers(rows, 'amy_ko')[0].matchType).toBe('exact')
+  })
+
+  it('未提供 label 時 label 等於 name', () => {
+    expect(matchEngineers(ROSTER, 'darius')[0].label).toBe('Darius_Chang')
+  })
+})
+
 describe('matchEngineers 完全相符', () => {
   it('忽略大小寫比對完整姓名', () => {
     expect(names(matchEngineers(ROSTER, 'darius_chang'))).toEqual(['Darius_Chang'])

@@ -128,6 +128,9 @@ paths:
         another person's data (e.g. "will" overlaps Will_Wang / William_Wu / Willie_Lin).
         Results are the roster (engineers table) unioned with any name that appears in
         schedules, so historical engineers stay resolvable.
+        Since 2026-08-04 renaming an engineer only changes `label`; `value` (returned as
+        `name`) stays fixed as the identifier schedules reference. Both are matched, so a
+        renamed engineer is findable by either the old identifier or the new display name.
       parameters:
         - in: query
           name: q
@@ -151,6 +154,7 @@ paths:
                   type: object
                   properties:
                     name:     { type: string, description: 'Canonical value; use verbatim as testEngineer' }
+                    label:    { type: string, description: 'Display name; show this to the user. Equals name unless the engineer was renamed' }
                     testUnit: { type: string, nullable: true }
                     isActive: { type: boolean, description: 'false = has left; still appears in past schedules' }
                     matchType:

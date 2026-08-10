@@ -259,3 +259,50 @@ describe('類別統計模式對負載分析的影響', () => {
     expect(notes.some(l => l.includes('教育訓練2'))).toBe(true)
   })
 })
+
+describe('engineers 排序', () => {
+  it('rate 相同時依姓名序數排序，避免與 C# 版順序不一致', () => {
+    // 刻意讓插入順序（Zoe 先）與期望順序（Amy 先）相反：
+    // 沒有 tie-break 時 JS 的穩定排序會保留 Zoe 在前，C# 的 List.Sort 則不保證。
+    const r = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ testEngineer: 'Zoe_Wu' }), sched({ testEngineer: 'Amy_Lin' })],
+    })
+    expect(r.engineers[0].rate).toBe(r.engineers[1].rate)
+    expect(r.engineers.map(e => e.testEngineer)).toEqual(['Amy_Lin', 'Zoe_Wu'])
+  })
+})
+
+describe('加班姓名比對', () => {
+  // SPM ABS 的 LOGONID 是全大寫（WILL_WANG），但 testEngineer 是 Will_Wang。
+  // 比對若區分大小寫，加班加分會靜默失效——不會報錯，只是所有人都沒加分。
+  it('不分大小寫比對工程師姓名', () => {
+    const r = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ testEngineer: 'Will_Wang' })],
+      overtime: { WILL_WANG: 12 },
+    })
+    expect(r.engineers[0].overtimeHours).toBe(12)
+    expect(r.engineers[0].overtimeBonus).toBe(2) // 12 ÷ 6
+  })
+
+  it('查無加班紀錄時仍回報 limitations', () => {
+    const r = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ testEngineer: 'Will_Wang' })],
+      overtime: { SOMEONE_ELSE: 12 },
+    })
+    expect(r.engineers[0].overtimeHours).toBeNull()
+    expect(r.engineers[0].limitations).toContain('查無加班紀錄，總分未含加班加分')
+  })
+
+  it('加班時數為 0 時視為有紀錄，不是查無', () => {
+    const r = analyzeWorkload({
+      month: MONTH,
+      schedules: [sched({ testEngineer: 'Will_Wang' })],
+      overtime: { will_wang: 0 },
+    })
+    expect(r.engineers[0].overtimeHours).toBe(0)
+    expect(r.engineers[0].limitations).not.toContain('查無加班紀錄，總分未含加班加分')
+  })
+})

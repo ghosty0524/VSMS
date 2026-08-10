@@ -10,14 +10,20 @@
 export type MatchType = 'exact' | 'firstName' | 'lastName' | 'prefix' | 'contains'
 
 export interface EngineerRecord {
+  /** 穩定識別碼，即排程 testEngineer 存的值。改名時不會變動 */
   name: string
+  /** 顯示名稱。人員改名只會改這個；省略時視為與 name 相同 */
+  label?: string | null
   testUnit?: string | null
   /** 省略時視為在職。已停用者仍須查得到——歷史排程會提到他們 */
   isActive?: boolean
 }
 
 export interface EngineerMatch {
+  /** 查詢 testEngineer 時使用這個值 */
   name: string
+  /** 對使用者顯示時使用這個值 */
+  label: string
   testUnit: string | null
   isActive: boolean
   matchType: MatchType
@@ -65,10 +71,18 @@ export function matchEngineers(engineers: EngineerRecord[], query: string): Engi
 
   const scored: EngineerMatch[] = []
   for (const e of engineers) {
-    const matchType = classify(e.name, q)
+    // value 與 label 都要比對：使用者可能用舊識別碼、也可能用改名後的顯示名稱。
+    // 兩者都命中時取較強的那個。
+    const label = e.label ?? e.name
+    const byName = classify(e.name, q)
+    const byLabel = label === e.name ? null : classify(label, q)
+    const matchType =
+      byName && byLabel ? (RANK[byName] <= RANK[byLabel] ? byName : byLabel) : byName ?? byLabel
+
     if (matchType) {
       scored.push({
         name: e.name,
+        label,
         testUnit: e.testUnit ?? null,
         isActive: e.isActive ?? true,
         matchType,
