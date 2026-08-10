@@ -10,6 +10,7 @@ import { computeStatus } from '../../lib/status'
 import { schedulesToTsv, schedulesToHtmlTable } from '../../lib/clipboardTable'
 import { copyTableToClipboard } from '../../lib/copyToClipboard'
 import { isRestDay } from '../../lib/restDays'
+import { matchesKeyword } from '../../lib/scheduleKeywordMatch'
 import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
 import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
@@ -126,6 +127,7 @@ function applyFilter(
   role: Role | null,
   allowedUnits: string[],
   linkedEngineer: string,
+  resolveEngineerLabel: (value: string) => string,
 ): Schedule[] {
   let result = schedules.filter(s => {
     // ★ User 預設只看自己的排程（testEngineer === linkedEngineer）
@@ -137,12 +139,9 @@ function applyFilter(
     if (fs.testUnits.length     && !fs.testUnits.includes(s.testUnit))         return false
     if (fs.testEngineers.length && !fs.testEngineers.includes(s.testEngineer)) return false
     if (fs.statuses.length      && !fs.statuses.includes(computeStatus(s)))    return false
-    if (fs.keyword) {
-      const kw     = fs.keyword.toLowerCase()
-      const target = [s.projectName, s.taskDescription, s.requiredPersonnel, s.testReport]
-        .join(' ').toLowerCase()
-      if (!target.includes(kw)) return false
-    }
+    // ★ 關鍵字比對邏輯（含測試人員 value／label 雙比對）抽到 lib/scheduleKeywordMatch，
+    //   與匯出儀表板的 vanilla JS 複本共用同一份規則說明，見該檔案開頭註解。
+    if (!matchesKeyword(s, fs.keyword, resolveEngineerLabel)) return false
     // ★ 時間篩選：移除與設定範圍無重疊的排程
     if (fs.ganttStart && s.endDate < fs.ganttStart) return false
     if (fs.ganttEnd   && s.startDate > fs.ganttEnd) return false
@@ -355,10 +354,6 @@ export function GanttChart({
     return () => { cancelAnimationFrame(raf); window.removeEventListener('keydown', onKey) }
   }, [isFullscreen, editTarget, deleteTarget, flagPopover, showAddModal, updateVisibleRange])
 
-  const filtered  = applyFilter(schedules, filterSort, role, allowedUnits, linkedEngineer)
-  // guest 唯讀：所有寫入操作（旗標/編輯/刪除）一律隱藏
-  const canWrite  = role === 'super_admin' || role === 'admin'
-
   // 從 options 建立 testEngineer value → 顯示名稱（label）的對照表
   const engineerLabelMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -371,6 +366,11 @@ export function GanttChart({
   }, [options.testUnits])
 
   const engLabel = (value: string) => engineerLabelMap.get(value) ?? value
+
+  // 關鍵字篩選需要 engLabel 解析改名後的顯示名稱，故 engineerLabelMap 定義需在此之前
+  const filtered  = applyFilter(schedules, filterSort, role, allowedUnits, linkedEngineer, engLabel)
+  // guest 唯讀：所有寫入操作（旗標/編輯/刪除）一律隱藏
+  const canWrite  = role === 'super_admin' || role === 'admin'
 
   // 列表模式「複製表格」：把「當前 filtered 陣列的全部資料」（非可視列）同時轉為
   // TSV 與 HTML 表格寫入剪貼簿，這是它存在的唯一理由——虛擬化只渲染可視列 ± 緩衝，

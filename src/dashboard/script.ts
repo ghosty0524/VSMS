@@ -220,8 +220,12 @@ export const DASHBOARD_JS = `
       if (state.testEngineers.length && state.testEngineers.indexOf(s.testEngineer)=== -1) return false;
       if (state.hiddenStatuses.indexOf(computeStatus(s)) !== -1) return false;
       if (state.projectSearch) {
+        // 關鍵字比對邏輯（含測試人員 value／label 雙比對）：與 src/lib/scheduleKeywordMatch.ts
+        // 的 matchesKeyword 同規則之 vanilla JS 複本，匯出的 HTML 需離線運作、無法 import
+        // 該檔，故必須複製邏輯；修改比對規則時請同步更新兩處，保持行為一致。
         var kw  = state.projectSearch.toLowerCase();
-        var txt = (s.projectName+' '+s.taskDescription+' '+s.requiredPersonnel+' '+s.testReport).toLowerCase();
+        var engName = s.testEngineer ? engLabel(s.testEngineer) : '';
+        var txt = (s.projectName+' '+s.taskDescription+' '+s.requiredPersonnel+' '+s.testReport+' '+s.testEngineer+' '+engName).toLowerCase();
         if (txt.indexOf(kw) === -1) return false;
       }
       if (state.startFrom && s.startDate < state.startFrom) return false;
