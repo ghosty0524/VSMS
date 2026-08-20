@@ -126,6 +126,9 @@ model NotifyConfig {
   enabled         Boolean     @default(false)
   teamsWebhookUrl String      @db.VarChar(500) @default("")
   systemUrl       String      @db.VarChar(200) @default("")
+  leadDays        Int         @default(3)
+  catchUpDays     Int         @default(3)
+  mailDomain      String      @db.VarChar(100) @default("")
   recipients      Recipient[]
 
   @@map("notify_config")
@@ -160,4 +163,33 @@ model Device {
   sortOrder Int
 
   @@map("devices")
+}
+
+model NotificationLog {
+  id           String    @id @default(uuid())
+  scheduleId   String    @db.VarChar(36)
+  sendDate     String    @db.VarChar(10)
+  status       String    @db.VarChar(20)
+  recipients   String    @db.Text
+  errorMessage String?   @db.Text
+  attempts     Int       @default(0)
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@unique([scheduleId, sendDate])
+  @@index([sendDate])
+  @@map("notification_logs")
+}
+
+model NotifyRule {
+  id              String   @id @default(uuid())
+  testUnit        String?  @unique @db.VarChar(100)
+  enabled         Boolean  @default(true)
+  subjectTemplate String?  @db.Text
+  introTemplate   String?  @db.Text
+  outroTemplate   String?  @db.Text
+  ccRecipients    String   @db.Text
+  updatedAt       DateTime @updatedAt
+
+  @@map("notify_rules")
 }

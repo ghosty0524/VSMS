@@ -40,6 +40,29 @@ export async function initDb(): Promise<void> {
     update: {},
   })
 
+  // Ensure NotifyConfig singleton（預設關閉，設定齊全前不寄任何信）
+  await prisma.notifyConfig.upsert({
+    where: { id: 1 },
+    create: { id: 1, enabled: false },
+    update: {},
+  })
+
+  // Ensure the default NotifyRule (testUnit = null) exists. resolveRule 沒有它
+  // 就整批不寄信，所以這筆必須永遠在。
+  const defaultRule = await prisma.notifyRule.findFirst({ where: { testUnit: null } })
+  if (!defaultRule) {
+    await prisma.notifyRule.create({
+      data: {
+        testUnit: null,
+        enabled: true,
+        subjectTemplate: '[VSMS 排程預告] {{projectName}} 將於 {{startDate}} 啟動',
+        introTemplate: '您好，以下排程將於 {{daysUntilStart}} 天後啟動：',
+        outroTemplate: '如需異動請至系統確認。',
+        ccRecipients: '',
+      },
+    })
+  }
+
   // Seed default categories/testUnits only if completely empty (fresh install)
   const catCount = await prisma.category.count()
   if (catCount === 0) {
