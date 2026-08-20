@@ -303,7 +303,7 @@ export function computeSendDate(
 
 Run: `npx vitest run --config server/vitest.config.ts server/src/__tests__/notifyDate.test.ts`
 
-Expected: PASS（15 passed）
+Expected: PASS（14 passed）
 
 - [ ] **Step 5: Commit**
 
@@ -1170,7 +1170,7 @@ Expected: 無輸出（exit 0）
 
 Run: `npx vitest run --config server/vitest.config.ts`
 
-Expected: PASS，測試數 101 + 15 + 9 + 13 + 9 + 8 = 155
+Expected: PASS，測試數 101 + 14 + 9 + 13 + 9 + 8 = 154
 
 - [ ] **Step 6: Commit**
 
@@ -2466,7 +2466,7 @@ function startNotifyCron(): void {
 
 Run: `npx vitest run --config server/vitest.config.ts`
 
-Expected: PASS，測試數 155 + 16 + 5 + 5 = 181。輸出中**不得**出現 `[notify] daily notification job scheduled`。
+Expected: PASS，測試數 154 + 16 + 5 + 5 = 180。輸出中**不得**出現 `[notify] daily notification job scheduled`。
 
 Run: `npx tsc -p server/tsconfig.json --noEmit`
 
@@ -3074,7 +3074,7 @@ Expected: 僅出現既有的 9 個錯誤，不得有新增。
 
 Run: `npm run test:all`
 
-Expected: 前端 145 passed、後端 181 passed，全綠。
+Expected: 前端 145 passed、後端 180 passed，全綠。
 
 - [ ] **Step 4: 端對端確認**
 
