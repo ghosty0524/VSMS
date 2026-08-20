@@ -62,6 +62,12 @@ describe('resolveRule', () => {
     expect(resolveRule('EMC', [defaultRule, off])?.enabled).toBe(false)
   })
 
+  it('reports the unit rule as enabled even when the default is disabled', () => {
+    // 上線策略依賴這個組合：預設規則關閉，再逐一開啟單位。
+    const defaultOff: NotifyRuleRow = { ...defaultRule, enabled: false }
+    expect(resolveRule('EMC', [defaultOff, emcRule])?.enabled).toBe(true)
+  })
+
   it('uses the default enabled flag for a unit with no rule of its own', () => {
     const off: NotifyRuleRow = { ...defaultRule, enabled: false }
     expect(resolveRule('RF', [off])?.enabled).toBe(false)
