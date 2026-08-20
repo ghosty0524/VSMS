@@ -2,6 +2,9 @@
 import { prisma } from './db.js'
 import type { AuditAction } from '../types.js'
 
+/** 預設通知規則的固定主鍵 —— 見 initDb 中的說明。 */
+export const DEFAULT_NOTIFY_RULE_ID = 'default'
+
 // ── Audit ────────────────────────────────────────────────────
 export async function appendAudit(
   username: string,
@@ -47,21 +50,28 @@ export async function initDb(): Promise<void> {
     update: {},
   })
 
-  // Ensure the default NotifyRule (testUnit = null) exists. resolveRule 沒有它
-  // 就整批不寄信，所以這筆必須永遠在。
-  const defaultRule = await prisma.notifyRule.findFirst({ where: { testUnit: null } })
-  if (!defaultRule) {
-    await prisma.notifyRule.create({
-      data: {
-        testUnit: null,
-        enabled: true,
-        subjectTemplate: '[VSMS 排程預告] {{projectName}} 將於 {{startDate}} 啟動',
-        introTemplate: '您好，以下排程將於 {{daysUntilStart}} 天後啟動：',
-        outroTemplate: '如需異動請至系統確認。',
-        ccRecipients: '',
-      },
-    })
-  }
+  // 預設通知規則。resolveRule 的沿用鏈終點就是它，缺了整批不寄信。
+  //
+  // 用固定主鍵 upsert 而不是 findFirst-then-create：MySQL 的 UNIQUE 索引把每個
+  // NULL 視為互異，所以 testUnit 上的 UNIQUE 擋不住第二筆 testUnit = NULL。
+  // 主鍵 upsert 會編成 INSERT ... ON DUPLICATE KEY UPDATE，是原子的。
+  await prisma.notifyRule.upsert({
+    where: { id: DEFAULT_NOTIFY_RULE_ID },
+    create: {
+      id: DEFAULT_NOTIFY_RULE_ID,
+      testUnit: null,
+      enabled: true,
+      subjectTemplate: '[VSMS 排程預告] {{projectName}} 將於 {{startDate}} 啟動',
+      introTemplate: '您好，以下排程將於 {{daysUntilStart}} 天後啟動：',
+      outroTemplate: '如需異動請至系統確認。',
+      ccRecipients: '',
+    },
+    update: {},
+  })
+  // 清掉任何非正規的預設規則，讓 resolveRule 的 .find() 不會在不同次啟動挑到不同筆。
+  await prisma.notifyRule.deleteMany({
+    where: { testUnit: null, id: { not: DEFAULT_NOTIFY_RULE_ID } },
+  })
 
   // Seed default categories/testUnits only if completely empty (fresh install)
   const catCount = await prisma.category.count()
