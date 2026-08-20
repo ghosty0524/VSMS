@@ -15,6 +15,7 @@ import usersRouter from './routes/users.js'
 import auditRouter from './routes/audit.js'
 import calendarRouter from './routes/calendar.js'
 import integrationRouter from './routes/integration.js'
+import notifyRouter from './routes/notify.js'
 import { buildVersionRouter } from './routes/build.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -78,6 +79,7 @@ app.use('/api/options', optionsRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/audit', auditRouter)
 app.use('/api/calendar', calendarRouter)
+app.use('/api/notify', notifyRouter)
 app.use('/api/integration', integrationRouter)
 
 // ── Static (serve SPA in production) ──────────────────
