@@ -6,6 +6,7 @@ import { analyzeWorkload } from '../lib/workload.js';
 import { matchEngineers, compareOrdinal, type EngineerRecord } from '../lib/engineerMatch.js';
 import { completedAtPatch } from '../lib/completedAt.js';
 import { normalizeStatsMode } from './optionsMapping.js';
+import { todayTaipei } from '../lib/today.js';
 
 const router = Router();
 
@@ -22,14 +23,6 @@ function qs(val: unknown): string | undefined {
 // callers (agents send ISO dates) and normalise so string comparison lines up.
 function normalizeDate(value: string): string {
   return value.replace(/-/g, '/');
-}
-
-// startDate/endDate are Taiwan-local calendar dates, so "today" has to be the
-// Taiwan date too. Using the UTC date made every comparison a day early between
-// 00:00 and 08:00 Taiwan time, which shifted the overdue / inProgress boundary.
-function todayTaipei(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000)
-    .toISOString().slice(0, 10).replace(/-/g, '/');
 }
 
 /**
