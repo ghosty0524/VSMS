@@ -6,9 +6,10 @@ import { EngineerManager } from './EngineerManager'
 import { RestDaysManager } from './RestDaysManager'
 import { UserManager } from './UserManager'
 import { DeviceManager } from './DeviceManager'
+import { NotifyManager } from './NotifyManager'
 import CalendarImport from './CalendarImport'
 
-type SettingsTab = 'categories' | 'units' | 'engineers' | 'restdays' | 'users' | 'devices'
+type SettingsTab = 'categories' | 'units' | 'engineers' | 'restdays' | 'users' | 'devices' | 'notify'
 
 export function SettingsPage() {
   const { role } = useAuthStore()
@@ -21,6 +22,7 @@ export function SettingsPage() {
     { key: 'engineers',  label: '測試人員' },
     { key: 'restdays',   label: '休息日設定' },
     { key: 'devices',    label: '設備管理' },
+    { key: 'notify',     label: '預告通知' },
     { key: 'users',      label: '帳號管理', superAdminOnly: true },
   ]
 
@@ -61,6 +63,7 @@ export function SettingsPage() {
         {activeTab === 'categories' && <CategoryManager />}
         {activeTab === 'units'      && <TestUnitManager />}
         {activeTab === 'engineers'  && <EngineerManager />}
+        {activeTab === 'notify'     && <NotifyManager />}
 
         {activeTab === 'restdays' && (
           <div className="flex flex-col gap-6">
