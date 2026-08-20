@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
+import type { Request, Response, NextFunction } from 'express'
 import request from 'supertest'
 import { templateFieldErrors } from '../routes/notify.js'
+import { DEFAULT_NOTIFY_RULE_ID } from '../lib/storage.js'
+import { addDays, computeSendDate, daysBetween } from '../lib/notifyDate.js'
+import { todayTaipei } from '../lib/today.js'
 
 describe('templateFieldErrors', () => {
   it('returns no errors when every template is valid', () => {
@@ -69,6 +73,289 @@ describe('notify router guards', () => {
 
     const res = await request(app).put('/api/notify/config').send({ catchUpDays: 0 })
     expect(res.status).toBe(422)
-    expect(res.body.errors.catchUpDays).toBeTruthy()
+    // 訊息本身要講清楚「為什麼」不能是 0（留一天讓失敗的寄送重試），不能只
+    // 是隨便一句泛用錯誤字串 —— 光有錯誤欄位不足以說明原因，管理者看了訊息
+    // 才知道該怎麼改。
+    expect(res.body.errors.catchUpDays).toContain('重試')
+  })
+})
+
+// ── Prisma stub ──────────────────────────────────────────────
+// 正式環境的 DATABASE_URL 指到唯一一份 vsms 資料庫（沒有獨立測試庫），notify
+// 路由又能寄出真信、改掉預設通知規則，絕對不能在測試中打真的 DB 或真的
+// mailer。這裡把 '../lib/db.js' 換成記憶體版 prisma stub —— notify.ts 與
+// storage.ts 的 appendAudit 都從同一個解析後路徑匯入，所以兩邊拿到的是同一份
+// stub。
+interface FakeRule {
+  id: string
+  testUnit: string | null
+  enabled: boolean
+  subjectTemplate: string | null
+  introTemplate: string | null
+  outroTemplate: string | null
+  ccRecipients: string
+}
+
+interface FakeSchedule {
+  id: string
+  projectName: string
+  taskDescription: string
+  category: string
+  testUnit: string
+  testEngineer: string
+  device: string
+  startDate: string
+  endDate: string
+  timeResource: number
+  requiredPersonnel: string
+}
+
+interface FakeConfig {
+  id: number
+  enabled: boolean
+  systemUrl: string
+  leadDays: number
+  catchUpDays: number
+  mailDomain: string
+  teamsWebhookUrl: string
+}
+
+interface FakeState {
+  config: FakeConfig
+  rules: FakeRule[]
+  schedules: FakeSchedule[]
+  restDays: { id: number; weekends: boolean; specificDates: string[] }
+  deletedRuleIds: string[]
+  lastRuleUpdateData: Record<string, unknown> | null
+  lastConfigUpdateData: Record<string, unknown> | null
+}
+
+function makeDefaultState(): FakeState {
+  return {
+    config: { id: 1, enabled: true, systemUrl: '', leadDays: 3, catchUpDays: 3, mailDomain: '', teamsWebhookUrl: '' },
+    rules: [],
+    schedules: [],
+    restDays: { id: 1, weekends: true, specificDates: [] },
+    deletedRuleIds: [],
+    lastRuleUpdateData: null,
+    lastConfigUpdateData: null,
+  }
+}
+
+function makeFakePrisma(state: FakeState) {
+  return {
+    notifyConfig: {
+      findUnique: async () => state.config,
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        state.lastConfigUpdateData = data
+        state.config = { ...state.config, ...data } as FakeConfig
+        return state.config
+      },
+    },
+    recipient: {
+      findMany: async () => [],
+    },
+    notifyRule: {
+      findMany: async () => state.rules,
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        state.rules.find(r => r.id === where.id) ?? null,
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        state.lastRuleUpdateData = data
+        const idx = state.rules.findIndex(r => r.id === where.id)
+        if (idx >= 0) state.rules[idx] = { ...state.rules[idx], ...data } as FakeRule
+        return state.rules[idx]
+      },
+      delete: async ({ where }: { where: { id: string } }) => {
+        state.deletedRuleIds.push(where.id)
+        state.rules = state.rules.filter(r => r.id !== where.id)
+      },
+      create: async ({ data }: { data: Omit<FakeRule, 'id'> }) => {
+        const created: FakeRule = { id: `new-rule-${state.rules.length}`, ...data }
+        state.rules.push(created)
+        return created
+      },
+    },
+    schedule: {
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        state.schedules.find(s => s.id === where.id) ?? null,
+    },
+    restDaysConfig: {
+      findUnique: async () => state.restDays,
+    },
+    user: {
+      findUnique: async () => ({ username: 'admin', displayName: 'Admin' }),
+    },
+    auditLog: {
+      create: async () => undefined,
+    },
+  }
+}
+
+let currentPrisma: ReturnType<typeof makeFakePrisma>
+vi.mock('../lib/db.js', () => ({
+  get prisma() { return currentPrisma },
+}))
+
+async function buildAdminApp() {
+  const { default: notifyRouter } = await import('../routes/notify.js')
+  const app = express()
+  app.use(express.json())
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    req.session = { sessionId: 's1', username: 'admin', role: 'admin' } as unknown as Request['session']
+    next()
+  })
+  app.use('/api/notify', notifyRouter)
+  // 對齊 server/src/index.ts 的錯誤處理順序：路由自己沒接住的例外會落到這裡，
+  // 回傳 INTERNAL_SERVER_ERROR —— Fix 2 要驗證的正是「不能讓例外流到這裡」。
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const message = err instanceof Error ? err.message : 'Unexpected server error'
+    res.status(500).json({ ok: false, code: 'INTERNAL_SERVER_ERROR', message })
+  })
+  return app
+}
+
+beforeEach(() => {
+  vi.resetModules()
+})
+
+describe('DELETE /api/notify/rules/:id — 預設規則保護', () => {
+  // 兩個條件（testUnit === null／id === DEFAULT_NOTIFY_RULE_ID）各自都要能
+  // 單獨擋下刪除；下面兩個測試分別只滿足其中一個條件，只留一個判斷式的
+  // 回歸會讓其中一個失敗。
+  it('僅 testUnit 為 null（id 不是 DEFAULT_NOTIFY_RULE_ID）也要擋下', async () => {
+    const state = makeDefaultState()
+    state.rules = [{
+      id: 'corrupted-id', testUnit: null, enabled: true,
+      subjectTemplate: 'x', introTemplate: '', outroTemplate: '', ccRecipients: '',
+    }]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).delete('/api/notify/rules/corrupted-id')
+
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('DEFAULT_RULE_PROTECTED')
+    expect(state.deletedRuleIds).toEqual([])
+  })
+
+  it('僅 id 為 DEFAULT_NOTIFY_RULE_ID（testUnit 不是 null）也要擋下', async () => {
+    const state = makeDefaultState()
+    state.rules = [{
+      id: DEFAULT_NOTIFY_RULE_ID, testUnit: 'RA', enabled: true,
+      subjectTemplate: 'x', introTemplate: '', outroTemplate: '', ccRecipients: '',
+    }]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).delete(`/api/notify/rules/${DEFAULT_NOTIFY_RULE_ID}`)
+
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('DEFAULT_RULE_PROTECTED')
+    expect(state.deletedRuleIds).toEqual([])
+  })
+})
+
+describe('POST /api/notify/preview — 休息日設定與 daysUntilStart', () => {
+  it('sendDate 反映 specificDates 假日造成的往前挪；daysUntilStart 以今天而非 sendDate 為基準', async () => {
+    const state = makeDefaultState()
+    // 固定日期而非用「今天」推算 sendDate，避免測試結果隨執行日期的星期幾而
+    // 飄動：2031/03/10 是週一，往前推 5 天的 2031/03/05 是週三（非週末），
+    // 只有在 restDaysConfig.specificDates 真的被讀取時才會往前多挪一天。
+    const startDate = '2031/03/10'
+    const leadDays = 5
+    const naiveSendDate = addDays(startDate, -leadDays) // 2031/03/05，週三
+    state.config = { ...state.config, leadDays, mailDomain: 'example.com' }
+    state.restDays = { id: 1, weekends: false, specificDates: [naiveSendDate] }
+    state.rules = [{
+      id: DEFAULT_NOTIFY_RULE_ID, testUnit: null, enabled: true,
+      subjectTemplate: '距開始還有 {{daysUntilStart}} 天',
+      introTemplate: '', outroTemplate: '', ccRecipients: '',
+    }]
+    state.schedules = [{
+      id: 'sched-1', projectName: 'P', taskDescription: 'T', category: 'C',
+      testUnit: 'RA', testEngineer: 'E', device: 'D',
+      startDate, endDate: startDate, timeResource: 1, requiredPersonnel: 'someone',
+    }]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).post('/api/notify/preview').send({ scheduleId: 'sched-1' })
+
+    expect(res.status).toBe(200)
+
+    const expectedSendDate = computeSendDate(startDate, leadDays, {
+      weekends: false, specificDates: [naiveSendDate],
+    })
+    // 前提檢查：確定這個 fixture 真的會造成往前挪一天，不然下面的斷言測不出
+    // 「忽略 specificDates」的回歸。
+    expect(expectedSendDate).not.toBe(naiveSendDate)
+    expect(res.body.sendDate).toBe(expectedSendDate)
+
+    // 用真正的 daysBetween(今天, startDate) 算期望值（跟路由內部算法相同的
+    // 函式），而不是拿 sendDate 去算 —— 如果路由回歸成以 sendDate 為基準，
+    // 這裡會因為兩者相差 leadDays 天而顯著不同，不會因為執行日期恰好而巧合通過。
+    const expectedDaysUntilStart = Math.max(0, daysBetween(todayTaipei(), startDate))
+    expect(res.body.subject).toBe(`距開始還有 ${expectedDaysUntilStart} 天`)
+  })
+})
+
+describe('Mass assignment 防護（Fix 1）', () => {
+  it('PUT /rules/:id：testUnit、id、updatedAt 不會出現在交給 Prisma 的 data 裡', async () => {
+    const state = makeDefaultState()
+    state.rules = [{
+      id: 'rule-1', testUnit: 'RA', enabled: true,
+      subjectTemplate: '', introTemplate: '', outroTemplate: '', ccRecipients: '',
+    }]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).put('/api/notify/rules/rule-1').send({
+      subjectTemplate: 'New Subject',
+      enabled: false,
+      testUnit: 'HACKED',
+      id: 'other-id',
+      updatedAt: '2020-01-01T00:00:00.000Z',
+    })
+
+    expect(res.status).toBe(200)
+    const data = state.lastRuleUpdateData
+    expect(data).not.toBeNull()
+    expect(Object.keys(data ?? {}).sort()).toEqual(['enabled', 'subjectTemplate'])
+    expect(data).not.toHaveProperty('testUnit')
+    expect(data).not.toHaveProperty('id')
+    expect(data).not.toHaveProperty('updatedAt')
+  })
+
+  it('PUT /config：id、teamsWebhookUrl 不會出現在交給 Prisma 的 data 裡', async () => {
+    const state = makeDefaultState()
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).put('/api/notify/config').send({
+      enabled: true,
+      id: 999,
+      teamsWebhookUrl: 'http://evil.example.com/hook',
+    })
+
+    expect(res.status).toBe(200)
+    const data = state.lastConfigUpdateData
+    expect(data).not.toBeNull()
+    expect(Object.keys(data ?? {})).toEqual(['enabled'])
+    expect(data).not.toHaveProperty('id')
+    expect(data).not.toHaveProperty('teamsWebhookUrl')
+  })
+})
+
+describe('POST /api/notify/test — 型別防護（Fix 2）', () => {
+  it('to 不是字串時回 422，不是 500', async () => {
+    const state = makeDefaultState()
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).post('/api/notify/test').send({ to: ['a@example.com'] })
+
+    expect(res.status).toBe(422)
+    expect(res.body.errors?.to).toBeTruthy()
+    expect(res.body.code).not.toBe('INTERNAL_SERVER_ERROR')
   })
 })

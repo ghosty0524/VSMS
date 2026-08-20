@@ -82,8 +82,21 @@ router.put('/config', async (req, res) => {
     })
     return
   }
-  await prisma.notifyConfig.update({ where: { id: 1 }, data: body })
-  await audit(req, '通知設定', Object.keys(body))
+  // 白名單：只挑選這幾個欄位組出 Prisma 的 data，不能把 req.body 整包丟給
+  // update —— 否則呼叫端可以夾帶 id、teamsWebhookUrl 等欄位做 mass assignment，
+  // 寫入這條路由從未打算開放的欄位。缺席的欄位維持缺席，讓局部更新只動到
+  // 呼叫端真的送來的欄位。
+  const data: Partial<{
+    enabled: boolean; systemUrl: string; leadDays: number; catchUpDays: number; mailDomain: string
+  }> = {}
+  if (body.enabled !== undefined) data.enabled = body.enabled
+  if (body.systemUrl !== undefined) data.systemUrl = body.systemUrl
+  if (body.leadDays !== undefined) data.leadDays = body.leadDays
+  if (body.catchUpDays !== undefined) data.catchUpDays = body.catchUpDays
+  if (body.mailDomain !== undefined) data.mailDomain = body.mailDomain
+
+  await prisma.notifyConfig.update({ where: { id: 1 }, data })
+  await audit(req, '通知設定', Object.keys(data))
   res.json({ ok: true })
 })
 
@@ -143,8 +156,23 @@ router.put('/rules/:id', async (req, res) => {
       }
     }
   }
-  await prisma.notifyRule.update({ where: { id: req.params.id }, data: body })
-  await audit(req, `通知規則：${existing.testUnit ?? '預設'}`, Object.keys(body))
+  // 白名單：testUnit 是預設規則的識別欄位（resolveRule 靠它挑出 fallback）、
+  // id 是主鍵、updatedAt 由 Prisma 管理 —— 三者都不可經由這條路由被呼叫端
+  // 改動。若整包 body 直接餵給 update，`PUT /rules/<預設規則 id>` 帶一個
+  // `{ testUnit: 'X' }` 就能讓預設規則從 testUnit === null 消失，
+  // resolveRule 從此找不到任何單位的 fallback，整個通知功能悄悄失效。
+  const data: Partial<{
+    enabled: boolean; subjectTemplate: string | null; introTemplate: string | null
+    outroTemplate: string | null; ccRecipients: string
+  }> = {}
+  if (body.enabled !== undefined) data.enabled = body.enabled
+  if (body.subjectTemplate !== undefined) data.subjectTemplate = body.subjectTemplate
+  if (body.introTemplate !== undefined) data.introTemplate = body.introTemplate
+  if (body.outroTemplate !== undefined) data.outroTemplate = body.outroTemplate
+  if (body.ccRecipients !== undefined) data.ccRecipients = body.ccRecipients
+
+  await prisma.notifyRule.update({ where: { id: req.params.id }, data })
+  await audit(req, `通知規則：${existing.testUnit ?? '預設'}`, Object.keys(data))
   res.json({ ok: true })
 })
 
@@ -169,7 +197,11 @@ router.delete('/rules/:id', async (req, res) => {
 
 // POST /api/notify/preview — 套用規則但不寄出
 router.post('/preview', async (req, res) => {
-  const { scheduleId } = req.body as { scheduleId: string }
+  const { scheduleId } = req.body as { scheduleId: unknown }
+  if (typeof scheduleId !== 'string' || !scheduleId.trim()) {
+    res.status(422).json({ ok: false, errors: { scheduleId: '排程 ID 不可空白' } })
+    return
+  }
   const schedule = await prisma.schedule.findUnique({ where: { id: scheduleId } })
   if (!schedule) {
     res.status(404).json({ ok: false, message: '找不到該排程' })
@@ -250,8 +282,12 @@ router.post('/run', async (req, res) => {
 
 // POST /api/notify/test — 寄一封測試信
 router.post('/test', async (req, res) => {
-  const { to } = req.body as { to: string }
-  if (!to?.trim()) {
+  const { to } = req.body as { to: unknown }
+  // to 型別要先檢查再呼叫字串方法 —— 陣列、數字、物件都會讓 to?.trim() 拋出
+  // TypeError，那個例外會落在這條路由的 try/catch 之外，一路衝到全域錯誤
+  // 處理器，回傳 500 並把內部錯誤訊息（如 "to?.trim is not a function"）
+  // 洩漏給呼叫端，而不是這條路由原本就有的 422 錯誤格式。
+  if (typeof to !== 'string' || !to.trim()) {
     res.status(422).json({ ok: false, errors: { to: '收件地址不可空白' } })
     return
   }
@@ -266,6 +302,9 @@ router.post('/test', async (req, res) => {
       text: `這是一封測試信，寄出時間 ${todayTaipei()}。收到即表示 SMTP 設定正確。`,
       html: `<p>這是一封測試信，寄出時間 ${todayTaipei()}。收到即表示 SMTP 設定正確。</p>`,
     })
+    // 這條路由可以把信寄給管理者任意指定的地址，若不留紀錄就沒有人知道
+    // 誰在什麼時候寄了信到哪裡去。
+    await audit(req, `測試信：${to.trim()}`, [])
     res.json({ ok: true })
   } catch (err) {
     res.status(502).json({
