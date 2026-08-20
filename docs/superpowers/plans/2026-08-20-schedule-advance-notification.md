@@ -1559,7 +1559,7 @@ describe('runDailyNotify', () => {
     const { mailer, sent } = makeMailer()
     const result = await runDailyNotify(store, mailer, NOW)
     expect(sent).toHaveLength(0)
-    expect(result.errors[0].message).toContain('default')
+    expect(result.errors[0].message).toContain('預設通知規則')
   })
 })
 ```
