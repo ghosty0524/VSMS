@@ -80,3 +80,45 @@ describe('buildMailBody', () => {
     expect(html).not.toContain('<p></p>')
   })
 })
+
+describe('buildMailBody — 空欄位以 None 呈現', () => {
+  // 只有 RA 會填機台，SIT-HW / SIT-SW / SI 一律留白，所以這條規則在多數
+  // 信件裡都會用到 —— 沒有它，那些信會出現一行後面空白的「機台：」。
+  const blankDevice = { ...schedule, device: '' }
+  const blankVars = buildTemplateVars(blankDevice, 'https://vsms.local:3001', 3)
+
+  it('renders an empty device as None in the text version', () => {
+    const { text } = buildMailBody(rule, blankDevice, blankVars)
+    expect(text).toContain('機台：None')
+  })
+
+  it('renders an empty device as None in the HTML version', () => {
+    const { html } = buildMailBody(rule, blankDevice, blankVars)
+    expect(html).toContain('<td>None</td>')
+  })
+
+  it('treats a whitespace-only value as empty', () => {
+    const s = { ...schedule, taskDescription: '   ' }
+    const { text } = buildMailBody(rule, s, buildTemplateVars(s, '', 3))
+    expect(text).toContain('任務說明：None')
+  })
+
+  it('leaves a present value untouched', () => {
+    const { text } = buildMailBody(rule, schedule, vars)
+    expect(text).toContain('機台：Chamber-A')
+    expect(text).not.toContain('None')
+  })
+
+  it('keeps a zero timeResource as 0 人天 rather than None', () => {
+    const s = { ...schedule, timeResource: 0 }
+    const { text } = buildMailBody(rule, s, buildTemplateVars(s, '', 3))
+    expect(text).toContain('工時：0 人天')
+    expect(text).not.toContain('工時：None')
+  })
+
+  it('renders None for both halves of an empty date range', () => {
+    const s = { ...schedule, startDate: '', endDate: '' }
+    const { text } = buildMailBody(rule, s, buildTemplateVars(s, '', 3))
+    expect(text).toContain('起迄日期：None')
+  })
+})
