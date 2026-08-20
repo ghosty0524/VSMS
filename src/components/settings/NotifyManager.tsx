@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../../lib/api'
 import type { NotifyConfig, NotifyRule } from '../../types'
+import { NotifyLogTable } from './NotifyLogTable'
 
 export function NotifyManager() {
   const [config, setConfig] = useState<NotifyConfig | null>(null)
@@ -198,6 +199,12 @@ export function NotifyManager() {
             </select>
           </div>
         )}
+      </section>
+
+      {/* ── 通知記錄 ── */}
+      <section className="border-t border-gray-200 pt-5">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">通知記錄</h3>
+        <NotifyLogTable />
       </section>
     </div>
   )
