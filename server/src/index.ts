@@ -7,6 +7,10 @@ import fs from 'node:fs'
 import https from 'node:https'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import cron from 'node-cron'
+import { runDailyNotify } from './lib/notifyRunner.js'
+import { prismaNotifyStore } from './lib/notifyStore.js'
+import { getMailer, isMailerConfigured } from './lib/mailer.js'
 import { guestReadOnly } from './middleware/guestReadOnly.js'
 import authRouter from './routes/auth.js'
 import schedulesRouter from './routes/schedules.js'
@@ -103,6 +107,27 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
   res.status(500).json({ ok: false, code: 'INTERNAL_SERVER_ERROR', message })
 })
 
+// 每天 08:00（伺服器本地時間）檢查並寄出預告信。
+//
+// 必須在 listen 之後才啟動：本檔把 app export 給測試使用，掛在模組頂層會讓
+// 每次跑測試都起一個排程器。
+function startNotifyCron(): void {
+  if (!isMailerConfigured()) {
+    console.warn('[notify] SMTP is not configured — the daily notification job will not run.')
+    console.warn('[notify] Set SMTP_HOST and SMTP_FROM in .env to enable it.')
+    return
+  }
+  cron.schedule('0 8 * * *', () => {
+    // 未捕捉的錯誤會拖垮同 process 的前端服務，一律吞在這裡並記錄。
+    runDailyNotify(prismaNotifyStore, getMailer())
+      .then(r => console.log(
+        `[notify] daily run: checked=${r.checked} due=${r.due} sent=${r.sent} failed=${r.failed} skipped=${r.skipped} missedWindow=${r.missedWindow}` +
+        (r.errors.length ? ` errors=${r.errors.length}` : '')))
+      .catch(err => console.error('[notify] daily run failed:', err))
+  })
+  console.log('[notify] daily notification job scheduled at 08:00')
+}
+
 const { initDb, scheduleAuditCleaner } = await import('./lib/storage.js')
 const { prisma } = await import('./lib/db.js')
 const PORT = process.env.PORT ?? 3001
@@ -125,9 +150,11 @@ if (httpsEnabled) {
   }
   https.createServer({ cert, key }, app).listen(Number(PORT), () => {
     console.log(`VSMS Server running at https://localhost:${PORT}`)
+    startNotifyCron()
   })
 } else {
   app.listen(Number(PORT), () => {
     console.log(`VSMS Server running at http://localhost:${PORT}`)
+    startNotifyCron()
   })
 }
