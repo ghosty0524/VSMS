@@ -29,6 +29,10 @@ dist-ssr
 .env
 .env.local
 
+# TLS material (mkcert cert shared with VTMS — never commit the private key)
+cert.pem
+key.pem
+
 # Runtime data (generated at server startup, not source)
 server/data/
 

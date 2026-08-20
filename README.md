@@ -19,7 +19,7 @@ npm run dev
 ```
 
 - 前端：http://localhost:5173
-- 後端 API：http://localhost:3001
+- 後端 API：https://localhost:3001（自簽憑證，瀏覽器會跳一次警告）
 
 ## 正式部署
 
@@ -43,7 +43,11 @@ npm run build
 npm start
 ```
 
-- 系統網址：http://localhost:3001
+- 系統網址：https://localhost:3001
+
+> 伺服器在 `.env` 同時設定 `HTTPS_CERT_FILE` / `HTTPS_KEY_FILE` 時走 HTTPS，否則退回 HTTP。
+> 正式站必須走 HTTPS：VTMS 對同一台主機送出 HSTS，而 HSTS 以主機為範圍、不分連接埠，
+> 瀏覽器只要開過 VTMS，之後連 `http://<host>:3001` 都會被改寫成 https 而連不上。
 
 ### 3. 首次登入
 

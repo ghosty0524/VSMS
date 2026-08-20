@@ -4,6 +4,7 @@ import compression from 'compression'
 import session from 'express-session'
 import path from 'node:path'
 import fs from 'node:fs'
+import https from 'node:https'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { guestReadOnly } from './middleware/guestReadOnly.js'
@@ -41,6 +42,15 @@ const distPath = [
 // 不要為了跟其他 /api 路由「排整齊」把它搬到 session 之後。
 app.use(buildVersionRouter(distPath))
 
+// HTTPS when both cert and key are configured, plain HTTP otherwise (tests, local dev).
+// Shares the same mkcert certificate as VTMS — see HTTPS_CERT_FILE in .env.
+// Serving over TLS is required because VTMS sends HSTS for this host, and HSTS is
+// scoped to the host without the port: once a browser has loaded VTMS over HTTPS it
+// rewrites http://<host>:3001 to https:// before any packet leaves the machine.
+const httpsCertFile = process.env.HTTPS_CERT_FILE?.trim() || ''
+const httpsKeyFile = process.env.HTTPS_KEY_FILE?.trim() || ''
+const httpsEnabled = Boolean(httpsCertFile && httpsKeyFile)
+
 // Without SESSION_SECRET a random per-boot secret is used instead of a known
 // hardcoded string. Sessions live in MemoryStore and reset on restart anyway.
 let sessionSecret = process.env.SESSION_SECRET
@@ -54,7 +64,9 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   rolling: true, // sliding expiry: cookie refreshed on every response
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: SESSION_TIMEOUT_MIN * 60 * 1000 },
+  // secure follows httpsEnabled: a secure cookie over plain HTTP is never sent back,
+  // which would silently break login if HTTPS were ever turned off.
+  cookie: { httpOnly: true, sameSite: 'lax', secure: httpsEnabled, maxAge: SESSION_TIMEOUT_MIN * 60 * 1000 },
 }))
 
 // ── API Routes ─────────────────────────────────────────
@@ -95,6 +107,25 @@ const PORT = process.env.PORT ?? 3001
 await prisma.$connect()
 await initDb()
 scheduleAuditCleaner()
-app.listen(Number(PORT), () => {
-  console.log(`VSMS Server running at http://localhost:${PORT}`)
-})
+if (httpsEnabled) {
+  let cert: Buffer, key: Buffer
+  try {
+    cert = fs.readFileSync(httpsCertFile)
+    key = fs.readFileSync(httpsKeyFile)
+  } catch (err) {
+    console.error(
+      `[server] HTTPS is enabled but the certificate files could not be read.\n` +
+      `  HTTPS_CERT_FILE = ${httpsCertFile}\n` +
+      `  HTTPS_KEY_FILE  = ${httpsKeyFile}\n` +
+      `  Error: ${err instanceof Error ? err.message : String(err)}`
+    )
+    process.exit(1)
+  }
+  https.createServer({ cert, key }, app).listen(Number(PORT), () => {
+    console.log(`VSMS Server running at https://localhost:${PORT}`)
+  })
+} else {
+  app.listen(Number(PORT), () => {
+    console.log(`VSMS Server running at http://localhost:${PORT}`)
+  })
+}

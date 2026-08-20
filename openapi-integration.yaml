@@ -5,7 +5,7 @@ info:
   version: 1.0.0
 
 servers:
-  - url: http://localhost:3001/api/integration
+  - url: https://localhost:3001/api/integration
     description: Local development
 
 security:
