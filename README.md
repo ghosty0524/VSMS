@@ -49,6 +49,20 @@ npm start
 > 正式站必須走 HTTPS：VTMS 對同一台主機送出 HSTS，而 HSTS 以主機為範圍、不分連接埠，
 > 瀏覽器只要開過 VTMS，之後連 `http://<host>:3001` 都會被改寫成 https 而連不上。
 
+### 排程預告通知（SMTP）
+
+```
+SMTP_HOST=
+SMTP_PORT=25
+SMTP_SECURE=false
+SMTP_FROM=
+SMTP_USER=        # 選填，留空即匿名轉發
+SMTP_PASS=        # 選填
+```
+
+`SMTP_HOST` 或 `SMTP_FROM` 未設定時，通知功能會停用並在啟動時印出警告，
+不會影響系統其他功能。
+
 ### 3. 首次登入
 
 系統啟動後，開啟瀏覽器前往系統網址，會出現初始化畫面：
