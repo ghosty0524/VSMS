@@ -24,6 +24,26 @@ function normalizeDate(value: string): string {
   return value.replace(/-/g, '/');
 }
 
+// startDate/endDate are Taiwan-local calendar dates, so "today" has to be the
+// Taiwan date too. Using the UTC date made every comparison a day early between
+// 00:00 and 08:00 Taiwan time, which shifted the overdue / inProgress boundary.
+function todayTaipei(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000)
+    .toISOString().slice(0, 10).replace(/-/g, '/');
+}
+
+/**
+ * 逾期 (overdue) is computed, not stored: past its end date and still open.
+ * It is deliberately NOT the same as 延遲 (the isDelayed flag someone ticked) —
+ * a schedule can be overdue without being flagged, and flagged without being
+ * overdue, so the two are reported side by side rather than merged.
+ */
+const overdueClause = (today: string) => ({
+  endDate: { lt: today },
+  isCompleted: false,
+  isCancelled: false,
+});
+
 function buildWhereClause(query: Record<string, unknown>) {
   const where: Record<string, unknown> = {};
   const testUnit = qs(query.testUnit);
@@ -37,6 +57,30 @@ function buildWhereClause(query: Record<string, unknown>) {
   // projectName is free text → partial (contains) match for agent forgiveness
   const projectName = qs(query.projectName);
   if (projectName) where.projectName = { contains: projectName };
+  // category is a closed classification (NPI / AVL / Regression / Support / 2nd
+  // Source / …) and is NOT the same thing as the word appearing in the text:
+  // 284 rows are category=NPI but "NPI" appears in 0 task descriptions, while
+  // "Regression" appears in 34 descriptions whose category is something else.
+  const category = qs(query.category);
+  if (category) where.category = category;
+  // Free-text search across the two fields that actually carry meaning to a user.
+  // projectName alone is close to useless for content searches: "AVL" appears in 0
+  // project names but 187 task descriptions, "Regression" in 0 vs 77.
+  const q = qs(query.q);
+  if (q) {
+    where.OR = [
+      { projectName: { contains: q } },
+      { taskDescription: { contains: q } },
+    ];
+  }
+  // requiredPersonnel is free text: one field may hold several names
+  // ("Amy_Chen, Kevin_Yu") and the same person appears in several spellings
+  // ("Grace" / "Grace Chen" / "Grace_Chen") → contains match covers both cases.
+  const requiredPersonnel = qs(query.requiredPersonnel);
+  if (requiredPersonnel) where.requiredPersonnel = { contains: requiredPersonnel };
+  // createdBy is the VSMS data-entry account (a short closed set) → exact match
+  const createdBy = qs(query.createdBy);
+  if (createdBy) where.createdBy = createdBy;
   const isCompleted = qs(query.isCompleted);
   if (isCompleted !== undefined) where.isCompleted = isCompleted === 'true';
   const isDelayed = qs(query.isDelayed);
@@ -53,6 +97,14 @@ function buildWhereClause(query: Record<string, unknown>) {
     if (dateFrom) dateFilter.gte = normalizeDate(dateFrom);
     if (dateTo) dateFilter.lte = normalizeDate(dateTo);
     where.startDate = dateFilter;
+  }
+  // 逾期 — goes through AND so it composes with an explicit isCompleted /
+  // isCancelled instead of silently overwriting them.
+  const isOverdue = qs(query.isOverdue);
+  if (isOverdue === 'true' || isOverdue === 'false') {
+    const clause = overdueClause(todayTaipei());
+    if (!where.AND) where.AND = [];
+    (where.AND as unknown[]).push(isOverdue === 'true' ? clause : { NOT: clause });
   }
   return where;
 }
@@ -71,7 +123,7 @@ router.get('/schedules', requireApiKey, async (req, res) => {
 // GET /schedules/summary — aggregate stats by testUnit
 router.get('/schedules/summary', requireApiKey, async (req, res) => {
   const schedules = await prisma.schedule.findMany();
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+  const today = todayTaipei();
   const total = schedules.length;
   const cancelled = schedules.filter(s => s.isCancelled).length;
   const active = schedules.filter(s => !s.isCancelled);
@@ -80,11 +132,121 @@ router.get('/schedules/summary', requireApiKey, async (req, res) => {
   // Mutually exclusive buckets: completed / delayed / inProgress / notStarted (+cancelled)
   const inProgress = active.filter(s => !s.isCompleted && !s.isDelayed && s.startDate <= today).length;
   const notStarted = active.filter(s => !s.isCompleted && !s.isDelayed && s.startDate > today).length;
+  // Cross-cutting, NOT buckets — see tally() for why these are separate.
+  const overdue = active.filter(s => !s.isCompleted && s.endDate && s.endDate < today).length;
+  const flaggedDelayed = active.filter(s => s.isDelayed).length;
   const byUnit: Record<string, number> = {};
   for (const s of schedules) {
     if (s.testUnit) byUnit[s.testUnit] = (byUnit[s.testUnit] ?? 0) + 1;
   }
-  res.json({ total, completed, delayed, inProgress, notStarted, cancelled, byUnit });
+  res.json({
+    total, completed, delayed, inProgress, notStarted, cancelled,
+    overdue, flaggedDelayed, asOfDate: today, byUnit,
+  });
+});
+
+// Dimensions /schedules/stats can group by. requiredPersonnel is kept as the
+// raw stored value: one field may hold several people ("Amy_Chen, Kevin_Yu"),
+// and silently splitting it would invent groups that do not exist in the data.
+const STATS_DIMENSIONS: Record<string, (s: ScheduleRow) => string | null> = {
+  projectName:       s => s.projectName,
+  testUnit:          s => s.testUnit,
+  testEngineer:      s => s.testEngineer,
+  device:            s => s.device,
+  category:          s => s.category,
+  requiredPersonnel: s => s.requiredPersonnel,
+  month:             s => (s.startDate ?? '').slice(0, 7), // YYYY/MM of startDate
+};
+
+type ScheduleRow = {
+  projectName: string | null; testUnit: string | null; testEngineer: string | null;
+  device: string | null; category: string | null; requiredPersonnel: string | null;
+  startDate: string; endDate: string; isCompleted: boolean; isDelayed: boolean; isCancelled: boolean;
+};
+
+type Bucket = {
+  key: string; total: number; completed: number; delayed: number;
+  inProgress: number; notStarted: number; cancelled: number;
+  overdue: number; flaggedDelayed: number;
+};
+
+const emptyBucket = (key: string): Bucket => ({
+  key, total: 0, completed: 0, delayed: 0, inProgress: 0, notStarted: 0, cancelled: 0,
+  overdue: 0, flaggedDelayed: 0,
+});
+
+/**
+ * completed / delayed / inProgress / notStarted / cancelled are mutually
+ * exclusive and sum to total — same buckets as /schedules/summary.
+ *
+ * overdue (逾期) and flaggedDelayed (被標記 delayed) are NOT buckets: they cut
+ * across the above and overlap each other, so they must never be added into a
+ * total. They are separate because a schedule can be past its end date without
+ * anyone flagging it, and flagged without being past its end date.
+ */
+function tally(b: Bucket, s: ScheduleRow, today: string): void {
+  b.total++;
+  if (!s.isCancelled) {
+    if (s.isDelayed) b.flaggedDelayed++;
+    if (!s.isCompleted && s.endDate && s.endDate < today) b.overdue++;
+  }
+  if (s.isCancelled) { b.cancelled++; return; }
+  if (s.isCompleted) { b.completed++; return; }
+  if (s.isDelayed) { b.delayed++; return; }
+  if (s.startDate <= today) b.inProgress++; else b.notStarted++;
+}
+
+// GET /schedules/stats — grouped counts over the WHOLE filtered set (Copilot Agent).
+// Exists because list results are capped: any count the agent derives from a
+// capped list is wrong. This never truncates the underlying data — when topN is
+// used the remainder is still reported in `others`, so the numbers reconcile.
+router.get('/schedules/stats', requireApiKey, async (req, res) => {
+  const groupBy = qs(req.query.groupBy) ?? '';
+  const pick = STATS_DIMENSIONS[groupBy];
+  if (!pick) {
+    res.status(400).json({
+      error: `groupBy is required and must be one of: ${Object.keys(STATS_DIMENSIONS).join(', ')}`,
+    });
+    return;
+  }
+
+  const schedules = await prisma.schedule.findMany({ where: buildWhereClause(req.query) }) as ScheduleRow[];
+  const today = todayTaipei();
+
+  const overall = emptyBucket('(all)');
+  const groups = new Map<string, Bucket>();
+  for (const s of schedules) {
+    tally(overall, s, today);
+    const key = (pick(s) ?? '').trim() || '(未填寫)';
+    let bucket = groups.get(key);
+    if (!bucket) { bucket = emptyBucket(key); groups.set(key, bucket); }
+    tally(bucket, s, today);
+  }
+
+  const sorted = [...groups.values()].sort((a, b) => b.total - a.total || a.key.localeCompare(b.key));
+  const topNRaw = Number(qs(req.query.topN));
+  const topN = Number.isInteger(topNRaw) && topNRaw > 0 ? topNRaw : 0;
+
+  const body: Record<string, unknown> = {
+    groupBy,
+    asOfDate: today,
+    fieldNotes: 'completed/delayed/inProgress/notStarted/cancelled are mutually exclusive and sum to total. overdue (逾期 = past endDate, still open) and flaggedDelayed (被標記 delayed, includes completed ones) cut across those buckets and overlap each other — never add them into a total.',
+    totalRecords: overall.total,
+    groupCount: sorted.length,
+    overall: { ...overall, key: undefined },
+    groups: topN ? sorted.slice(0, topN) : sorted,
+  };
+  if (topN && sorted.length > topN) {
+    const rest = sorted.slice(topN);
+    const others = rest.reduce((acc, b) => {
+      acc.total += b.total; acc.completed += b.completed; acc.delayed += b.delayed;
+      acc.inProgress += b.inProgress; acc.notStarted += b.notStarted; acc.cancelled += b.cancelled;
+      acc.overdue += b.overdue; acc.flaggedDelayed += b.flaggedDelayed;
+      return acc;
+    }, emptyBucket('(others)'));
+    body.others = { ...others, groupCount: rest.length };
+  }
+  res.json(body);
 });
 
 // GET /schedules/by-plan/:planId — find schedule linked to a VTMS plan

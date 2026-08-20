@@ -59,6 +59,22 @@ components:
         completedAt:     { type: string, format: date-time, nullable: true, description: 'Timestamp when isCompleted last transitioned to true' }
         userFlag:        { type: boolean, description: 'User (non-admin) mark 標記' }
         userFlagNote:    { type: string, nullable: true, description: 'Note attached to the user mark' }
+        requiredPersonnel: { type: string, description: '需求人員 — who asked for the test. Free text; may hold several names ("Amy_Chen, Kevin_Yu") and one person may appear in several spellings ("Grace" / "Grace Chen" / "Grace_Chen")' }
+        createdBy:       { type: string, description: 'VSMS data-entry account that keyed the schedule in — not the requester' }
+
+    ScheduleStatsGroup:
+      type: object
+      description: 'One grouping bucket. completed / delayed / inProgress / notStarted / cancelled are mutually exclusive and sum to total.'
+      properties:
+        key:         { type: string, description: 'Group value; "(未填寫)" when the field is empty' }
+        total:       { type: integer }
+        completed:   { type: integer }
+        delayed:     { type: integer, description: '延遲 flag set AND still open — the exclusive bucket' }
+        inProgress:  { type: integer }
+        notStarted:  { type: integer }
+        cancelled:   { type: integer }
+        overdue:     { type: integer, description: '逾期 — past endDate, still open. Cross-cutting: overlaps the buckets, never add it into total' }
+        flaggedDelayed: { type: integer, description: 'Every schedule carrying the 延遲 flag, completed ones included. Cross-cutting; >= delayed' }
 
     ScheduleWithProgress:
       allOf:
@@ -77,9 +93,12 @@ paths:
         - { in: query, name: testEngineer, schema: { type: string }, description: 'Exact test engineer name' }
         - { in: query, name: device,       schema: { type: string }, description: 'Exact equipment/device name' }
         - { in: query, name: projectName,  schema: { type: string }, description: 'Partial project name match' }
+        - { in: query, name: requiredPersonnel, schema: { type: string }, description: 'Partial 需求人員 (requester) match — covers multi-name fields and spelling variants' }
+        - { in: query, name: createdBy,    schema: { type: string }, description: 'Exact data-entry account (not the requester)' }
         - { in: query, name: isCompleted,  schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: isDelayed,    schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: isCancelled,  schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: isOverdue,    schema: { type: string, enum: ['true','false'] }, description: '逾期 — computed: endDate already past AND not completed AND not cancelled. Distinct from the isDelayed flag' }
         - { in: query, name: userFlag,     schema: { type: string, enum: ['true','false'] }, description: 'Filter by user (non-admin) mark' }
         - { in: query, name: dateFrom,     schema: { type: string, description: 'YYYY-MM-DD (matches startDate >=)' } }
         - { in: query, name: dateTo,       schema: { type: string, description: 'YYYY-MM-DD (matches startDate <=)' } }
@@ -165,6 +184,57 @@ paths:
         '401':
           description: Unauthorized
 
+  /schedules/stats:
+    get:
+      summary: Grouped counts over the whole filtered set (never truncated)
+      description: >
+        Server-side aggregation for the Copilot agent. List endpoints are capped,
+        so any count the agent derives from them is wrong; this returns complete
+        counts instead. Buckets match /schedules/summary. When topN is used the
+        omitted groups are still summed into `others`, so groups + others always
+        reconcile to totalRecords.
+      parameters:
+        - { in: query, name: groupBy, required: true, schema: { type: string, enum: [projectName, testUnit, testEngineer, device, category, requiredPersonnel, month] }, description: 'Grouping dimension; "month" uses the YYYY/MM of startDate' }
+        - { in: query, name: topN,    schema: { type: integer, minimum: 1 }, description: 'Return only the N largest groups; the rest are still counted in `others`' }
+        - { in: query, name: testUnit,          schema: { type: string } }
+        - { in: query, name: testEngineer,      schema: { type: string } }
+        - { in: query, name: device,            schema: { type: string } }
+        - { in: query, name: projectName,       schema: { type: string } }
+        - { in: query, name: requiredPersonnel, schema: { type: string } }
+        - { in: query, name: createdBy,         schema: { type: string } }
+        - { in: query, name: isCompleted,       schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: isDelayed,         schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: isCancelled,       schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: userFlag,          schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: dateFrom,          schema: { type: string } }
+        - { in: query, name: dateTo,            schema: { type: string } }
+      responses:
+        '200':
+          description: Grouped counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groupBy:      { type: string }
+                  totalRecords: { type: integer, description: 'Rows matching the filters — complete, never capped' }
+                  groupCount:   { type: integer }
+                  overall:      { $ref: '#/components/schemas/ScheduleStatsGroup' }
+                  groups:
+                    type: array
+                    items: { $ref: '#/components/schemas/ScheduleStatsGroup' }
+                  others:
+                    allOf:
+                      - $ref: '#/components/schemas/ScheduleStatsGroup'
+                      - type: object
+                        properties:
+                          groupCount: { type: integer }
+                    description: 'Present only when topN omitted some groups'
+        '400':
+          description: groupBy missing or not one of the supported dimensions
+        '401':
+          description: Unauthorized
+
   /schedules/by-plan/{planId}:
     get:
       summary: Find schedule linked to a VTMS test plan
@@ -193,9 +263,12 @@ paths:
         - { in: query, name: testEngineer, schema: { type: string }, description: 'Exact test engineer name' }
         - { in: query, name: device,       schema: { type: string }, description: 'Exact equipment/device name' }
         - { in: query, name: projectName,  schema: { type: string }, description: 'Partial project name match' }
+        - { in: query, name: requiredPersonnel, schema: { type: string }, description: 'Partial 需求人員 (requester) match — covers multi-name fields and spelling variants' }
+        - { in: query, name: createdBy,    schema: { type: string }, description: 'Exact data-entry account (not the requester)' }
         - { in: query, name: isCompleted,  schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: isDelayed,    schema: { type: string, enum: ['true','false'] } }
         - { in: query, name: isCancelled,  schema: { type: string, enum: ['true','false'] } }
+        - { in: query, name: isOverdue,    schema: { type: string, enum: ['true','false'] }, description: '逾期 — computed: endDate already past AND not completed AND not cancelled. Distinct from the isDelayed flag' }
         - { in: query, name: userFlag,     schema: { type: string, enum: ['true','false'] }, description: 'Filter by user (non-admin) mark' }
         - { in: query, name: dateFrom,     schema: { type: string } }
         - { in: query, name: dateTo,       schema: { type: string } }
