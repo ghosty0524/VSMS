@@ -78,7 +78,7 @@ SMTP_PASS=        # 選填
 | `sentAt` | DateTime? | |
 | `createdAt` | DateTime | |
 
-- `@@unique([scheduleId, sendDate])` — **防重複的根本**。cron 與手動重跑 API 可能並行，應用層 if-check 擋不住競態。
+- `@@unique([scheduleId, sendDate])` — 只防止同一筆記錄在資料表裡出現重複的「列」，不保證不重複寄信：寄信迴圈是先呼叫 `mailer.send()` 成功後才 `upsertLog()`，而 `upsertLog` 用的是 upsert，鍵值衝突時是更新既有列、不是拋錯擋下來。真正擋住並行執行的是 `notifyRunner.ts` 內的模組級 mutex（`inFlight`）——VSMS 是單一 pm2 process，cron 與手動重跑 API 若同時觸發，第二個呼叫會立刻拿到 `alreadyRunning:true` 的空結果，不會真的再跑一次。
 - `@@index([sendDate])`
 
 ### 新增 `NotifyRule`

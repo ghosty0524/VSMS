@@ -60,22 +60,66 @@ export interface RunResult {
   /** 寄信日早於補寄視窗起點而被跳過的筆數 —— 見迴圈內對應註解。 */
   missedWindow: number
   errors: Array<{ scheduleId: string; message: string }>
+  /**
+   * true 表示這次呼叫沒有真的跑——呼叫時已經有另一次 runDailyNotify 在
+   * process 內執行中，於是立刻回傳這個「什麼都沒做」的空結果。呼叫端要靠
+   * 這個欄位分辨「今天沒有該寄的信」和「有人正在跑」，兩者不能都顯示成
+   * 同一句「檢查 0 筆」。預設 false。
+   */
+  alreadyRunning: boolean
 }
 
 export const MAX_ATTEMPTS = 3
 
+// 每次呼叫都要拿到全新的物件與全新的 errors 陣列 —— 用共用常數物件再展開
+// （{ ...SHARED }）只是淺拷貝，errors 這個陣列參照會被所有呼叫共用，一次
+// push 就會污染下一次呼叫的結果，跨測試甚至跨並行執行都看得到彼此的錯誤。
+function emptyResult(alreadyRunning: boolean): RunResult {
+  return { checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, errors: [], alreadyRunning }
+}
+
+// 模組級鎖：VSMS 是單一 pm2 process，一個 in-flight Promise 就足夠擋住同
+// process 內的並行執行，不需要跨 process 的分散式鎖。
+let inFlight: Promise<RunResult> | null = null
+
 /**
  * 每日執行一次，也供手動重跑 API 呼叫。
  *
- * 冪等性最終靠 notification_logs 的 (scheduleId, sendDate) 唯一鍵保證 —— cron
- * 與手動重跑可能並行，這裡的 findLogs 檢查擋不住競態。
+ * notification_logs 的 (scheduleId, sendDate) 唯一鍵只保證不會出現重複的
+ * 記錄「列」，並不保證不會重複寄信：下面的迴圈是先呼叫 mailer.send()、
+ * 成功後才 upsertLog()，而 upsertLog 用的是 upsert——鍵值衝突時是更新既有
+ * 那一列，不是拋錯擋下來。所以唯一鍵擋不住兩次並行執行各自寄出一封信。
+ *
+ * 真正擋住並行執行的是這裡的模組級 mutex（inFlight）：同一個 process 內
+ * 第二個呼叫會立刻拿到 alreadyRunning:true 的空結果，不會真的再跑一次。
+ * 這涵蓋 cron 與手動重跑 API 並行、以及兩個分頁或兩位管理者同時按下手動
+ * 重跑等情況——只要都打進同一個 process（VSMS 目前只有一個）。
  */
 export async function runDailyNotify(
   store: NotifyStore,
   mailer: Mailer,
   now: Date = new Date(),
 ): Promise<RunResult> {
-  const result: RunResult = { checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, errors: [] }
+  if (inFlight) {
+    return emptyResult(true)
+  }
+  const run = runOnce(store, mailer, now)
+  inFlight = run
+  try {
+    return await run
+  } finally {
+    // 成功、失敗都要釋放——否則一次未預期的例外會讓鎖永遠卡住，之後所有
+    // 呼叫都會被誤判成「有人正在跑」。
+    inFlight = null
+  }
+}
+
+async function runOnce(
+  store: NotifyStore,
+  mailer: Mailer,
+  now: Date,
+): Promise<RunResult> {
+  const result: RunResult = emptyResult(false)
 
   const config = await store.loadConfig()
   if (!config?.enabled) return result
@@ -202,9 +246,17 @@ export async function runDailyNotify(
           })
           continue
         }
+        // attempts 是「每次執行」累加，不是「每天」累加：手動重跑按鈕存在的
+        // 目的就是讓操作者能在同一天連續重跑（例如除錯 SMTP 設定），若攻頂
+        // 條件只看 attempts >= MAX_ATTEMPTS，三次手動重跑就會把所有到期排程
+        // 打成永久失敗、之後永遠不再重試，而操作者當下毫無徵兆。因此再加上
+        // 「寄信日已經過去」（sendDate < today）這道日期閘門：寄信日當天不論
+        // 重跑幾次都維持 'failed'，只有跨過至少一個自然日之後，攻頂才會真的
+        // 生效，此時 attempts 才確實對應「不同天各自失敗過一次」。
+        const dayHasAdvanced = sendDate < today
         await store.upsertLog({
           scheduleId: schedule.id, sendDate,
-          status: attempts >= MAX_ATTEMPTS ? 'failed_permanent' : 'failed',
+          status: (attempts >= MAX_ATTEMPTS && dayHasAdvanced) ? 'failed_permanent' : 'failed',
           recipients: [...to, ...(usingFallback ? [] : cc.addresses)].join(', '),
           errorMessage: message, attempts, sentAt: null,
         })

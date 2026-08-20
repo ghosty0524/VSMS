@@ -219,4 +219,6 @@ export interface NotifyRunResult {
   skipped: number
   missedWindow: number
   errors: { scheduleId: string; message: string }[]
+  /** true 表示這次呼叫時已經有另一次執行在進行中，本次沒有真的跑。 */
+  alreadyRunning: boolean
 }

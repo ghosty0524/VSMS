@@ -54,7 +54,12 @@ export function NotifyLogTable() {
               </td>
               <td className="py-2 px-2 whitespace-nowrap">{l.testUnit || <span className="text-gray-400">—</span>}</td>
               <td className="py-2 px-2 whitespace-nowrap">
-                <span className={`text-xs px-1.5 py-0.5 rounded ${STATUS_STYLE[l.status]}`}>
+                <span
+                  className={`text-xs px-1.5 py-0.5 rounded ${STATUS_STYLE[l.status]}`}
+                  title={l.status === 'failed_permanent'
+                    ? '已達重試上限，系統不會再自動重試這筆通知；如需重寄，需由工程人員手動處理。'
+                    : undefined}
+                >
                   {STATUS_TEXT[l.status]}
                 </span>
                 {l.attempts > 1 && (

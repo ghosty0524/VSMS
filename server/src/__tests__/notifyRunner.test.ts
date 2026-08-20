@@ -74,7 +74,10 @@ describe('runDailyNotify', () => {
     const { mailer, sent } = makeMailer()
     const result = await runDailyNotify(store, mailer, NOW)
     expect(sent).toHaveLength(0)
-    expect(result).toEqual({ checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, errors: [] })
+    expect(result).toEqual({
+      checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, errors: [],
+      alreadyRunning: false,
+    })
   })
 
   it('does not send twice for the same schedule and send date', async () => {
@@ -107,12 +110,14 @@ describe('runDailyNotify', () => {
     expect(sent).toHaveLength(0)
   })
 
-  it('marks the send permanently failed on the third failure', async () => {
+  it('marks the send permanently failed on the third failure once the send date has passed', async () => {
+    // sendDate for baseSchedule is 2026/08/21; run this a day later (08/22) so
+    // sendDate < today and the day gate (Fix 3 / Blocker 3) allows escalation.
     const { store, upserts } = makeStore({
       logs: [{ scheduleId: 's1', sendDate: '2026/08/21', status: 'failed', attempts: 2 }],
     })
     const mailer: Mailer = { async send() { throw new Error('ECONNREFUSED') } }
-    const result = await runDailyNotify(store, mailer, NOW)
+    const result = await runDailyNotify(store, mailer, new Date('2026-08-22T00:30:00Z'))
     expect(upserts[0]).toMatchObject({ status: 'failed_permanent', attempts: 3 })
     expect(upserts[0].errorMessage).toContain('ECONNREFUSED')
     expect(result.failed).toBe(1)
@@ -398,5 +403,77 @@ describe('runDailyNotify', () => {
     expect(result.errors[0].message).toContain('重複')
     expect(upserts).toHaveLength(1)
     expect(upserts[0].scheduleId).toBe('s2')
+  })
+
+  // --- Blocker 1: module-level mutex prevents concurrent runs --------------
+
+  it('returns alreadyRunning immediately for a second call while the first is still in flight, and releases the lock once the first finishes', async () => {
+    const { store } = makeStore()
+    let releaseSend: () => void = () => {}
+    const sendGate = new Promise<void>(resolve => { releaseSend = resolve })
+    const sent: SendMailInput[] = []
+    const mailer: Mailer = {
+      async send(input) {
+        sent.push(input)
+        await sendGate // holds the first run open until the test releases it
+      },
+    }
+
+    const first = runDailyNotify(store, mailer, NOW)
+    // inFlight is assigned synchronously before runDailyNotify's first
+    // `await`, so this second call is guaranteed to observe the lock —
+    // no need to yield a tick before calling it.
+    const second = await runDailyNotify(store, mailer, NOW)
+    // Release right away, before any assertions: if an assertion below threw,
+    // `first` would otherwise sit forever awaiting a gate nothing releases,
+    // leaking the module-level lock into later tests in this file.
+    releaseSend()
+
+    expect(second.alreadyRunning).toBe(true)
+    expect(second).toMatchObject({
+      checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, errors: [],
+    })
+
+    const firstResult = await first
+    expect(firstResult.alreadyRunning).toBe(false)
+    expect(firstResult.sent).toBe(1)
+    // Only the first run ever reached the mailer — the second call returned
+    // before touching it.
+    expect(sent).toHaveLength(1)
+
+    // The lock is released once the first run settles, so a later call
+    // proceeds normally instead of being blocked forever.
+    const third = await runDailyNotify(store, mailer, NOW)
+    expect(third.alreadyRunning).toBe(false)
+  })
+
+  // --- Blocker 3: the attempt cap only escalates once the day has passed ---
+
+  it('stays failed on its own send date no matter how many attempts have accumulated', async () => {
+    // sendDate for baseSchedule at NOW is 2026/08/21, same as today. Even
+    // with attempts already one below the cap, a same-day failure must not
+    // escalate to failed_permanent — otherwise repeated presses of the
+    // manual "立即檢查並補寄" button on the day the notice is due would
+    // permanently kill it before the day has even passed.
+    const { store, upserts } = makeStore({
+      logs: [{ scheduleId: 's1', sendDate: '2026/08/21', status: 'failed', attempts: 2 }],
+    })
+    const mailer: Mailer = { async send() { throw new Error('ECONNREFUSED') } }
+    const result = await runDailyNotify(store, mailer, NOW)
+    expect(upserts[0]).toMatchObject({ status: 'failed', attempts: 3 })
+    expect(result.failed).toBe(1)
+  })
+
+  it('reaches failed_permanent once the cap is hit for a send date earlier than today', async () => {
+    // Same schedule/log shape as above, but the run happens a day later
+    // (2026/08/22) so sendDate (2026/08/21) < today — the day gate now
+    // allows the attempt cap to take effect.
+    const { store, upserts } = makeStore({
+      logs: [{ scheduleId: 's1', sendDate: '2026/08/21', status: 'failed', attempts: 2 }],
+    })
+    const mailer: Mailer = { async send() { throw new Error('ECONNREFUSED') } }
+    const result = await runDailyNotify(store, mailer, new Date('2026-08-22T00:30:00Z'))
+    expect(upserts[0]).toMatchObject({ status: 'failed_permanent', attempts: 3 })
+    expect(result.failed).toBe(1)
   })
 })

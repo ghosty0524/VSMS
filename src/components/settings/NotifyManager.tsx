@@ -60,7 +60,14 @@ export function NotifyManager() {
     setBusy(true)
     try {
       const r = await api.notifyRun()
-      const hasProblem = r.missedWindow > 0 || r.failed > 0
+      // 已經有另一次執行在跑（例如另一個分頁、或前一次還沒逾時就被再按了
+      // 一次）——這次沒有真的檢查任何東西，不能跟「檢查 0 筆」顯示成同一句，
+      // 否則管理者會誤以為今天真的沒有該寄的信。
+      if (r.alreadyRunning) {
+        setMsg({ kind: 'ok', text: '已有另一次檢查正在執行中，本次未重複執行。請稍候再查看下方通知記錄。' })
+        return
+      }
+      const hasProblem = r.missedWindow > 0 || r.failed > 0 || r.errors.length > 0
       let text = `檢查 ${r.checked} 筆，寄出 ${r.sent}，失敗 ${r.failed}，略過 ${r.skipped}` +
         (r.missedWindow > 0
           ? `，⚠ 超出補寄視窗未寄 ${r.missedWindow} 筆`

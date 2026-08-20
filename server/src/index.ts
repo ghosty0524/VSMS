@@ -120,12 +120,25 @@ function startNotifyCron(): void {
   cron.schedule('0 8 * * *', () => {
     // 未捕捉的錯誤會拖垮同 process 的前端服務，一律吞在這裡並記錄。
     runDailyNotify(prismaNotifyStore, getMailer())
-      .then(r => console.log(
-        `[notify] daily run: checked=${r.checked} due=${r.due} sent=${r.sent} failed=${r.failed} skipped=${r.skipped} missedWindow=${r.missedWindow}` +
-        (r.errors.length ? ` errors=${r.errors.length}` : '')))
+      .then(r => {
+        const summary = `[notify] daily run: checked=${r.checked} due=${r.due} sent=${r.sent} failed=${r.failed} skipped=${r.skipped} missedWindow=${r.missedWindow}`
+        // failed、errors、missedWindow 任一非零都代表有東西需要管理者注意，
+        // 要用 console.error（不是 console.log）並把訊息內容印出來，不能只印
+        // 筆數 —— 「信件已寄出但寫入記錄失敗，下次可能重複寄信」這類最重要
+        // 的訊息，之前只印在 errors=N 的數字裡，內容從沒被印出來過。
+        if (r.failed || r.errors.length || r.missedWindow) {
+          console.error(`${summary} errors=${r.errors.length}`)
+          for (const e of r.errors) console.error(`[notify]   ${e.scheduleId}: ${e.message}`)
+        } else {
+          console.log(summary)
+        }
+      })
       .catch(err => console.error('[notify] daily run failed:', err))
-  })
-  console.log('[notify] daily notification job scheduled at 08:00')
+  }, { timezone: 'Asia/Taipei' })
+  // 明確指定時區：process 的時區與 todayTaipei() 硬編的 UTC+8 目前恰好一致
+  // （伺服器本來就跑在 Asia/Taipei），但那只是巧合，不是保證。這個專案已經
+  // 出過一次 UTC 對台灣時間的日期落差問題，這裡不要再重蹈覆轍。
+  console.log('[notify] daily notification job scheduled at 08:00 Asia/Taipei')
 }
 
 const { initDb, scheduleAuditCleaner } = await import('./lib/storage.js')
