@@ -1526,6 +1526,14 @@ describe('runDailyNotify', () => {
     expect(upserts[0].status).toBe('sent')
   })
 
+  it('appends the domain to a fallback recipient stored as a bare account name', async () => {
+    const noOne = { ...baseSchedule, requiredPersonnel: '' }
+    const { store } = makeStore({ candidates: [noOne], fallback: ['dept_inbox'] })
+    const { mailer, sent } = makeMailer()
+    await runDailyNotify(store, mailer, NOW)
+    expect(sent[0].to).toEqual(['dept_inbox@example.com'])
+  })
+
   it('records an error and keeps going when the send date cannot be resolved', async () => {
     const blocked: NotifyStore = {
       ...makeStore().store,
@@ -1694,7 +1702,11 @@ export async function runDailyNotify(
     const cc = resolveRecipients(rule.ccRaw, config.mailDomain)
 
     const usingFallback = primary.addresses.length === 0
-    const to = usingFallback ? fallback : primary.addresses
+    // fallback 也要走同一支解析：Recipient.name 存的可能是帳號名而非完整信箱，
+    // 直接丟給 SMTP 會寄不出去。
+    const to = usingFallback
+      ? resolveRecipients(fallback.join(', '), config.mailDomain).addresses
+      : primary.addresses
     if (to.length === 0) {
       result.errors.push({
         scheduleId: schedule.id,
@@ -1748,7 +1760,7 @@ export async function runDailyNotify(
 
 Run: `npx vitest run --config server/vitest.config.ts server/src/__tests__/notifyRunner.test.ts`
 
-Expected: PASS（15 passed）
+Expected: PASS（16 passed）
 
 - [ ] **Step 5: Commit**
 
@@ -2454,7 +2466,7 @@ function startNotifyCron(): void {
 
 Run: `npx vitest run --config server/vitest.config.ts`
 
-Expected: PASS，測試數 155 + 15 + 5 + 5 = 180。輸出中**不得**出現 `[notify] daily notification job scheduled`。
+Expected: PASS，測試數 155 + 16 + 5 + 5 = 181。輸出中**不得**出現 `[notify] daily notification job scheduled`。
 
 Run: `npx tsc -p server/tsconfig.json --noEmit`
 
@@ -2820,12 +2832,25 @@ export function NotifyManager() {
   )
 }
 
+type DraftKey = 'subjectTemplate' | 'introTemplate' | 'outroTemplate' | 'ccRecipients'
+
 function RuleEditor({ rule, isDefault, onSave, onDelete }: {
   rule: NotifyRule
   isDefault: boolean
   onSave: (rule: NotifyRule, patch: Partial<NotifyRule>) => Promise<void>
   onDelete?: () => Promise<void>
 }) {
+  // 文字欄位先進 draft，onBlur 才送出。用 onChange 直接送會讓每按一個鍵就打一次
+  // PUT，而 PUT 會跑範本驗證並寫 audit —— 打一句話等於幾十次寫入。
+  const [draft, setDraft] = useState<Partial<Record<DraftKey, string>>>({})
+  const valueOf = (key: DraftKey) => draft[key] ?? rule[key] ?? ''
+  const commit = async (key: DraftKey) => {
+    const next = draft[key]
+    if (next === undefined || next === (rule[key] ?? '')) return
+    setDraft(d => { const { [key]: _drop, ...rest } = d; return rest })
+    await onSave(rule, { [key]: next })
+  }
+
   const field = (key: 'subjectTemplate' | 'introTemplate' | 'outroTemplate', label: string) => {
     const inherits = rule[key] === null
     return (
@@ -2842,8 +2867,9 @@ function RuleEditor({ rule, isDefault, onSave, onDelete }: {
           )}
         </div>
         <textarea rows={key === 'subjectTemplate' ? 1 : 2}
-          value={rule[key] ?? ''} disabled={inherits}
-          onChange={e => onSave(rule, { [key]: e.target.value })}
+          value={valueOf(key)} disabled={inherits}
+          onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
+          onBlur={() => commit(key)}
           className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 disabled:bg-gray-100 disabled:text-gray-400" />
       </div>
     )
@@ -2877,8 +2903,9 @@ function RuleEditor({ rule, isDefault, onSave, onDelete }: {
         <span className="block text-xs font-medium text-gray-600 mb-1">
           固定副本收件人（逗號分隔；會與預設規則的副本合併）
         </span>
-        <input type="text" value={rule.ccRecipients}
-          onChange={e => onSave(rule, { ccRecipients: e.target.value })}
+        <input type="text" value={valueOf('ccRecipients')}
+          onChange={e => setDraft(d => ({ ...d, ccRecipients: e.target.value }))}
+          onBlur={() => commit('ccRecipients')}
           className="w-full text-sm border border-gray-300 rounded px-2 py-1.5" />
       </label>
     </div>
@@ -3047,7 +3074,7 @@ Expected: 僅出現既有的 9 個錯誤，不得有新增。
 
 Run: `npm run test:all`
 
-Expected: 前端 145 passed、後端 180 passed，全綠。
+Expected: 前端 145 passed、後端 181 passed，全綠。
 
 - [ ] **Step 4: 端對端確認**
 
