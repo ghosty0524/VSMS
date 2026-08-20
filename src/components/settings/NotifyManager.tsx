@@ -14,7 +14,7 @@ export function NotifyManager() {
     const [c, r] = await Promise.all([api.notifyConfig(), api.notifyRules()])
     setConfig(c); setRules(r.rules); setTestUnits(r.testUnits)
   }
-  useEffect(() => { reload().catch(e => setMsg({ kind: 'err', text: String(e) })) }, [])
+  useEffect(() => { reload().catch(e => setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : String(e) })) }, [])
 
   const saveConfig = async (patch: Partial<NotifyConfig>) => {
     if (!config) return
@@ -28,17 +28,19 @@ export function NotifyManager() {
     }
   }
 
-  const saveRule = async (rule: NotifyRule, patch: Partial<NotifyRule>) => {
+  const saveRule = async (rule: NotifyRule, patch: Partial<NotifyRule>): Promise<boolean> => {
     setRules(rs => rs.map(r => r.id === rule.id ? { ...r, ...patch } : r))
     try {
       await api.updateNotifyRule(rule.id, patch)
       setMsg({ kind: 'ok', text: '已儲存' })
+      return true
     } catch (e) {
       const text = e instanceof ApiError && e.fieldErrors
         ? Object.values(e.fieldErrors).join('；')
-        : String(e)
+        : e instanceof ApiError ? e.message : String(e)
       setMsg({ kind: 'err', text })
       await reload()
+      return false
     }
   }
 
@@ -73,7 +75,19 @@ export function NotifyManager() {
 
   const addRule = async (unit: string) => {
     try { await api.createNotifyRule(unit); await reload() }
-    catch (e) { setMsg({ kind: 'err', text: String(e) }) }
+    catch (e) { setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : String(e) }) }
+  }
+
+  const deleteRule = async (id: string) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await api.deleteNotifyRule(id)
+      await reload()
+      setMsg({ kind: 'ok', text: '已刪除' })
+    } catch (e) {
+      setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : String(e) })
+    } finally { setBusy(false) }
   }
 
   if (!config) return <p className="text-sm text-gray-400">載入中…</p>
@@ -171,7 +185,7 @@ export function NotifyManager() {
 
         {unitRules.map(rule => (
           <RuleEditor key={rule.id} rule={rule} isDefault={false} onSave={saveRule}
-            onDelete={async () => { await api.deleteNotifyRule(rule.id); await reload() }} />
+            onDelete={() => deleteRule(rule.id)} busy={busy} />
         ))}
 
         {unusedUnits.length > 0 && (
@@ -191,11 +205,12 @@ export function NotifyManager() {
 
 type DraftKey = 'subjectTemplate' | 'introTemplate' | 'outroTemplate' | 'ccRecipients'
 
-function RuleEditor({ rule, isDefault, onSave, onDelete }: {
+function RuleEditor({ rule, isDefault, onSave, onDelete, busy }: {
   rule: NotifyRule
   isDefault: boolean
-  onSave: (rule: NotifyRule, patch: Partial<NotifyRule>) => Promise<void>
-  onDelete?: () => Promise<void>
+  onSave: (rule: NotifyRule, patch: Partial<NotifyRule>) => Promise<boolean>
+  onDelete?: () => void
+  busy?: boolean
 }) {
   // 文字欄位先進 draft，onBlur 才送出。用 onChange 直接送會讓每按一個鍵就打一次
   // PUT，而 PUT 會跑範本驗證並寫 audit —— 打一句話等於幾十次寫入。
@@ -204,8 +219,12 @@ function RuleEditor({ rule, isDefault, onSave, onDelete }: {
   const commit = async (key: DraftKey) => {
     const next = draft[key]
     if (next === undefined || next === (rule[key] ?? '')) return
-    setDraft(d => { const { [key]: _drop, ...rest } = d; return rest })
-    await onSave(rule, { [key]: next })
+    // 失敗時 draft 必須留著，讓管理者能照著剛才打的字修正後再送一次；
+    // 只有存檔成功才清掉，避免文字憑空消失。
+    const ok = await onSave(rule, { [key]: next })
+    if (ok) {
+      setDraft(d => { const { [key]: _drop, ...rest } = d; return rest })
+    }
   }
 
   const field = (key: 'subjectTemplate' | 'introTemplate' | 'outroTemplate', label: string) => {
@@ -246,7 +265,8 @@ function RuleEditor({ rule, isDefault, onSave, onDelete }: {
             啟用
           </label>
           {onDelete && (
-            <button type="button" onClick={onDelete} className="text-xs text-gray-400 hover:text-red-500">
+            <button type="button" onClick={onDelete} disabled={busy}
+              className="text-xs text-gray-400 hover:text-red-500 disabled:opacity-40">
               × 刪除
             </button>
           )}
