@@ -160,3 +160,63 @@ export interface VtmsTestPlan {
   plannedEndDate: string | null
   assignees: string[]
 }
+
+export interface NotifyConfig {
+  enabled: boolean
+  systemUrl: string
+  leadDays: number
+  catchUpDays: number
+  mailDomain: string
+  smtpConfigured: boolean
+  fallbackRecipients: { id: string; name: string; note: string; isActive: boolean }[]
+  templateVars: string[]
+}
+
+export interface NotifyRule {
+  id: string
+  /** null = 預設規則 */
+  testUnit: string | null
+  enabled: boolean
+  /** null = 沿用預設規則；空字串 = 刻意留白 */
+  subjectTemplate: string | null
+  introTemplate: string | null
+  outroTemplate: string | null
+  ccRecipients: string
+}
+
+export interface NotifyLog {
+  id: string
+  scheduleId: string
+  sendDate: string
+  status: 'sent' | 'failed' | 'failed_permanent'
+  recipients: string
+  errorMessage: string | null
+  attempts: number
+  sentAt: string | null
+  createdAt: string
+  projectName: string
+  testUnit: string
+  startDate: string
+}
+
+export interface NotifyPreview {
+  subject: string
+  text: string
+  html: string
+  to: string[]
+  cc: string[]
+  unresolved: string[]
+  sendDate: string | null
+  unitEnabled: boolean
+}
+
+export interface NotifyRunResult {
+  ok: boolean
+  checked: number
+  due: number
+  sent: number
+  failed: number
+  skipped: number
+  missedWindow: number
+  errors: { scheduleId: string; message: string }[]
+}

@@ -1,4 +1,7 @@
-import type { Schedule, OptionsMap, Option, User, AuditLog, VtmsProgress } from '../types'
+import type {
+  Schedule, OptionsMap, Option, User, AuditLog, VtmsProgress,
+  NotifyConfig, NotifyRule, NotifyLog, NotifyPreview, NotifyRunResult,
+} from '../types'
 
 export class ApiError extends Error {
   constructor(
@@ -127,4 +130,27 @@ export const api = {
   // ── VTMS progress ─────────────────────────────────────
   getScheduleVtmsProgress: (scheduleId: string) =>
     req<VtmsProgress>('GET', `/schedules/${scheduleId}/vtms-progress`),
+
+  // ── Notify ────────────────────────────────────────────
+  notifyConfig: () =>
+    req<NotifyConfig>('GET', '/notify/config'),
+  updateNotifyConfig: (patch: Partial<Omit<NotifyConfig, 'smtpConfigured' | 'fallbackRecipients' | 'templateVars'>>) =>
+    req<{ ok: boolean }>('PUT', '/notify/config', patch),
+  notifyRules: () =>
+    req<{ rules: NotifyRule[]; testUnits: { value: string; label: string }[]; templateVars: string[] }>(
+      'GET', '/notify/rules'),
+  createNotifyRule: (testUnit: string) =>
+    req<{ ok: boolean; rule: NotifyRule }>('POST', '/notify/rules', { testUnit }),
+  updateNotifyRule: (id: string, patch: Partial<Omit<NotifyRule, 'id' | 'testUnit'>>) =>
+    req<{ ok: boolean }>('PUT', `/notify/rules/${id}`, patch),
+  deleteNotifyRule: (id: string) =>
+    req<{ ok: boolean }>('DELETE', `/notify/rules/${id}`),
+  notifyPreview: (scheduleId: string) =>
+    req<NotifyPreview>('POST', '/notify/preview', { scheduleId }),
+  notifyLogs: (limit = 200) =>
+    req<{ logs: NotifyLog[] }>('GET', `/notify/logs?limit=${limit}`),
+  notifyRun: () =>
+    req<NotifyRunResult>('POST', '/notify/run'),
+  notifyTest: (to: string) =>
+    req<{ ok: boolean }>('POST', '/notify/test', { to }),
 }
