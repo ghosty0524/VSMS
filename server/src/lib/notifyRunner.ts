@@ -43,11 +43,24 @@ export interface NotifyStore {
   loadRestDays(): Promise<RestDaySettings>
   loadRules(): Promise<NotifyRuleRow[]>
   loadFallbackRecipients(): Promise<string[]>
+  /**
+   * 所有 VSMS 使用者帳號名稱（含已停用者）。需求人員若是其中之一就不發預告
+   * 信——本人在系統裡看得到排程。停用的帳號也一併排除，是使用者的決定。
+   */
+  loadAccountNames(): Promise<string[]>
   /** 未完成、未取消、且 startDate > today */
   findCandidates(today: string): Promise<CandidateSchedule[]>
   findLogs(scheduleIds: string[]): Promise<NotificationLogRow[]>
   upsertLog(entry: LogUpsert): Promise<void>
 }
+
+/**
+ * 佔位用的專案編號，不是真的專案，不發預告信。
+ *
+ * 目前寫死在程式裡而非做成設定：只有這一個值，且它是全公司共用的慣例而非
+ * 各單位可調整的偏好。若日後出現第二個佔位編號，再考慮搬進 NotifyConfig。
+ */
+export const EXCLUDED_PROJECT_NAMES = ['PDN-999999']
 
 export interface RunResult {
   /** 本次執行檢視過的候選排程總數（不論是否落在寄信視窗內）。 */
@@ -59,6 +72,11 @@ export interface RunResult {
   skipped: number
   /** 寄信日早於補寄視窗起點而被跳過的筆數 —— 見迴圈內對應註解。 */
   missedWindow: number
+  /**
+   * 因排除規則而不寄的筆數：佔位專案編號，或需求人員本身是 VSMS 帳號。
+   * 與 skipped 分開計數，否則「規則排除」會混進「已經寄過」裡看不出來。
+   */
+  excluded: number
   errors: Array<{ scheduleId: string; message: string }>
   /**
    * true 表示這次呼叫沒有真的跑——呼叫時已經有另一次 runDailyNotify 在
@@ -75,7 +93,7 @@ export const MAX_ATTEMPTS = 3
 // （{ ...SHARED }）只是淺拷貝，errors 這個陣列參照會被所有呼叫共用，一次
 // push 就會污染下一次呼叫的結果，跨測試甚至跨並行執行都看得到彼此的錯誤。
 function emptyResult(alreadyRunning: boolean): RunResult {
-  return { checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, errors: [], alreadyRunning }
+  return { checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, excluded: 0, errors: [], alreadyRunning }
 }
 
 // 模組級鎖：VSMS 是單一 pm2 process，一個 in-flight Promise 就足夠擋住同
@@ -125,12 +143,15 @@ async function runOnce(
   if (!config?.enabled) return result
 
   const today = todayTaipei(now)
-  const [restDays, rules, fallback, candidates] = await Promise.all([
+  const [restDays, rules, fallback, accountNames, candidates] = await Promise.all([
     store.loadRestDays(),
     store.loadRules(),
     store.loadFallbackRecipients(),
+    store.loadAccountNames(),
     store.findCandidates(today),
   ])
+  const accounts = new Set(accountNames.map(n => n.trim().toLowerCase()).filter(Boolean))
+  const excludedProjects = new Set(EXCLUDED_PROJECT_NAMES.map(n => n.toLowerCase()))
 
   // catchUpDays 是管理者可編輯的資料庫欄位；負值會讓 windowStart 落在未來，
   // 導致每一筆都被判定為「早於視窗」而完全不寄信、卻無任何徵兆。在使用處
@@ -165,6 +186,25 @@ async function runOnce(
       }
 
       result.due++
+
+      // 排除規則。放在 due 之後，excluded 才代表「今天本來該寄、但被規則擋下」
+      // ——放在前面的話那幾筆每天都會被計進去，變成固定不動的雜訊。這樣
+      // due = sent + failed + skipped + excluded，數字可以對帳。
+      //
+      // 不寫 log：這是「這筆本來就不該發通知」的設定狀態，不是一次通知事件，
+      // 寫進記錄頁只會把真正的寄送記錄淹掉（與單位停用同樣的處理方式）。
+      if (excludedProjects.has((schedule.projectName ?? '').trim().toLowerCase())) {
+        result.excluded++
+        continue
+      }
+      // 需求人員本人是 VSMS 使用者就不寄——他在系統裡看得到自己的排程。
+      // 欄位含多人時，只要其中任何一位是帳號，整筆都不寄（使用者的決定）。
+      const personnelTokens = (schedule.requiredPersonnel ?? '')
+        .split(/[,，、;；\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)
+      if (personnelTokens.some(t => accounts.has(t))) {
+        result.excluded++
+        continue
+      }
 
       const existing = logByKey.get(logKey(schedule.id, sendDate))
       if (existing && (existing.status === 'sent' || existing.status === 'failed_permanent')) {

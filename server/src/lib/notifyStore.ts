@@ -48,6 +48,14 @@ export const prismaNotifyStore: NotifyStore = {
     return rows.map(r => r.name).filter(Boolean)
   },
 
+  async loadAccountNames(): Promise<string[]> {
+    // 含已停用帳號：停用與否不影響「這個人是系統使用者」這件事，而使用者
+    // 明確要求一併排除。同時取 username 與 displayName，因為 requiredPersonnel
+    // 是自由文字，兩種寫法都可能出現。
+    const rows = await prisma.user.findMany({ select: { username: true, displayName: true } })
+    return rows.flatMap(u => [u.username, u.displayName]).filter(Boolean)
+  },
+
   async findCandidates(today: string): Promise<CandidateSchedule[]> {
     const rows = await prisma.schedule.findMany({
       where: { isCompleted: false, isCancelled: false, startDate: { gt: today } },

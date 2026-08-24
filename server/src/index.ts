@@ -121,7 +121,7 @@ function startNotifyCron(): void {
     // 未捕捉的錯誤會拖垮同 process 的前端服務，一律吞在這裡並記錄。
     runDailyNotify(prismaNotifyStore, getMailer())
       .then(r => {
-        const summary = `[notify] daily run: checked=${r.checked} due=${r.due} sent=${r.sent} failed=${r.failed} skipped=${r.skipped} missedWindow=${r.missedWindow}`
+        const summary = `[notify] daily run: checked=${r.checked} due=${r.due} sent=${r.sent} failed=${r.failed} skipped=${r.skipped} missedWindow=${r.missedWindow} excluded=${r.excluded}`
         // failed、errors、missedWindow 任一非零都代表有東西需要管理者注意，
         // 要用 console.error（不是 console.log）並把訊息內容印出來，不能只印
         // 筆數 —— 「信件已寄出但寫入記錄失敗，下次可能重複寄信」這類最重要

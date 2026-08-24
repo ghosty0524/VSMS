@@ -33,6 +33,7 @@ function makeStore(overrides: Partial<{
   candidates: CandidateSchedule[]
   logs: NotificationLogRow[]
   fallback: string[]
+  accounts: string[]
 }> = {}) {
   const upserts: LogUpsert[] = []
   const store: NotifyStore = {
@@ -41,6 +42,7 @@ function makeStore(overrides: Partial<{
     loadRestDays: async () => ({ weekends: true, specificDates: [] }),
     loadRules: async () => overrides.rules ?? [defaultRule],
     loadFallbackRecipients: async () => overrides.fallback ?? ['fallback@example.com'],
+    loadAccountNames: async () => overrides.accounts ?? [],
     findCandidates: async () => overrides.candidates ?? [baseSchedule],
     findLogs: async () => overrides.logs ?? [],
     upsertLog: async (e) => { upserts.push(e) },
@@ -75,7 +77,7 @@ describe('runDailyNotify', () => {
     const result = await runDailyNotify(store, mailer, NOW)
     expect(sent).toHaveLength(0)
     expect(result).toEqual({
-      checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, errors: [],
+      checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, excluded: 0, errors: [],
       alreadyRunning: false,
     })
   })
@@ -475,5 +477,94 @@ describe('runDailyNotify', () => {
     const result = await runDailyNotify(store, mailer, new Date('2026-08-22T00:30:00Z'))
     expect(upserts[0]).toMatchObject({ status: 'failed_permanent', attempts: 3 })
     expect(result.failed).toBe(1)
+  })
+})
+
+describe('runDailyNotify — 排除規則', () => {
+  // 佔位用的專案編號，以及「需求人員本身就是 VSMS 使用者」的情形：
+  // 這兩種都不該發預告信，前者不是真專案，後者本人在系統裡看得到排程。
+  it('skips a placeholder PDN-999999 project without sending or logging', async () => {
+    const placeholder = { ...baseSchedule, projectName: 'PDN-999999' }
+    const { store, upserts } = makeStore({ candidates: [placeholder] })
+    const { mailer, sent } = makeMailer()
+    const r = await runDailyNotify(store, mailer, NOW)
+    expect(sent).toHaveLength(0)
+    expect(upserts).toHaveLength(0)
+    expect(r.excluded).toBe(1)
+    expect(r.sent).toBe(0)
+  })
+
+  it('matches the placeholder project name case-insensitively and ignores surrounding spaces', async () => {
+    const placeholder = { ...baseSchedule, projectName: '  pdn-999999  ' }
+    const { store } = makeStore({ candidates: [placeholder] })
+    const { mailer, sent } = makeMailer()
+    const r = await runDailyNotify(store, mailer, NOW)
+    expect(sent).toHaveLength(0)
+    expect(r.excluded).toBe(1)
+  })
+
+  it('still sends a project whose name merely contains the placeholder digits', async () => {
+    const real = { ...baseSchedule, projectName: 'PDN-9999990' }
+    const { store } = makeStore({ candidates: [real] })
+    const { mailer, sent } = makeMailer()
+    await runDailyNotify(store, mailer, NOW)
+    expect(sent).toHaveLength(1)
+  })
+
+  it('skips a schedule whose requiredPersonnel is a VSMS account', async () => {
+    const s = { ...baseSchedule, requiredPersonnel: 'Polson_Cheng' }
+    const { store, upserts } = makeStore({ candidates: [s], accounts: ['Polson_Cheng', 'Will_Wang'] })
+    const { mailer, sent } = makeMailer()
+    const r = await runDailyNotify(store, mailer, NOW)
+    expect(sent).toHaveLength(0)
+    expect(upserts).toHaveLength(0)
+    expect(r.excluded).toBe(1)
+  })
+
+  it('matches an account name case-insensitively', async () => {
+    const s = { ...baseSchedule, requiredPersonnel: 'polson_cheng' }
+    const { store } = makeStore({ candidates: [s], accounts: ['Polson_Cheng'] })
+    const { mailer, sent } = makeMailer()
+    expect((await runDailyNotify(store, mailer, NOW)).excluded).toBe(1)
+    expect(sent).toHaveLength(0)
+  })
+
+  it('skips the whole schedule when any one of several requiredPersonnel is an account', async () => {
+    const s = { ...baseSchedule, requiredPersonnel: 'Amy_Chen, Polson_Cheng' }
+    const { store } = makeStore({ candidates: [s], accounts: ['Polson_Cheng'] })
+    const { mailer, sent } = makeMailer()
+    expect((await runDailyNotify(store, mailer, NOW)).excluded).toBe(1)
+    expect(sent).toHaveLength(0)
+  })
+
+  it('sends normally when no requiredPersonnel is an account', async () => {
+    const { store } = makeStore({ accounts: ['Polson_Cheng', 'Will_Wang'] })
+    const { mailer, sent } = makeMailer()
+    const r = await runDailyNotify(store, mailer, NOW)
+    expect(sent).toHaveLength(1)
+    expect(r.excluded).toBe(0)
+  })
+
+  it('counts an excluded schedule as due, so due reconciles with the outcomes', async () => {
+    // excluded 只在「今天本來該寄」時才計數，否則它每天都會是同一個固定值。
+    // due = sent + failed + skipped + excluded 必須對得起來。
+    const placeholder = { ...baseSchedule, projectName: 'PDN-999999' }
+    const { store } = makeStore({ candidates: [placeholder] })
+    const { mailer } = makeMailer()
+    const r = await runDailyNotify(store, mailer, NOW)
+    expect(r.checked).toBe(1)
+    expect(r.due).toBe(1)
+    expect(r.excluded).toBe(1)
+    expect(r.due).toBe(r.sent + r.failed + r.skipped + r.excluded)
+  })
+
+  it('does not count an excluded schedule that was not due today', async () => {
+    // 寄信日還在未來：連 due 都不算，自然也不該計入 excluded。
+    const future = { ...baseSchedule, projectName: 'PDN-999999', startDate: '2026/09/30' }
+    const { store } = makeStore({ candidates: [future] })
+    const { mailer } = makeMailer()
+    const r = await runDailyNotify(store, mailer, NOW)
+    expect(r.due).toBe(0)
+    expect(r.excluded).toBe(0)
   })
 })

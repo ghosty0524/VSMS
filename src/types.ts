@@ -218,6 +218,8 @@ export interface NotifyRunResult {
   failed: number
   skipped: number
   missedWindow: number
+  /** 因排除規則（佔位專案編號、需求人員本身是 VSMS 帳號）而不寄的筆數。 */
+  excluded: number
   errors: { scheduleId: string; message: string }[]
   /** true 表示這次呼叫時已經有另一次執行在進行中，本次沒有真的跑。 */
   alreadyRunning: boolean
