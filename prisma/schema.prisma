@@ -173,6 +173,8 @@ model NotificationLog {
   recipients   String    @db.Text
   errorMessage String?   @db.Text
   attempts     Int       @default(0)
+  messageId    String?   @db.VarChar(255)
+  smtpResponse String?   @db.Text
   sentAt       DateTime?
   createdAt    DateTime  @default(now())
 

@@ -87,6 +87,8 @@ export const prismaNotifyStore: NotifyStore = {
         errorMessage: entry.errorMessage,
         attempts: entry.attempts,
         sentAt: entry.sentAt,
+        messageId: entry.messageId,
+        smtpResponse: entry.smtpResponse,
       },
     })
   },

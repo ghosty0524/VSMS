@@ -36,6 +36,10 @@ export interface LogUpsert {
   errorMessage: string | null
   attempts: number
   sentAt: Date | null
+  /** 寄件伺服器回傳的訊息 ID；失敗時為 null。 */
+  messageId: string | null
+  /** SMTP 的原始回應字串。M365 的 InternalId 在裡面，是 message trace 的查詢鍵。 */
+  smtpResponse: string | null
 }
 
 export interface NotifyStore {
@@ -260,7 +264,7 @@ async function runOnce(
       const attempts = (existing?.attempts ?? 0) + 1
       let mailSent = false
       try {
-        await mailer.send({
+        const info = await mailer.send({
           to,
           cc: usingFallback ? [] : cc.addresses,
           subject: body.subject,
@@ -272,6 +276,7 @@ async function runOnce(
           scheduleId: schedule.id, sendDate, status: 'sent',
           recipients: [...to, ...(usingFallback ? [] : cc.addresses)].join(', '),
           errorMessage: null, attempts, sentAt: now,
+          messageId: info.messageId, smtpResponse: info.response,
         })
         result.sent++
       } catch (err) {
@@ -299,6 +304,7 @@ async function runOnce(
           status: (attempts >= MAX_ATTEMPTS && dayHasAdvanced) ? 'failed_permanent' : 'failed',
           recipients: [...to, ...(usingFallback ? [] : cc.addresses)].join(', '),
           errorMessage: message, attempts, sentAt: null,
+          messageId: null, smtpResponse: null,
         })
         result.failed++
       }

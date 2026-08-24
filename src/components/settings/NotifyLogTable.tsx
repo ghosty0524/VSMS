@@ -71,6 +71,16 @@ export function NotifyLogTable() {
                 {l.errorMessage && (
                   <span className="block text-red-600 mt-0.5">{l.errorMessage}</span>
                 )}
+                {/* 郵件伺服器的原始回應。M365 會把 InternalId 放在這裡，IT 用它
+                    在 message trace 一次就能定位到這一封，不必靠時間範圍去撈。 */}
+                {l.smtpResponse && (
+                  <span
+                    className="block text-gray-400 mt-0.5 font-mono text-[11px] cursor-text select-all"
+                    title="郵件伺服器回應（追查投遞狀況時提供給 IT）"
+                  >
+                    {l.smtpResponse}
+                  </span>
+                )}
               </td>
             </tr>
           ))}

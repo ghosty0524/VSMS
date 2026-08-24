@@ -10,8 +10,20 @@ export interface SendMailInput {
   html: string
 }
 
+/**
+ * 寄件伺服器對這一封的回應。
+ *
+ * `response` 是 SMTP 的原始 250 字串，M365 會把 InternalId 放在裡面，而那正是
+ * message trace 的查詢鍵。存下來的話，事後追查「這封到底送到哪」是一次查詢；
+ * 沒存的話只能靠時間範圍去撈。兩者都可能是 null——不是所有伺服器都會給。
+ */
+export interface SendMailResult {
+  messageId: string | null
+  response: string | null
+}
+
 export interface Mailer {
-  send(input: SendMailInput): Promise<void>
+  send(input: SendMailInput): Promise<SendMailResult>
 }
 
 interface MailerConfig {
@@ -96,9 +108,9 @@ function getCached(): { config: MailerConfig; transporter: Transporter } {
 
 export function getMailer(): Mailer {
   return {
-    async send(input: SendMailInput): Promise<void> {
+    async send(input: SendMailInput): Promise<SendMailResult> {
       const { config, transporter } = getCached()
-      await transporter.sendMail({
+      const info = await transporter.sendMail({
         from: config.from,
         to: input.to.join(', '),
         cc: input.cc.length ? input.cc.join(', ') : undefined,
@@ -106,6 +118,10 @@ export function getMailer(): Mailer {
         text: input.text,
         html: input.html,
       })
+      return {
+        messageId: info.messageId ?? null,
+        response: typeof info.response === 'string' ? info.response : null,
+      }
     },
   }
 }

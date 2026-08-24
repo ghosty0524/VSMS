@@ -192,6 +192,10 @@ export interface NotifyLog {
   recipients: string
   errorMessage: string | null
   attempts: number
+  /** 寄件伺服器回傳的訊息 ID。 */
+  messageId: string | null
+  /** SMTP 原始回應；M365 的 InternalId 在裡面，是 message trace 的查詢鍵。 */
+  smtpResponse: string | null
   sentAt: string | null
   createdAt: string
   projectName: string

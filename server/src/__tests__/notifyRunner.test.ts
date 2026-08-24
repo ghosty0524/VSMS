@@ -52,7 +52,7 @@ function makeStore(overrides: Partial<{
 
 function makeMailer() {
   const sent: SendMailInput[] = []
-  const mailer: Mailer = { async send(input) { sent.push(input) } }
+  const mailer: Mailer = { async send(input) { sent.push(input); return { messageId: null, response: null } } }
   return { mailer, sent }
 }
 
@@ -418,6 +418,7 @@ describe('runDailyNotify', () => {
       async send(input) {
         sent.push(input)
         await sendGate // holds the first run open until the test releases it
+        return { messageId: null, response: null }
       },
     }
 
@@ -566,5 +567,42 @@ describe('runDailyNotify — 排除規則', () => {
     const r = await runDailyNotify(store, mailer, NOW)
     expect(r.due).toBe(0)
     expect(r.excluded).toBe(0)
+  })
+})
+
+describe('runDailyNotify — 記錄 SMTP 回應', () => {
+  // M365 的 250 回應字串裡含 InternalId，那是 message trace 的查詢鍵。
+  // 沒有存下來的話，事後追查「這封到底送到哪」只能靠時間範圍去撈。
+  it('stores the messageId and the raw SMTP response on a successful send', async () => {
+    const { store, upserts } = makeStore()
+    const mailer: Mailer = {
+      async send() {
+        return {
+          messageId: '<abc123@lannerinc.com>',
+          response: '250 2.6.0 <abc123@lannerinc.com> [InternalId=987654] Queued mail for delivery',
+        }
+      },
+    }
+    await runDailyNotify(store, mailer, NOW)
+    expect(upserts[0].messageId).toBe('<abc123@lannerinc.com>')
+    expect(upserts[0].smtpResponse).toContain('InternalId=987654')
+  })
+
+  it('records nulls rather than throwing when the mailer reports nothing', async () => {
+    const { store, upserts } = makeStore()
+    const mailer: Mailer = { async send() { return { messageId: null, response: null } } }
+    await runDailyNotify(store, mailer, NOW)
+    expect(upserts[0].status).toBe('sent')
+    expect(upserts[0].messageId).toBeNull()
+    expect(upserts[0].smtpResponse).toBeNull()
+  })
+
+  it('leaves both null on a failed send', async () => {
+    const { store, upserts } = makeStore()
+    const mailer: Mailer = { async send() { throw new Error('ETIMEDOUT') } }
+    await runDailyNotify(store, mailer, NOW)
+    expect(upserts[0].status).toBe('failed')
+    expect(upserts[0].messageId).toBeNull()
+    expect(upserts[0].smtpResponse).toBeNull()
   })
 })
