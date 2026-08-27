@@ -1,6 +1,6 @@
 import type {
   Schedule, OptionsMap, Option, User, AuditLog, VtmsProgress,
-  NotifyConfig, NotifyRule, NotifyLog, NotifyPreview, NotifyRunResult,
+  NotifyConfig, NotifyRule, NotifyLog, NotifyPreview, NotifyRunResult, FallbackRecipient,
 } from '../types'
 
 export class ApiError extends Error {
@@ -145,6 +145,12 @@ export const api = {
     req<{ ok: boolean }>('PUT', `/notify/rules/${id}`, patch),
   deleteNotifyRule: (id: string) =>
     req<{ ok: boolean }>('DELETE', `/notify/rules/${id}`),
+  createNotifyRecipient: (name: string, note: string) =>
+    req<{ ok: boolean; recipient: FallbackRecipient }>('POST', '/notify/recipients', { name, note }),
+  updateNotifyRecipient: (id: string, patch: Partial<Omit<FallbackRecipient, 'id'>>) =>
+    req<{ ok: boolean }>('PUT', `/notify/recipients/${id}`, patch),
+  deleteNotifyRecipient: (id: string) =>
+    req<{ ok: boolean }>('DELETE', `/notify/recipients/${id}`),
   notifyPreview: (scheduleId: string) =>
     req<NotifyPreview>('POST', '/notify/preview', { scheduleId }),
   notifyLogs: (limit = 200) =>

@@ -168,7 +168,8 @@ export interface NotifyConfig {
   catchUpDays: number
   mailDomain: string
   smtpConfigured: boolean
-  fallbackRecipients: { id: string; name: string; note: string; isActive: boolean }[]
+  /** 需求人員無法對應為信箱時的代收群組；停用者也會回傳，供設定頁顯示。 */
+  fallbackRecipients: FallbackRecipient[]
   templateVars: string[]
 }
 
@@ -182,6 +183,14 @@ export interface NotifyRule {
   introTemplate: string | null
   outroTemplate: string | null
   ccRecipients: string
+}
+
+export interface FallbackRecipient {
+  id: string
+  /** 公司帳號名或完整 email；存檔時已驗證過能組成有效信箱。 */
+  name: string
+  note: string
+  isActive: boolean
 }
 
 export interface NotifyLog {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, ApiError } from '../../lib/api'
 import type { NotifyConfig, NotifyRule } from '../../types'
 import { NotifyLogTable } from './NotifyLogTable'
+import { FallbackRecipients } from './FallbackRecipients'
 
 export function NotifyManager() {
   const [config, setConfig] = useState<NotifyConfig | null>(null)
@@ -191,6 +192,15 @@ export function NotifyManager() {
             立即檢查並補寄
           </button>
         </div>
+      </section>
+
+      {/* ── 代收群組 ── */}
+      <section className="border-t border-gray-200 pt-5">
+        <h3 className="text-sm font-semibold text-gray-700 mb-1">代收群組</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          需求人員無法對應為有效信箱時，整封通知改寄給這裡的人；此時各單位的固定副本不會發送。
+        </p>
+        <FallbackRecipients recipients={config.fallbackRecipients} onChanged={reload} />
       </section>
 
       {/* ── 規則 ── */}

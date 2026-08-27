@@ -120,6 +120,14 @@ interface FakeConfig {
   teamsWebhookUrl: string
 }
 
+interface FakeRecipient {
+  id: string
+  name: string
+  note: string
+  isActive: boolean
+  notifyConfigId: number
+}
+
 interface FakeLog {
   id: string
   scheduleId: string
@@ -140,6 +148,7 @@ interface FakeState {
   rules: FakeRule[]
   schedules: FakeSchedule[]
   logs: FakeLog[]
+  recipients: FakeRecipient[]
   restDays: { id: number; weekends: boolean; specificDates: string[] }
   deletedRuleIds: string[]
   lastRuleUpdateData: Record<string, unknown> | null
@@ -152,6 +161,7 @@ function makeDefaultState(): FakeState {
     rules: [],
     schedules: [],
     logs: [],
+    recipients: [],
     restDays: { id: 1, weekends: true, specificDates: [] },
     deletedRuleIds: [],
     lastRuleUpdateData: null,
@@ -170,7 +180,23 @@ function makeFakePrisma(state: FakeState) {
       },
     },
     recipient: {
-      findMany: async () => [],
+      findMany: async ({ where }: { where?: { isActive?: boolean } } = {}) =>
+        state.recipients.filter(r => where?.isActive === undefined || r.isActive === where.isActive),
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        state.recipients.find(r => r.id === where.id) ?? null,
+      create: async ({ data }: { data: Omit<FakeRecipient, 'id'> }) => {
+        const created: FakeRecipient = { id: 'new-rcpt-' + state.recipients.length, ...data }
+        state.recipients.push(created)
+        return created
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const i = state.recipients.findIndex(r => r.id === where.id)
+        state.recipients[i] = { ...state.recipients[i], ...data } as FakeRecipient
+        return state.recipients[i]
+      },
+      delete: async ({ where }: { where: { id: string } }) => {
+        state.recipients = state.recipients.filter(r => r.id !== where.id)
+      },
     },
     notifyRule: {
       findMany: async () => state.rules,
@@ -475,5 +501,118 @@ describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
 
     expect(res.body.logs[0].projectName).toBe('')
     expect(res.body.logs[0].testUnit).toBe('')
+  })
+})
+
+describe('代收群組（fallback recipients）CRUD', () => {
+  const withDomain = () => {
+    const state = makeDefaultState()
+    state.config = { ...state.config, mailDomain: 'example.com' }
+    return state
+  }
+
+  it('新增後出現在 GET /config 的 fallbackRecipients 裡', async () => {
+    const state = withDomain()
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const created = await request(app)
+      .post('/api/notify/recipients').send({ name: 'Amy_Chen', note: 'QA 窗口' })
+    expect(created.status).toBe(200)
+
+    const cfg = await request(app).get('/api/notify/config')
+    expect(cfg.body.fallbackRecipients).toEqual([
+      { id: 'new-rcpt-0', name: 'Amy_Chen', note: 'QA 窗口', isActive: true },
+    ])
+  })
+
+  it('帳號名接上 mailDomain 組不成有效信箱時擋下', async () => {
+    // 代收群組是最後一道防線，它自己填錯的話信就真的寄不出去了。
+    const state = withDomain()
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).post('/api/notify/recipients').send({ name: '@broken' })
+
+    expect(res.status).toBe(422)
+    expect(res.body.errors?.name).toBeTruthy()
+    expect(state.recipients).toHaveLength(0)
+  })
+
+  it('mailDomain 未設定時擋下，並指出是網域沒設', async () => {
+    // 沒有網域，任何裸帳號名都組不成信箱 —— 錯誤訊息要指向真正該修的地方，
+    // 否則管理者會反覆懷疑自己名字打錯。
+    const state = makeDefaultState()
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).post('/api/notify/recipients').send({ name: 'Amy_Chen' })
+
+    expect(res.status).toBe(422)
+    expect(res.body.errors?.name).toContain('寄件網域')
+  })
+
+  it('一筆只能是一位收件人，填多個要擋下', async () => {
+    const state = withDomain()
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).post('/api/notify/recipients').send({ name: 'Amy_Chen, Kevin_Yu' })
+
+    expect(res.status).toBe(422)
+    expect(state.recipients).toHaveLength(0)
+  })
+
+  it('空白名稱擋下', async () => {
+    const state = withDomain()
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    expect((await request(app).post('/api/notify/recipients').send({ name: '   ' })).status).toBe(422)
+  })
+
+  it('可以停用而不刪除；停用後 runner 就撈不到', async () => {
+    const state = withDomain()
+    state.recipients = [{ id: 'r1', name: 'Amy_Chen', note: '', isActive: true, notifyConfigId: 1 }]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).put('/api/notify/recipients/r1').send({ isActive: false })
+
+    expect(res.status).toBe(200)
+    expect(state.recipients[0].isActive).toBe(false)
+    // runner 只取 isActive: true
+    expect(await currentPrisma.recipient.findMany({ where: { isActive: true } })).toEqual([])
+  })
+
+  it('改名時同樣要通過信箱驗證', async () => {
+    const state = withDomain()
+    state.recipients = [{ id: 'r1', name: 'Amy_Chen', note: '', isActive: true, notifyConfigId: 1 }]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).put('/api/notify/recipients/r1').send({ name: '@broken' })
+
+    expect(res.status).toBe(422)
+    expect(state.recipients[0].name).toBe('Amy_Chen')
+  })
+
+  it('刪除後就不在清單裡', async () => {
+    const state = withDomain()
+    state.recipients = [{ id: 'r1', name: 'Amy_Chen', note: '', isActive: true, notifyConfigId: 1 }]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    expect((await request(app).delete('/api/notify/recipients/r1')).status).toBe(200)
+    expect(state.recipients).toHaveLength(0)
+  })
+
+  it('操作不存在的代收人員回 404，不是 500', async () => {
+    const state = withDomain()
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    expect((await request(app).put('/api/notify/recipients/nope').send({ isActive: false })).status).toBe(404)
+    expect((await request(app).delete('/api/notify/recipients/nope')).status).toBe(404)
   })
 })

@@ -5,7 +5,7 @@ import { appendAudit, DEFAULT_NOTIFY_RULE_ID } from '../lib/storage.js'
 import { requireAdmin } from '../middleware/requireAdmin.js'
 import { validateTemplate, TEMPLATE_VARS } from '../lib/notifyTemplate.js'
 import { resolveRule } from '../lib/notifyRule.js'
-import { planRecipients } from '../lib/notifyRecipients.js'
+import { planRecipients, resolveRecipients } from '../lib/notifyRecipients.js'
 import { buildTemplateVars, buildMailBody } from '../lib/notifyMailBody.js'
 import { computeSendDate, daysBetween } from '../lib/notifyDate.js'
 import { todayTaipei } from '../lib/today.js'
@@ -97,6 +97,102 @@ router.put('/config', async (req, res) => {
 
   await prisma.notifyConfig.update({ where: { id: 1 }, data })
   await audit(req, '通知設定', Object.keys(data))
+  res.json({ ok: true })
+})
+
+// --- 代收群組（需求人員無法對應時的收件人）------------------------------
+
+/**
+ * 驗證一筆代收人員的名稱。
+ *
+ * 代收群組是最後一道防線：需求人員對應不出信箱時整封信改寄給它。若它本身也
+ * 填錯，runner 會走到「無 fallback 收件人」那條路 —— 不寄、不留記錄，只在
+ * 管理者手動重跑時才看得到錯誤。因此在存檔時就擋下，不留到寄信當下。
+ *
+ * 一筆只允許一位收件人：Recipient 逐列停用/刪除，一列塞多人的話就沒辦法
+ * 單獨停用其中一位。
+ */
+function recipientNameError(name: string, mailDomain: string): string | null {
+  const trimmed = (name ?? '').trim()
+  if (!trimmed) return '代收人員不可空白'
+
+  const { addresses, unresolved } = resolveRecipients(trimmed, mailDomain)
+  if (addresses.length > 1 || (addresses.length === 1 && unresolved.length > 0)) {
+    return '一筆只能填一位代收人員，請分開新增'
+  }
+  if (addresses.length === 0) {
+    // 網域沒設時每個裸帳號名都會失敗。訊息要指向真正該修的地方，否則管理者
+    // 會反覆懷疑是自己名字打錯。
+    return mailDomain.trim()
+      ? `「${trimmed}」無法組成有效信箱；請填公司帳號名或完整 email`
+      : '尚未設定寄件網域，請先填寫「寄件網域」再新增代收人員'
+  }
+  return null
+}
+
+// POST /api/notify/recipients
+router.post('/recipients', async (req, res) => {
+  const { name, note } = req.body as { name?: unknown; note?: unknown }
+  if (typeof name !== 'string') {
+    res.status(422).json({ ok: false, errors: { name: '代收人員不可空白' } })
+    return
+  }
+  const config = await prisma.notifyConfig.findUnique({ where: { id: 1 } })
+  const error = recipientNameError(name, config?.mailDomain ?? '')
+  if (error) {
+    res.status(422).json({ ok: false, errors: { name: error } })
+    return
+  }
+  const created = await prisma.recipient.create({
+    data: {
+      name: name.trim(),
+      note: typeof note === 'string' ? note.trim() : '',
+      isActive: true,
+      notifyConfigId: 1,
+    },
+  })
+  await audit(req, `代收人員：${created.name}（新增）`, [])
+  res.json({ ok: true, recipient: created })
+})
+
+// PUT /api/notify/recipients/:id
+router.put('/recipients/:id', async (req, res) => {
+  const existing = await prisma.recipient.findUnique({ where: { id: req.params.id } })
+  if (!existing) {
+    res.status(404).json({ ok: false, message: '找不到該代收人員' })
+    return
+  }
+  const body = req.body as Partial<{ name: string; note: string; isActive: boolean }>
+
+  // 白名單，與 PUT /config 同樣的理由：不能把 req.body 整包丟給 update，
+  // 否則呼叫端可以夾帶 id 或 notifyConfigId 改寫這條路由沒打算開放的欄位。
+  const data: Partial<{ name: string; note: string; isActive: boolean }> = {}
+  if (body.name !== undefined) {
+    const config = await prisma.notifyConfig.findUnique({ where: { id: 1 } })
+    const error = recipientNameError(body.name, config?.mailDomain ?? '')
+    if (error) {
+      res.status(422).json({ ok: false, errors: { name: error } })
+      return
+    }
+    data.name = body.name.trim()
+  }
+  if (body.note !== undefined) data.note = String(body.note).trim()
+  if (body.isActive !== undefined) data.isActive = Boolean(body.isActive)
+
+  await prisma.recipient.update({ where: { id: req.params.id }, data })
+  await audit(req, `代收人員：${existing.name}`, Object.keys(data))
+  res.json({ ok: true })
+})
+
+// DELETE /api/notify/recipients/:id
+router.delete('/recipients/:id', async (req, res) => {
+  const existing = await prisma.recipient.findUnique({ where: { id: req.params.id } })
+  if (!existing) {
+    res.status(404).json({ ok: false, message: '找不到該代收人員' })
+    return
+  }
+  await prisma.recipient.delete({ where: { id: req.params.id } })
+  await audit(req, `代收人員：${existing.name}（刪除）`, [])
   res.json({ ok: true })
 })
 
