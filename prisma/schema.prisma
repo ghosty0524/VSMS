@@ -177,6 +177,9 @@ model NotificationLog {
   smtpResponse String?   @db.Text
   sentAt       DateTime?
   createdAt    DateTime  @default(now())
+  // 重試是對同一列 upsert-update，createdAt 不會動。記錄頁要以「最後處理
+  // 時間」排序，才不會讓今天重試成功的舊記錄永遠沉在下面看不到。
+  updatedAt    DateTime  @updatedAt
 
   @@unique([scheduleId, sendDate])
   @@index([sendDate])

@@ -198,6 +198,13 @@ export interface NotifyLog {
   smtpResponse: string | null
   sentAt: string | null
   createdAt: string
+  /**
+   * 最後一次處理這筆通知的時間；記錄頁的排序依據，也是畫面上顯示的那一欄。
+   * 標為選填是因為 dist 由磁碟即時服務、後端要重啟才生效，兩者之間必然有一段
+   * 新前端搭舊後端的時間，那時這個欄位不存在。
+   */
+  updatedAt?: string
+  /** 排程已刪除時為空字串。 */
   projectName: string
   testUnit: string
   startDate: string

@@ -10,6 +10,9 @@ export function NotifyManager() {
   const [testTo, setTestTo] = useState('')
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  // 遞增後傳給 NotifyLogTable 觸發重載。「立即檢查並補寄」會產生新的通知記錄，
+  // 但那張表在別的元件裡，不主動通知它就會停在舊內容。
+  const [logRefresh, setLogRefresh] = useState(0)
 
   const reload = async () => {
     const [c, r] = await Promise.all([api.notifyConfig(), api.notifyRules()])
@@ -79,7 +82,12 @@ export function NotifyManager() {
       setMsg({ kind: hasProblem ? 'err' : 'ok', text })
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : String(e) })
-    } finally { setBusy(false) }
+    } finally {
+      setBusy(false)
+      // 成功、失敗、alreadyRunning 都要重載：失敗那批也會寫進通知記錄，
+      // 只在成功時重載會讓使用者看不到剛剛失敗的那幾筆。
+      setLogRefresh(n => n + 1)
+    }
   }
 
   const addRule = async (unit: string) => {
@@ -131,7 +139,9 @@ export function NotifyManager() {
 
         <div className="grid grid-cols-2 gap-4 max-w-md">
           <label className="text-sm">
-            <span className="block text-xs text-gray-600 mb-1">提前天數</span>
+            <span className="block text-xs text-gray-600 mb-1" title="往前數幾個工作天寄出；休息日不計入">
+              提前工作天數
+            </span>
             <input type="number" min={1} value={config.leadDays}
               onChange={e => setConfig({ ...config, leadDays: Number(e.target.value) })}
               onBlur={e => saveConfig({ leadDays: Number(e.target.value) })}
@@ -212,7 +222,7 @@ export function NotifyManager() {
       {/* ── 通知記錄 ── */}
       <section className="border-t border-gray-200 pt-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">通知記錄</h3>
-        <NotifyLogTable />
+        <NotifyLogTable refreshToken={logRefresh} />
       </section>
     </div>
   )

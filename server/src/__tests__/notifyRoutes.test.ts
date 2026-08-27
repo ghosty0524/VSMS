@@ -120,10 +120,26 @@ interface FakeConfig {
   teamsWebhookUrl: string
 }
 
+interface FakeLog {
+  id: string
+  scheduleId: string
+  sendDate: string
+  status: string
+  recipients: string
+  errorMessage: string | null
+  attempts: number
+  messageId: string | null
+  smtpResponse: string | null
+  sentAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 interface FakeState {
   config: FakeConfig
   rules: FakeRule[]
   schedules: FakeSchedule[]
+  logs: FakeLog[]
   restDays: { id: number; weekends: boolean; specificDates: string[] }
   deletedRuleIds: string[]
   lastRuleUpdateData: Record<string, unknown> | null
@@ -135,6 +151,7 @@ function makeDefaultState(): FakeState {
     config: { id: 1, enabled: true, systemUrl: '', leadDays: 3, catchUpDays: 3, mailDomain: '', teamsWebhookUrl: '' },
     rules: [],
     schedules: [],
+    logs: [],
     restDays: { id: 1, weekends: true, specificDates: [] },
     deletedRuleIds: [],
     lastRuleUpdateData: null,
@@ -178,6 +195,18 @@ function makeFakePrisma(state: FakeState) {
     schedule: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         state.schedules.find(s => s.id === where.id) ?? null,
+      findMany: async ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
+        state.schedules.filter(s => !where?.id?.in || where.id.in.includes(s.id)),
+    },
+    notificationLog: {
+      findMany: async (
+        { orderBy, take }: { orderBy?: Record<string, 'asc' | 'desc'>; take?: number } = {},
+      ) => {
+        const [key, dir] = Object.entries(orderBy ?? {})[0] ?? ['createdAt', 'desc']
+        const at = (l: FakeLog) => (l[key as keyof FakeLog] as Date).getTime()
+        const sorted = [...state.logs].sort((a, b) => dir === 'desc' ? at(b) - at(a) : at(a) - at(b))
+        return typeof take === 'number' ? sorted.slice(0, take) : sorted
+      },
     },
     restDaysConfig: {
       findUnique: async () => state.restDays,
@@ -357,5 +386,94 @@ describe('POST /api/notify/test — 型別防護（Fix 2）', () => {
     expect(res.status).toBe(422)
     expect(res.body.errors?.to).toBeTruthy()
     expect(res.body.code).not.toBe('INTERNAL_SERVER_ERROR')
+  })
+})
+
+describe('POST /api/notify/preview — 收件人與實際寄出一致', () => {
+  it('副本含規則固定副本與該排程的測試人員', async () => {
+    const state = makeDefaultState()
+    state.config = { ...state.config, mailDomain: 'example.com' }
+    state.rules = [{
+      id: DEFAULT_NOTIFY_RULE_ID, testUnit: null, enabled: true,
+      subjectTemplate: 'S', introTemplate: '', outroTemplate: '',
+      ccRecipients: 'dept_head',
+    }]
+    state.schedules = [{
+      id: 'sched-1', projectName: 'P', taskDescription: 'T', category: 'C',
+      testUnit: 'RA', testEngineer: 'Darius_Chang', device: 'D',
+      startDate: '2031/03/10', endDate: '2031/03/10', timeResource: 1,
+      requiredPersonnel: 'Amy_Chen',
+    }]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).post('/api/notify/preview').send({ scheduleId: 'sched-1' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.to).toEqual(['Amy_Chen@example.com'])
+    expect(res.body.cc).toEqual(['dept_head@example.com', 'Darius_Chang@example.com'])
+  })
+})
+
+describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
+  const log = (o: Partial<FakeLog> & { id: string; sendDate: string; updatedAt: Date }): FakeLog => ({
+    scheduleId: 'sched-1', status: 'sent', recipients: 'a@example.com',
+    errorMessage: null, attempts: 1, messageId: null, smtpResponse: null,
+    sentAt: null, createdAt: o.updatedAt, ...o,
+  })
+
+  it('依 updatedAt 排序，補寄的舊 sendDate 記錄排在最前面', async () => {
+    // 使用者回報的情境：今天才補寄出去的那筆，sendDate 是好幾天前。若用
+    // sendDate 排序，它會沉到下面，看起來就像「今天沒跑」。
+    const state = makeDefaultState()
+    state.logs = [
+      // 08/20 就建立、今天重試才成功的那筆。createdAt 停在 08/20，只有
+      // updatedAt 會動 —— 用 createdAt 排序它就永遠浮不上來。
+      log({
+        id: 'retried-today', sendDate: '2026/08/20',
+        createdAt: new Date('2026-08-20T00:00:00Z'),
+        updatedAt: new Date('2026-08-27T00:00:00Z'),
+      }),
+      log({
+        id: 'sent-once-on-08-26', sendDate: '2026/08/26',
+        createdAt: new Date('2026-08-26T00:00:00Z'),
+        updatedAt: new Date('2026-08-26T00:00:00Z'),
+      }),
+    ]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).get('/api/notify/logs')
+
+    expect(res.status).toBe(200)
+    expect(res.body.logs.map((l: { id: string }) => l.id)).toEqual([
+      'retried-today',
+      'sent-once-on-08-26',
+    ])
+  })
+
+  it('回傳 updatedAt，前端才有辦法把排序依據顯示出來', async () => {
+    const state = makeDefaultState()
+    state.logs = [log({ id: 'l1', sendDate: '2026/08/25', updatedAt: new Date('2026-08-27T00:00:00Z') })]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).get('/api/notify/logs')
+
+    expect(res.body.logs[0].updatedAt).toBe('2026-08-27T00:00:00.000Z')
+  })
+
+  it('排程已刪除時 projectName 回空字串，由前端決定怎麼呈現', async () => {
+    // 回字串 '(已刪除)' 會讓前端的 `l.projectName || …` 永遠不成立，灰字提示
+    // 變成死碼。空字串才讓兩邊的約定成立。
+    const state = makeDefaultState()
+    state.logs = [log({ id: 'l1', scheduleId: 'gone', sendDate: '2026/08/25', updatedAt: new Date('2026-08-27T00:00:00Z') })]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).get('/api/notify/logs')
+
+    expect(res.body.logs[0].projectName).toBe('')
+    expect(res.body.logs[0].testUnit).toBe('')
   })
 })

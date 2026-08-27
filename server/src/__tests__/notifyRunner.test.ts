@@ -4,7 +4,9 @@ import type { NotifyStore, NotifyConfigRow, CandidateSchedule, NotificationLogRo
 import type { NotifyRuleRow } from '../lib/notifyRule.js'
 import type { Mailer, SendMailInput } from '../lib/mailer.js'
 
-// 2026/08/21 是週五。leadDays=3 → 08/24(一) 的寄信日正是 08/21。
+// 2026/08/21 是週五。leadDays 是 3 個「工作天」，所以 08/26(三) 的寄信日正是
+// 08/21：往前數 08/25(二)、08/24(一)，跳過 08/23(日) 與 08/22(六)，第三個工作天
+// 落在 08/21(五)。
 const NOW = new Date('2026-08-21T00:30:00Z') // 台灣 08:30
 
 const baseSchedule: CandidateSchedule = {
@@ -15,7 +17,7 @@ const baseSchedule: CandidateSchedule = {
   testUnit: 'EMC',
   testEngineer: 'Darius_Chang',
   device: 'Chamber-A',
-  startDate: '2026/08/24',
+  startDate: '2026/08/26',
   endDate: '2026/09/02',
   timeResource: 5,
   requiredPersonnel: 'Amy_Chen',
@@ -133,7 +135,7 @@ describe('runDailyNotify', () => {
   })
 
   it('catches up on a send date that has already passed', async () => {
-    // 08/26(三) 啟動 → 寄信日 08/23(日) → 挪到 08/21(五)。今天是 08/24(一)，
+    // 08/26(三) 啟動 → 往前三個工作天 = 08/21(五)。今天是 08/24(一)，
     // 已過期兩天，仍在 catchUpDays=3 的視窗內。
     const late = { ...baseSchedule, startDate: '2026/08/26' }
     const { store } = makeStore({ candidates: [late] })
@@ -184,7 +186,9 @@ describe('runDailyNotify', () => {
     const { store } = makeStore({ rules: [withCc, emc] })
     const { mailer, sent } = makeMailer()
     await runDailyNotify(store, mailer, NOW)
-    expect(sent[0].cc).toEqual(['dept_head@example.com', 'emc_window@example.com'])
+    expect(sent[0].cc).toEqual([
+      'dept_head@example.com', 'emc_window@example.com', 'Darius_Chang@example.com',
+    ])
   })
 
   it('falls back to the fallback group when no recipient can be resolved', async () => {
@@ -237,7 +241,7 @@ describe('runDailyNotify', () => {
 
   it('sends when the send date lands exactly on the catch-up window start', async () => {
     // today=2026/08/21, catchUpDays=3 → windowStart=2026/08/18。
-    // startDate=2026/08/21 → sendDate=addDays(-3)=2026/08/18，恰好等於下界。
+    // startDate=2026/08/21(五) → 往前三個工作天 08/20、08/19、08/18，恰好等於下界。
     const atWindowStart = { ...baseSchedule, startDate: '2026/08/21' }
     const { store, upserts } = makeStore({ candidates: [atWindowStart] })
     const { mailer, sent } = makeMailer()
@@ -248,7 +252,7 @@ describe('runDailyNotify', () => {
   })
 
   it('does not send, and increments missedWindow, one day before the catch-up window start', async () => {
-    // startDate=2026/08/20 → sendDate=2026/08/17，比 windowStart(2026/08/18) 早一天。
+    // startDate=2026/08/20(四) → 往前三個工作天 = 08/17(一)，比 windowStart(08/18) 早一天。
     const justBefore = { ...baseSchedule, startDate: '2026/08/20' }
     const { store, upserts } = makeStore({ candidates: [justBefore] })
     const { mailer, sent } = makeMailer()
@@ -261,9 +265,8 @@ describe('runDailyNotify', () => {
   // --- Fix 3: daysUntilStart is read from today, not the send date -------
 
   it('computes daysUntilStart from today rather than the catch-up send date', async () => {
-    // 08/26(三) 啟動 → 寄信日 08/23(日) → 挪到 08/21(五)。今天是 08/24(一)，
-    // 讀信當下距離開始只剩 2 天（08/26 - 08/24），不是以寄信日算出的 5 天
-    // （08/26 - 08/21）。
+    // 08/26(三) 啟動 → 往前三個工作天 = 08/21(五)。今天是 08/24(一)，讀信當下
+    // 距離開始只剩 2 天（08/26 - 08/24），不是以寄信日算出的 5 天（08/26 - 08/21）。
     const withDays: NotifyRuleRow = { ...defaultRule, introTemplate: '距離開始還有 {{daysUntilStart}} 天' }
     const late = { ...baseSchedule, startDate: '2026/08/26' }
     const { store } = makeStore({ candidates: [late], rules: [withDays] })
@@ -297,14 +300,14 @@ describe('runDailyNotify', () => {
 
   // --- Test gap 4: cc is dropped on the fallback path ---------------------
 
-  it('drops cc on the fallback path', async () => {
+  it('drops the rule cc on the fallback path but keeps the test engineer', async () => {
     const withCc: NotifyRuleRow = { ...defaultRule, ccRecipients: 'dept_head' }
     const noOne = { ...baseSchedule, requiredPersonnel: '   ' }
     const { store } = makeStore({ candidates: [noOne], rules: [withCc] })
     const { mailer, sent } = makeMailer()
     await runDailyNotify(store, mailer, NOW)
     expect(sent[0].to).toEqual(['fallback@example.com'])
-    expect(sent[0].cc).toEqual([])
+    expect(sent[0].cc).toEqual(['Darius_Chang@example.com'])
   })
 
   // --- Test gap 5: the log's recipients field records what was sent ------
@@ -314,7 +317,9 @@ describe('runDailyNotify', () => {
     const { store, upserts } = makeStore({ rules: [withCc] })
     const { mailer } = makeMailer()
     await runDailyNotify(store, mailer, NOW)
-    expect(upserts[0].recipients).toBe('Amy_Chen@example.com, dept_head@example.com')
+    expect(upserts[0].recipients).toBe(
+      'Amy_Chen@example.com, dept_head@example.com, Darius_Chang@example.com',
+    )
   })
 
   // --- Test gap 6: idempotency is per (schedule, sendDate) ----------------
@@ -604,5 +609,36 @@ describe('runDailyNotify — 記錄 SMTP 回應', () => {
     expect(upserts[0].status).toBe('failed')
     expect(upserts[0].messageId).toBeNull()
     expect(upserts[0].smtpResponse).toBeNull()
+  })
+})
+
+describe('runDailyNotify — 測試人員副本', () => {
+
+  it('ccs the schedule test engineer even when no rule cc is configured', async () => {
+    const { store, upserts } = makeStore()
+    const { mailer, sent } = makeMailer()
+    await runDailyNotify(store, mailer, NOW)
+    expect(sent[0].to).toEqual(['Amy_Chen@example.com'])
+    expect(sent[0].cc).toEqual(['Darius_Chang@example.com'])
+    expect(upserts[0].recipients).toBe('Amy_Chen@example.com, Darius_Chang@example.com')
+  })
+
+  it('does not cc the test engineer when they are also the requiredPersonnel', async () => {
+    const selfServed = { ...baseSchedule, requiredPersonnel: 'Darius_Chang' }
+    const { store } = makeStore({ candidates: [selfServed] })
+    const { mailer, sent } = makeMailer()
+    await runDailyNotify(store, mailer, NOW)
+    expect(sent[0].to).toEqual(['Darius_Chang@example.com'])
+    expect(sent[0].cc).toEqual([])
+  })
+
+  it('still sends when the test engineer cannot be resolved to an address', async () => {
+    const odd = { ...baseSchedule, testEngineer: '@broken' }
+    const { store } = makeStore({ candidates: [odd] })
+    const { mailer, sent } = makeMailer()
+    const result = await runDailyNotify(store, mailer, NOW)
+    expect(sent[0].cc).toEqual([])
+    expect(result.sent).toBe(1)
+    expect(result.errors).toEqual([])
   })
 })

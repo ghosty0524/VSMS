@@ -1,7 +1,7 @@
 import { todayTaipei } from './today.js'
 import { computeSendDate, addDays, daysBetween } from './notifyDate.js'
 import type { RestDaySettings } from './notifyDate.js'
-import { resolveRecipients } from './notifyRecipients.js'
+import { planRecipients } from './notifyRecipients.js'
 import { resolveRule } from './notifyRule.js'
 import type { NotifyRuleRow } from './notifyRule.js'
 import { buildTemplateVars, buildMailBody } from './notifyMailBody.js'
@@ -231,15 +231,13 @@ async function runOnce(
         continue
       }
 
-      const primary = resolveRecipients(schedule.requiredPersonnel, config.mailDomain)
-      const cc = resolveRecipients(rule.ccRaw, config.mailDomain)
-
-      const usingFallback = primary.addresses.length === 0
-      // fallback 也要走同一支解析：Recipient.name 存的可能是帳號名而非完整信箱，
-      // 直接丟給 SMTP 會寄不出去。
-      const to = usingFallback
-        ? resolveRecipients(fallback.join(', '), config.mailDomain).addresses
-        : primary.addresses
+      const { to, cc, usingFallback } = planRecipients({
+        requiredPersonnel: schedule.requiredPersonnel,
+        testEngineer: schedule.testEngineer,
+        ruleCcRaw: rule.ccRaw,
+        fallbackRaw: fallback.join(', '),
+        mailDomain: config.mailDomain,
+      })
       if (to.length === 0) {
         result.errors.push({
           scheduleId: schedule.id,
@@ -266,7 +264,7 @@ async function runOnce(
       try {
         const info = await mailer.send({
           to,
-          cc: usingFallback ? [] : cc.addresses,
+          cc,
           subject: body.subject,
           text: body.text + notice,
           html: body.html + noticeHtml,
@@ -274,7 +272,7 @@ async function runOnce(
         mailSent = true
         await store.upsertLog({
           scheduleId: schedule.id, sendDate, status: 'sent',
-          recipients: [...to, ...(usingFallback ? [] : cc.addresses)].join(', '),
+          recipients: [...to, ...cc].join(', '),
           errorMessage: null, attempts, sentAt: now,
           messageId: info.messageId, smtpResponse: info.response,
         })
@@ -302,7 +300,7 @@ async function runOnce(
         await store.upsertLog({
           scheduleId: schedule.id, sendDate,
           status: (attempts >= MAX_ATTEMPTS && dayHasAdvanced) ? 'failed_permanent' : 'failed',
-          recipients: [...to, ...(usingFallback ? [] : cc.addresses)].join(', '),
+          recipients: [...to, ...cc].join(', '),
           errorMessage: message, attempts, sentAt: null,
           messageId: null, smtpResponse: null,
         })

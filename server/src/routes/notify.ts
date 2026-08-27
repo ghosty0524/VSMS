@@ -5,7 +5,7 @@ import { appendAudit, DEFAULT_NOTIFY_RULE_ID } from '../lib/storage.js'
 import { requireAdmin } from '../middleware/requireAdmin.js'
 import { validateTemplate, TEMPLATE_VARS } from '../lib/notifyTemplate.js'
 import { resolveRule } from '../lib/notifyRule.js'
-import { resolveRecipients } from '../lib/notifyRecipients.js'
+import { planRecipients } from '../lib/notifyRecipients.js'
 import { buildTemplateVars, buildMailBody } from '../lib/notifyMailBody.js'
 import { computeSendDate, daysBetween } from '../lib/notifyDate.js'
 import { todayTaipei } from '../lib/today.js'
@@ -207,10 +207,13 @@ router.post('/preview', async (req, res) => {
     res.status(404).json({ ok: false, message: '找不到該排程' })
     return
   }
-  const [config, rules, restDays] = await Promise.all([
+  const [config, rules, restDays, fallbackRows] = await Promise.all([
     prisma.notifyConfig.findUnique({ where: { id: 1 } }),
     prisma.notifyRule.findMany(),
     prisma.restDaysConfig.findUnique({ where: { id: 1 } }),
+    // 代收群組也要讀：預覽若不知道 runner 會改寄代收群組，需求人員對應不出
+    // 信箱時顯示出來的收件人會是空的，和實際寄出的對不上。
+    prisma.recipient.findMany({ where: { isActive: true, notifyConfigId: 1 } }),
   ])
   const rule = resolveRule(schedule.testUnit, rules)
   if (!rule) {
@@ -218,8 +221,13 @@ router.post('/preview', async (req, res) => {
     return
   }
   const domain = config?.mailDomain ?? ''
-  const primary = resolveRecipients(schedule.requiredPersonnel, domain)
-  const cc = resolveRecipients(rule.ccRaw, domain)
+  const plan = planRecipients({
+    requiredPersonnel: schedule.requiredPersonnel,
+    testEngineer: schedule.testEngineer,
+    ruleCcRaw: rule.ccRaw,
+    fallbackRaw: fallbackRows.map(r => r.name).filter(Boolean).join(', '),
+    mailDomain: domain,
+  })
   const leadDays = config?.leadDays ?? 3
   // 真正讀取管理者設定的休息日，不可硬編：預覽如果忽略了休息日設定，
   // 顯示出來的寄信日會和 runner 實際寄出的日子對不上，比沒有預覽更糟。
@@ -239,9 +247,9 @@ router.post('/preview', async (req, res) => {
     subject: body.subject,
     text: body.text,
     html: body.html,
-    to: primary.addresses,
-    cc: cc.addresses,
-    unresolved: primary.unresolved,
+    to: plan.to,
+    cc: plan.cc,
+    unresolved: plan.unresolved,
     sendDate,
     unitEnabled: rule.enabled,
   })
@@ -250,8 +258,11 @@ router.post('/preview', async (req, res) => {
 // GET /api/notify/logs
 router.get('/logs', async (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 200), 500)
+  // 以 updatedAt 而非 createdAt 排序：重試走的是 upsert-update，createdAt
+  // 停在第一次建立的時間，用它排序會讓今天才處理完的記錄沉在下面，看起來
+  // 就像當天沒跑。前端也要把這個時間顯示出來，排序依據才是看得見的。
   const logs = await prisma.notificationLog.findMany({
-    orderBy: { createdAt: 'desc' },
+    orderBy: { updatedAt: 'desc' },
     take: limit,
   })
   const schedules = await prisma.schedule.findMany({
@@ -262,7 +273,9 @@ router.get('/logs', async (req, res) => {
   res.json({
     logs: logs.map(l => ({
       ...l,
-      projectName: byId.get(l.scheduleId)?.projectName ?? '(已刪除)',
+      // 查不到就回空字串，由前端決定怎麼呈現（灰字提示）。這裡若自己填一段
+      // 文字，前端的 fallback 判斷永遠不成立，會變成死碼。
+      projectName: byId.get(l.scheduleId)?.projectName ?? '',
       testUnit: byId.get(l.scheduleId)?.testUnit ?? '',
       startDate: byId.get(l.scheduleId)?.startDate ?? '',
     })),

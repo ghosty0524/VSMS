@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveRecipients } from '../lib/notifyRecipients.js'
+import { resolveRecipients, planRecipients } from '../lib/notifyRecipients.js'
 
 const DOMAIN = 'example.com.tw'
 
@@ -59,5 +59,68 @@ describe('resolveRecipients', () => {
   it('returns empty results for an empty field', () => {
     expect(resolveRecipients('', DOMAIN)).toEqual({ addresses: [], unresolved: [] })
     expect(resolveRecipients('   ', DOMAIN)).toEqual({ addresses: [], unresolved: [] })
+  })
+})
+
+describe('planRecipients', () => {
+  const base = {
+    requiredPersonnel: 'Amy_Chen',
+    testEngineer: 'Darius_Chang',
+    ruleCcRaw: 'dept_head, emc_window',
+    fallbackRaw: 'fallback@example.com.tw',
+    mailDomain: DOMAIN,
+  }
+
+  it('puts the test engineer in cc after the rule cc recipients', () => {
+    const plan = planRecipients(base)
+    expect(plan.to).toEqual(['Amy_Chen@example.com.tw'])
+    expect(plan.cc).toEqual([
+      'dept_head@example.com.tw',
+      'emc_window@example.com.tw',
+      'Darius_Chang@example.com.tw',
+    ])
+    expect(plan.usingFallback).toBe(false)
+  })
+
+  it('keeps the test engineer in cc on the fallback path but drops the rule cc', () => {
+    // 代收情境下規則副本要清空——那批人不該收到寄錯對象的信；測試人員留著，
+    // 他是最有能力指出正確需求人員的人。
+    const plan = planRecipients({ ...base, requiredPersonnel: '   ' })
+    expect(plan.to).toEqual(['fallback@example.com.tw'])
+    expect(plan.cc).toEqual(['Darius_Chang@example.com.tw'])
+    expect(plan.usingFallback).toBe(true)
+  })
+
+  it('does not repeat the test engineer already listed in the rule cc', () => {
+    const plan = planRecipients({ ...base, ruleCcRaw: 'dept_head, darius_chang' })
+    expect(plan.cc).toEqual(['dept_head@example.com.tw', 'darius_chang@example.com.tw'])
+  })
+
+  it('omits the test engineer from cc when they are already a to recipient', () => {
+    // 測試人員同時是需求人員時，不去重就會 To 一次、CC 一次寄兩封給同一人。
+    const plan = planRecipients({
+      ...base, requiredPersonnel: 'Darius_Chang', ruleCcRaw: '',
+    })
+    expect(plan.to).toEqual(['Darius_Chang@example.com.tw'])
+    expect(plan.cc).toEqual([])
+  })
+
+  it('silently drops a test engineer that cannot form a valid address', () => {
+    // 與規則副本一致的處理方式：解析不出來就略過，不擋整封信。
+    const plan = planRecipients({ ...base, testEngineer: '@broken', ruleCcRaw: 'dept_head' })
+    expect(plan.cc).toEqual(['dept_head@example.com.tw'])
+    expect(plan.unresolved).toEqual([])
+  })
+
+  it('reports the unresolved requiredPersonnel tokens', () => {
+    const plan = planRecipients({ ...base, requiredPersonnel: '王小明@' })
+    expect(plan.usingFallback).toBe(true)
+    expect(plan.unresolved).toEqual(['王小明@'])
+  })
+
+  it('returns an empty to when neither requiredPersonnel nor the fallback resolves', () => {
+    const plan = planRecipients({ ...base, requiredPersonnel: '', fallbackRaw: '' })
+    expect(plan.to).toEqual([])
+    expect(plan.usingFallback).toBe(true)
   })
 })

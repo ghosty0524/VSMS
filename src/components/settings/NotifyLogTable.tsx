@@ -14,7 +14,24 @@ const STATUS_TEXT: Record<NotifyLog['status'], string> = {
   failed_permanent: '永久失敗',
 }
 
-export function NotifyLogTable() {
+/**
+ * 「最後處理時間」，也就是後端排序記錄的依據。
+ *
+ * 不把它顯示出來的話，畫面上唯一的日期是預定寄信日，而補寄會讓它早於實際
+ * 處理日 —— 使用者會看到日期欄前後跳動，並誤以為當天的排程沒有跑。
+ *
+ * 呼叫端在 updatedAt 缺席時退回 createdAt：dist 由磁碟即時服務，後端卻要重啟
+ * 才生效，中間必然有一段新前端搭舊後端。舊後端不回 updatedAt，也正好是以
+ * createdAt 排序，退回去剛好與當下的排序一致。
+ */
+function formatHandledAt(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+export function NotifyLogTable({ refreshToken = 0 }: { refreshToken?: number }) {
   const [logs, setLogs] = useState<NotifyLog[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,7 +40,9 @@ export function NotifyLogTable() {
       .then(r => { setLogs(r.logs); setError(null) })
       .catch(e => setError(e instanceof ApiError ? e.message : String(e)))
   }
-  useEffect(() => { reload() }, [])
+  // refreshToken 由外層在「立即檢查並補寄」跑完後遞增 —— 這張表是那顆按鈕的
+  // 兄弟元件，沒有這條線就只會停在進入頁面當下的內容。
+  useEffect(() => { reload() }, [refreshToken])
 
   if (error) return <p className="text-sm text-red-600">{error}</p>
   if (!logs) return <p className="text-sm text-gray-400">載入中…</p>
@@ -38,7 +57,8 @@ export function NotifyLogTable() {
       <table className="w-full text-sm">
         <thead>
           <tr className="text-xs text-gray-500 border-b border-gray-200">
-            <th className="text-left py-2 px-2">寄信日</th>
+            <th className="text-left py-2 px-2">最後處理</th>
+            <th className="text-left py-2 px-2">預定寄信日</th>
             <th className="text-left py-2 px-2">專案</th>
             <th className="text-left py-2 px-2">單位</th>
             <th className="text-left py-2 px-2">狀態</th>
@@ -48,7 +68,14 @@ export function NotifyLogTable() {
         <tbody>
           {logs.map(l => (
             <tr key={l.id} className="border-b border-gray-100 align-top">
-              <td className="py-2 px-2 whitespace-nowrap">{l.sendDate}</td>
+              <td className="py-2 px-2 whitespace-nowrap"
+                title="這筆通知最後一次被處理的時間，也是本表的排序依據">
+                {formatHandledAt(l.updatedAt ?? l.createdAt)}
+              </td>
+              <td className="py-2 px-2 whitespace-nowrap text-gray-600"
+                title="依提前天數與休息日算出的預定寄信日；補寄時會早於實際處理時間">
+                {l.sendDate}
+              </td>
               <td className="py-2 px-2">
                 {l.projectName || <span className="text-gray-400">（排程已刪除）</span>}
               </td>
