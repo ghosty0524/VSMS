@@ -12,6 +12,7 @@ import { runDailyNotify } from './lib/notifyRunner.js'
 import { prismaNotifyStore } from './lib/notifyStore.js'
 import { getMailer, isMailerConfigured } from './lib/mailer.js'
 import { guestReadOnly } from './middleware/guestReadOnly.js'
+import { errorHandler } from './middleware/errorHandler.js'
 import authRouter from './routes/auth.js'
 import schedulesRouter from './routes/schedules.js'
 import optionsRouter from './routes/options.js'
@@ -101,11 +102,7 @@ if (distPath) {
 app.use((req: express.Request, res: express.Response) => {
   res.status(404).json({ ok: false, code: 'NOT_FOUND', message: 'API endpoint not found', path: req.originalUrl })
 })
-app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  const message = err instanceof Error ? err.message : 'Unexpected server error'
-  console.error(`[server] ${req.method} ${req.originalUrl} failed:`, err)
-  res.status(500).json({ ok: false, code: 'INTERNAL_SERVER_ERROR', message })
-})
+app.use(errorHandler)
 
 // 每天 08:00（伺服器本地時間）檢查並寄出預告信。
 //
