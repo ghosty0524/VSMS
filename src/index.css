@@ -1,1 +1,125 @@
 @import "tailwindcss";
+
+/* ────────────────────────────────────────────────────────────────
+   VSMS 設計 token
+   ────────────────────────────────────────────────────────────────
+   原則：介面退到後面，顏色留給資料。
+
+   甘特圖已經用掉很多顏色 —— 四個測試單位色、每位工程師的衍生色、
+   五種狀態色、溢出綠（皆為 constants.ts 的 hex 常數）。介面若再用
+   Tailwind 預設的 blue-500，就會跟 SIT-HW 的藍與 Testing 的藍撞在
+   一起，讓按鈕看起來跟資料一樣重要。
+
+   因此這裡重新定義三件事：
+
+   1. 中性色階 —— 原本 gray（中性）、slate（偏冷）、stone（偏暖）
+      三套混用，篩選面板的暖灰貼在頁面的中性灰上會說不出哪裡怪。
+      三者一律指向同一組帶藍味的墨色階，既有的 gray-100 / stone-50 /
+      slate-800 class 不必改寫即可統一。
+
+   2. 強調色階 —— blue 整條改為低飽和青綠。專案裡 blue-* 只用於介面
+      （按鈕、選取態、focus ring、連結），資料色全部是 hex 常數，
+      所以整條換掉不會影響任何一筆排程的呈現。
+
+   3. 語意別名 —— --color-ink / --color-accent 供後續改版使用。
+
+   兩條色階的每一階都經過對比檢查：accent-500 起白字達 4.8:1、
+   accent-600 起 6.4:1、neutral-500 起 4.9:1，皆通過 WCAG AA。
+   ──────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* ── 中性：帶藍味的墨色階 ───────────────────────────────── */
+  --color-slate-50:  #F7F8FA;
+  --color-slate-100: #F1F3F7;
+  --color-slate-200: #E6EAF0;
+  --color-slate-300: #D6DBE3;
+  --color-slate-400: #97A1AF;
+  --color-slate-500: #64707F;
+  --color-slate-600: #4B5666;
+  --color-slate-700: #37414F;
+  --color-slate-800: #232D3B;
+  --color-slate-900: #17212E;
+  --color-slate-950: #0E1620;
+
+  /* gray 與 stone 併入同一組值，既有 class 不必改寫 */
+  --color-gray-50:  #F7F8FA;
+  --color-gray-100: #F1F3F7;
+  --color-gray-200: #E6EAF0;
+  --color-gray-300: #D6DBE3;
+  --color-gray-400: #97A1AF;
+  --color-gray-500: #64707F;
+  --color-gray-600: #4B5666;
+  --color-gray-700: #37414F;
+  --color-gray-800: #232D3B;
+  --color-gray-900: #17212E;
+  --color-gray-950: #0E1620;
+
+  --color-stone-50:  #F7F8FA;
+  --color-stone-100: #F1F3F7;
+  --color-stone-200: #E6EAF0;
+  --color-stone-300: #D6DBE3;
+  --color-stone-400: #97A1AF;
+  --color-stone-500: #64707F;
+  --color-stone-600: #4B5666;
+  --color-stone-700: #37414F;
+  --color-stone-800: #232D3B;
+  --color-stone-900: #17212E;
+  --color-stone-950: #0E1620;
+
+  /* ── 強調：低飽和青綠，取代介面藍 ───────────────────────── */
+  --color-blue-50:  #EDF6F4;
+  --color-blue-100: #D7EDE8;
+  --color-blue-200: #AEDBD2;
+  --color-blue-300: #79C2B6;
+  --color-blue-400: #3EA294;
+  --color-blue-500: #128077;
+  --color-blue-600: #0E6B63;
+  --color-blue-700: #0B554F;
+  --color-blue-800: #0A443F;
+  --color-blue-900: #093834;
+  --color-blue-950: #04211E;
+
+  /* ── 語意別名 ───────────────────────────────────────────── */
+  --color-ink:        #17212E;
+  --color-ink-soft:   #232D3B;
+  --color-accent:     #0E6B63;
+  --color-accent-mid: #128077;
+  --color-accent-bg:  #D7EDE8;
+
+  /* Header 的 toast 一直掛著 animate-fade-in，但這個 class 從來沒有
+     定義過，等於靜默失效。補上定義讓它真的有動畫。 */
+  --animate-fade-in: fade-in 0.18s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@layer base {
+  /* 鍵盤焦點：輸入框本來就有 focus:ring，這裡只補按鈕與連結。
+     滑鼠點擊不會觸發 :focus-visible，因此不影響既有的點擊觀感。 */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* 代號與日期在列表裡要能對齊比較，等寬數字讓欄位不會左右抖動 */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

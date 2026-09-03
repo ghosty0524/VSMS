@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { ClipboardList, Download, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { api } from '../../lib/api';
 
@@ -65,8 +66,9 @@ const AuditPage: React.FC = () => {
 
   if (role !== 'super_admin') {
     return (
-      <div className="p-8 text-center text-gray-500">
-        ⚠️ 此功能僅限 Super Admin 使用
+      <div className="p-8 flex items-center justify-center gap-2 text-gray-500">
+        <ShieldAlert size={16} className="flex-shrink-0" />
+        此功能僅限 Super Admin 使用
       </div>
     );
   }
@@ -76,13 +78,17 @@ const AuditPage: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-800">🗂️ 審計紀錄</h2>
+        <h2 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
+          <ClipboardList size={22} className="text-gray-400" />
+          審計紀錄
+        </h2>
         <button
           type="button"
           onClick={handleExport}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
         >
-          ⬇️ 匯出 CSV
+          <Download size={15} />
+          匯出 CSV
         </button>
       </div>
 
@@ -155,7 +161,7 @@ const AuditPage: React.FC = () => {
               ) : (
                 filtered.map((log) => (
                   <tr key={log.id} className="border-t hover:bg-gray-50">
-                    <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
+                    <td className="tnum px-4 py-2 text-gray-500 whitespace-nowrap">
                       {new Date(log.timestamp).toLocaleString('zh-TW')}
                     </td>
                     <td className="px-4 py-2 font-medium text-gray-800">

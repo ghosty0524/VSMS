@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Users } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
 export function LoginPage() {
@@ -50,7 +51,7 @@ export function LoginPage() {
         {loginError && loginError.includes('上限') && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-start gap-2">
-              <span className="text-red-500 text-base">🚫</span>
+              <Users size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-red-700">{loginError}</p>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
 import type { NotifyConfig, NotifyRule } from '../../types'
 import { NotifyLogTable } from './NotifyLogTable'
@@ -75,7 +76,7 @@ export function NotifyManager() {
       let text = `檢查 ${r.checked} 筆，寄出 ${r.sent}，失敗 ${r.failed}，略過 ${r.skipped}` +
         (r.excluded > 0 ? `，依排除規則不寄 ${r.excluded}` : '') +
         (r.missedWindow > 0
-          ? `，⚠ 超出補寄視窗未寄 ${r.missedWindow} 筆`
+          ? `，超出補寄視窗未寄 ${r.missedWindow} 筆`
           : `，超出補寄視窗 0 筆`)
       if (r.errors.length > 0) {
         text += `\n錯誤明細：${r.errors.map(e => `${e.scheduleId}：${e.message}`).join('；')}`
@@ -117,8 +118,11 @@ export function NotifyManager() {
   return (
     <div className="flex flex-col gap-6">
       {msg && (
-        <p className={`text-sm rounded px-3 py-2 whitespace-pre-line ${msg.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-          {msg.text}
+        <p className={`flex items-start gap-2 text-sm rounded px-3 py-2 whitespace-pre-line ${msg.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {msg.kind === 'ok'
+            ? <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
+            : <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />}
+          <span>{msg.text}</span>
         </p>
       )}
 

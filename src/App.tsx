@@ -6,6 +6,7 @@ import { LoginPage } from './components/layout/LoginPage'
 import { ProtectedLayout } from './components/ProtectedLayout'
 import { SessionExpiryWarning } from './components/shared/SessionExpiryWarning'
 import { StaleBuildBanner } from './components/shared/StaleBuildBanner'
+import { ToastHost } from './components/shared/ToastHost'
 import { LoadingScreen } from './components/shared/LoadingScreen'
 import { Header } from './components/layout/Header'
 import { GanttChart } from './components/schedule/GanttChart'
@@ -75,6 +76,9 @@ export function App() {
         </main>
         <SessionExpiryWarning />
         <StaleBuildBanner />
+        {/* 全站唯一的通知渲染點。Header 與 GanttChart 原本各自有 fixed 定位的
+            通知，同時出現會互相遮蔽，現在共用 store/toastStore 的同一個佇列。 */}
+        <ToastHost />
       </div>
     </ProtectedLayout>
   )

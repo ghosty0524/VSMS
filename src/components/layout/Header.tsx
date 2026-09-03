@@ -4,6 +4,7 @@ import {
   Upload, Download, FileSpreadsheet, Plus, LogOut,
   ChevronDown
 } from 'lucide-react'
+import { toast } from '../../store/toastStore'
 import { useAuthStore } from '../../store/authStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
@@ -18,12 +19,6 @@ interface Props {
   onNavigate: (v: View) => void
   onAddSchedule: () => void
   role: Role | null
-}
-
-interface ToastMsg {
-  id: number
-  text: string
-  type: 'success' | 'error' | 'info' | 'loading'
 }
 
 async function saveDashboardHTML(html: string): Promise<void> {
@@ -71,21 +66,10 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
   const [showImport, setShowImport]                     = useState(false)
   const [showExportMenu, setShowExportMenu]             = useState(false)
   const [showExportExcelModal, setShowExportExcelModal] = useState(false)
-  const [toasts, setToasts]                             = useState<ToastMsg[]>([])
   const exportRef = useRef<HTMLDivElement>(null)
 
-  // ── Toast 工具 ────────────────────────────────────────────
-  // error 與 loading 不自動消失：錯誤需使用者確認後手動關閉
-  const addToast = (text: string, type: ToastMsg['type'], duration = 4000) => {
-    const id = Date.now()
-    setToasts(prev => [...prev, { id, text, type }])
-    if (type !== 'loading' && type !== 'error') {
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration)
-    }
-    return id
-  }
-  const removeToast = (id: number) =>
-    setToasts(prev => prev.filter(t => t.id !== id))
+  // 通知改走全站共用佇列（store/toastStore.ts）。error 與 loading 不自動消失
+  // 的既有規則保留在 store 裡。
 
   // ── 點擊外部關閉選單 ──────────────────────────────────────
   useEffect(() => {
@@ -114,9 +98,9 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
     // Step 2：Agent Excel（generateAgentExcel 內部直接下載，回傳 void）
     try {
       await generateAgentExcel(schedules)
-      addToast('✅ Dashboard 與 Agent Excel 已匯出！請將 Excel 上傳至 SharePoint。', 'success', 6000)
+      toast.success('Dashboard 與 Agent Excel 已匯出。請將 Excel 上傳至 SharePoint。', 6000)
     } catch (err) {
-      addToast(`⚠️ Dashboard 已匯出，但 Agent Excel 產生失敗：${String(err)}`, 'error', 6000)
+      toast.error(`Dashboard 已匯出，但 Agent Excel 產生失敗：${String(err)}`)
     }
   }
 
@@ -134,19 +118,12 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
     return true
   })
 
-  const toastStyle: Record<ToastMsg['type'], string> = {
-    success: 'bg-white border-green-200 text-green-800',
-    error:   'bg-white border-red-200   text-red-800',
-    info:    'bg-white border-blue-200  text-blue-800',
-    loading: 'bg-white border-slate-200 text-slate-700',
-  }
-
   return (
     <>
       <header className="bg-slate-800 shadow-md flex-shrink-0">
 
         {/* ── 上排：Logo + 操作按鈕 ── */}
-        <div className="px-5 py-3 flex items-center justify-between">
+        <div className="px-5 py-3 flex items-center justify-between gap-3 whitespace-nowrap">
 
           {/* Logo */}
           <div className="flex items-center gap-3">
@@ -171,12 +148,16 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
               <button
                 type="button"
                 onClick={onAddSchedule}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold
+                title="新增排程"
+                className="flex flex-shrink-0 items-center gap-1.5 px-4 py-2 text-sm font-semibold
                            bg-blue-500 hover:bg-blue-400 text-white rounded-lg
                            shadow-sm transition-all duration-150 active:scale-95"
               >
                 <Plus size={15} strokeWidth={2.5} />
-                新增排程
+                {/* 窄畫面只留圖示。四顆操作按鈕加使用者資訊在 375px 下放不進一列，
+                    硬擠會讓中文標籤逐字直排。標籤都有 title 可補說明。
+                    第二階段會把這些按鈕搬到主畫面工具列，屆時可再檢討。 */}
+                <span className="hidden sm:block">新增排程</span>
               </button>
             )}
 
@@ -186,12 +167,12 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
               type="button"
               onClick={() => setShowImport(true)}
               title="匯入 Excel"
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium
+              className="flex flex-shrink-0 items-center gap-1.5 px-3 py-2 text-sm font-medium
                          bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg
                          border border-slate-600 transition-all duration-150"
             >
               <Upload size={14} />
-              匯入
+              <span className="hidden sm:block">匯入</span>
             </button>
             )}
 
@@ -201,12 +182,13 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
               <button
                 type="button"
                 onClick={() => setShowExportMenu(o => !o)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium
+                title="匯出"
+                className="flex flex-shrink-0 items-center gap-1.5 px-3 py-2 text-sm font-medium
                            bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg
                            border border-slate-600 transition-all duration-150"
               >
                 <Download size={14} />
-                匯出
+                <span className="hidden sm:block">匯出</span>
                 <ChevronDown
                   size={13}
                   className={`transition-transform duration-200
@@ -277,22 +259,28 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
                 <span className="text-sm text-slate-200 font-medium hidden sm:block">
                   {displayName}
                 </span>
+                {/* 角色徽章：原本是實色底加白字（purple-500 / green-500 /
+                    amber-500），對比只有 2.1～3.4:1，全部不到 AA 的 4.5:1。
+                    改為淡底深字，對比拉到 7:1 以上，在深色 Header 上也更安靜。
+                    三顆都補上 title，之前只有訪客那顆有。 */}
                 {role === 'super_admin' && (
-                  <span className="px-1.5 py-0.5 text-xs font-bold
-                                   bg-purple-500 text-white rounded-md leading-tight">
+                  <span title="超級管理者"
+                        className="px-1.5 py-0.5 text-xs font-bold
+                                   bg-purple-100 text-purple-800 rounded-md leading-tight">
                     SA
                   </span>
                 )}
                 {role === 'user' && (
-                  <span className="px-1.5 py-0.5 text-xs font-bold
-                                   bg-green-500 text-white rounded-md leading-tight">
+                  <span title="測試人員"
+                        className="px-1.5 py-0.5 text-xs font-bold
+                                   bg-emerald-100 text-emerald-800 rounded-md leading-tight">
                     U
                   </span>
                 )}
                 {role === 'guest' && (
                   <span title="訪客（唯讀）"
                         className="px-1.5 py-0.5 text-xs font-bold
-                                   bg-amber-500 text-white rounded-md leading-tight">
+                                   bg-amber-100 text-amber-800 rounded-md leading-tight">
                     G
                   </span>
                 )}
@@ -313,7 +301,7 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
         </div>
 
         {/* ── 下排：Tab 導覽 ── */}
-        <div className="px-5 flex items-center gap-0.5 bg-slate-900/40">
+        <div className="px-5 flex items-center gap-0.5 bg-slate-900/40 overflow-x-auto">
           {visibleTabs.map(tab => (
             <button
               key={tab.key}
@@ -332,37 +320,6 @@ export function Header({ currentView, onNavigate, onAddSchedule, role }: Props) 
           ))}
         </div>
       </header>
-
-      {/* ── Toast 通知堆疊 ── */}
-      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium
-                        border rounded-xl shadow-xl pointer-events-auto
-                        animate-fade-in min-w-[260px] max-w-[400px]
-                        ${toastStyle[toast.type]}`}
-          >
-            {toast.type === 'loading' && (
-              <svg className="animate-spin w-4 h-4 text-slate-500 flex-shrink-0"
-                   fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10"
-                        stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor"
-                      d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-            )}
-            <span className="flex-1">{toast.text}</span>
-            {toast.type !== 'loading' && (
-              <button
-                type="button"
-                onClick={() => removeToast(toast.id)}
-                className="opacity-40 hover:opacity-70 flex-shrink-0 ml-1"
-              >✕</button>
-            )}
-          </div>
-        ))}
-      </div>
 
       <ExcelImportModal isOpen={showImport} onClose={() => setShowImport(false)} />
 

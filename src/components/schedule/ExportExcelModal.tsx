@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Check, FileSpreadsheet, X } from 'lucide-react'
 import { useEscapeKey } from '../shared/useEscapeKey'
 
 interface Props {
@@ -47,13 +48,17 @@ export function ExportExcelModal({ isOpen, allUnits, onConfirm, onClose }: Props
         <div className="bg-white rounded-xl shadow-xl w-80 pointer-events-auto">
           {/* Header */}
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-800">📊 選擇匯出範圍</h3>
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-800">
+              <FileSpreadsheet size={15} className="text-gray-400" />
+              選擇匯出範圍
+            </h3>
             <button
               type="button"
+              aria-label="關閉"
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+              className="text-gray-400 hover:text-gray-600"
             >
-              ×
+              <X size={16} />
             </button>
           </div>
 
@@ -106,11 +111,14 @@ export function ExportExcelModal({ isOpen, allUnits, onConfirm, onClose }: Props
 
             {/* 已選提示 */}
             <div className="mt-3 px-2 py-1.5 bg-blue-50 rounded-lg">
-              <p className="text-xs text-blue-700">
-                {selected.length === 0
-                  ? `✅ 匯出全部 ${sortedUnits.length} 個單位的資料`
-                  : `✅ 匯出已選 ${selected.length} 個單位：${selected.join('、')}`
-                }
+              <p className="flex items-start gap-1.5 text-xs text-blue-700">
+                <Check size={13} className="flex-shrink-0 mt-0.5" />
+                <span>
+                  {selected.length === 0
+                    ? `匯出全部 ${sortedUnits.length} 個單位的資料`
+                    : `匯出已選 ${selected.length} 個單位：${selected.join('、')}`
+                  }
+                </span>
               </p>
             </div>
           </div>

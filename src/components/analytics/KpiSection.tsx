@@ -30,7 +30,7 @@ const KpiSection: React.FC<Props> = ({ schedules }) => {
         <span className="text-xs text-gray-400">總數 {total}（比率一律排除已取消）</span>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="tnum grid grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-gray-50 rounded-lg p-4">
           <p className="text-xs text-gray-500">進行中</p>
           <p className="text-2xl font-semibold text-gray-800 mt-1">{counts.Testing}</p>

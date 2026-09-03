@@ -38,13 +38,15 @@ export function SettingsPage() {
       <h2 className="text-xl font-bold text-gray-800 mb-4">系統設定</h2>
 
       {/* Tab 列 */}
-      <div className="flex border-b border-gray-200 mb-6 gap-1">
+      {/* 七個分頁在 375px 下放不進一列。少了 nowrap，每個標籤會被壓成
+          逐字直排；改為橫向捲動並讓每個分頁維持原寬度。 */}
+      <div className="flex border-b border-gray-200 mb-6 gap-1 overflow-x-auto whitespace-nowrap">
         {visibleTabs.map((t) => (
           <button
             type="button"
             key={t.key}
             onClick={() => setSettingsTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+            className={`flex-shrink-0 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
               activeTab === t.key
                 ? 'bg-white border border-b-white border-gray-200 text-blue-600 -mb-px'
                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'

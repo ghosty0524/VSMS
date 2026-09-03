@@ -1,5 +1,9 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
-import { ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange, Maximize2, Minimize2, ClipboardCopy } from 'lucide-react'
+import {
+  ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange, Maximize2, Minimize2, ClipboardCopy,
+  ClipboardList,
+} from 'lucide-react'
+import { toast } from '../../store/toastStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
@@ -201,19 +205,12 @@ export function GanttChart({
   const closeFlagPopover = useCallback(() => setFlagPopover(null), [])
 
   // 儲存成功但排程被目前篩選（預設隱藏 Completed）擋掉時的提示，
-  // 避免使用者以為「標記完成」沒有生效
-  const [saveNotice, setSaveNotice] = useState<string | null>(null)
-  const saveNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // 列表複製提示：成功時顯示筆數，讓使用者確認拿到的是完整篩選結果而非
-  // 虛擬化畫面上的可視列；失敗（不安全來源／權限被拒）時顯示原因而非無聲失敗。
-  const [copyNotice, setCopyNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
-  const copyNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 避免使用者以為「標記完成」沒有生效。
+  // 通知本身改走全站共用的 toast 佇列（見 store/toastStore.ts）—— 原本這裡與
+  // 複製提示、Header 的 toast 是三套各自 fixed 定位的實作，同時出現會互相遮蔽。
   const handleSaved = useCallback(({ isCompleted }: { isCompleted: boolean }) => {
     if (isCompleted && filterSort.statuses.length > 0 && !filterSort.statuses.includes('Completed')) {
-      setSaveNotice('已標記為 Completed。已完成的排程目前被「狀態」篩選隱藏，勾選 Completed 即可重新顯示。')
-      if (saveNoticeTimer.current) clearTimeout(saveNoticeTimer.current)
-      saveNoticeTimer.current = setTimeout(() => setSaveNotice(null), 8000)
+      toast.info('已標記為 Completed。已完成的排程目前被「狀態」篩選隱藏，勾選 Completed 即可重新顯示。', 8000)
     }
   }, [filterSort.statuses])
 
@@ -376,10 +373,8 @@ export function GanttChart({
   // TSV 與 HTML 表格寫入剪貼簿，這是它存在的唯一理由——虛擬化只渲染可視列 ± 緩衝，
   // 若照 DOM 內容複製，篩選出的 599 筆會只拿到畫面上那 20～30 列且不會有任何警示。
   const handleCopyList = async () => {
-    if (copyNoticeTimer.current) clearTimeout(copyNoticeTimer.current)
-
     if (filtered.length === 0) {
-      setCopyNotice({ kind: 'error', text: '沒有可複製的資料' })
+      toast.error('沒有可複製的資料')
     } else {
       try {
         // 轉換也放在 try 內：需求要求任何失敗都要看得見，不能只守剪貼簿那一段
@@ -394,15 +389,14 @@ export function GanttChart({
         const ok = await copyTableToClipboard(tsv, html)
         if (!ok) throw new Error('copyTableToClipboard failed')
 
-        setCopyNotice({ kind: 'success', text: `已複製 ${filtered.length} 筆到剪貼簿` })
+        toast.success(`已複製 ${filtered.length} 筆到剪貼簿`)
       } catch {
         // 三層（Clipboard API 兩種寫法 + execCommand 舊版路徑）都失敗或不可用時才會到這裡，
         // 需求明確要求「顯示提示而非無聲失敗」。HTTP 環境現在也有 execCommand 這條退路，
         // 因此不再把矛頭指向「改用 HTTPS」，而是引導使用者檢查瀏覽器層級的複製權限。
-        setCopyNotice({ kind: 'error', text: '複製失敗，請確認瀏覽器是否允許此網站存取剪貼簿' })
+        toast.error('複製失敗，請確認瀏覽器是否允許此網站存取剪貼簿')
       }
     }
-    copyNoticeTimer.current = setTimeout(() => setCopyNotice(null), 4000)
   }
 
   // ── 設備視角 rows ──────────────────────────────────────
@@ -489,10 +483,10 @@ export function GanttChart({
           collapsed={filterCollapsed} onToggleCollapse={onToggleFilter}
           role={role} groupBy={groupBy} />
         <div className="flex-1 flex items-center justify-center bg-white rounded-lg shadow m-4">
-          <div className="text-center text-gray-400">
-            <div className="text-5xl mb-4">📋</div>
-            <p className="text-base font-medium text-gray-500">尚無工作排程</p>
-            <p className="text-sm text-gray-400 mt-1">點擊右上角「＋ 新增排程」開始建立</p>
+          <div className="flex flex-col items-center text-center text-gray-400">
+            <ClipboardList size={44} strokeWidth={1.25} className="mb-4 text-gray-300" />
+            <p className="text-base font-medium text-gray-600">尚無工作排程</p>
+            <p className="text-sm text-gray-500 mt-1">點擊右上角「＋ 新增排程」開始建立</p>
           </div>
         </div>
         <ScheduleFormModal isOpen={showAddModal} schedule={null} onSaved={handleSaved} onClose={onCloseAddModal} />
@@ -568,11 +562,15 @@ export function GanttChart({
       </div>
 
       {/* ── 甘特圖控制列 ── */}
+      {/* whitespace-nowrap 會往下繼承到整列的按鈕文字。少了它，視窗一窄
+          Tailwind 的 flex 子項就會被壓縮，中文按鈕標籤變成逐字直排
+          （375px 下「甘特圖」會排成三行）。放不下時改為整列橫向捲動。 */}
       <div
-        className="flex-shrink-0 flex items-center justify-between px-4 py-2
+        className="flex-shrink-0 flex items-center justify-between gap-2 px-4 py-2
+                   overflow-x-auto whitespace-nowrap
                    bg-slate-50 border-b hover:bg-slate-100 transition-colors duration-150 select-none"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex flex-shrink-0 items-center gap-2">
           {/* 視圖切換：甘特圖 / 列表 */}
           <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-medium"
             onClick={e => e.stopPropagation()}>
@@ -603,7 +601,7 @@ export function GanttChart({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-shrink-0 items-center gap-2">
           {/* ★ 分組切換按鈕：列表模式下沒有分組概念，隱藏 */}
           {viewMode === 'gantt' && (
             <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-medium"
@@ -751,7 +749,7 @@ export function GanttChart({
                         <div key={dev.id} className="relative border-b flex items-center px-3"
                           style={{ height: ROW_H, background: evenFill }}>
                           <span className="text-[13px] font-semibold text-slate-800">{dev.label}</span>
-                          <span className="ml-2 text-xs text-gray-400">
+                          <span className="ml-2 text-xs text-gray-500">
                             {devSchedules.length > 0 ? `${devSchedules.length} 筆` : '（空）'}
                           </span>
                         </div>
@@ -921,7 +919,7 @@ export function GanttChart({
                             title={s.testEngineer ? engLabel(s.testEngineer) : '未指派測試人員'}>
                             {s.testEngineer ? engLabel(s.testEngineer) : '未指派'}
                           </span>
-                          <span className="flex-1 min-w-0 text-xs font-semibold text-slate-800 truncate"
+                          <span className="tnum flex-1 min-w-0 text-xs font-semibold text-slate-800 truncate"
                             title={s.projectName}>
                             {pdnDisplay(s.projectName, leftWidth)}
                           </span>
@@ -1032,7 +1030,7 @@ export function GanttChart({
                             style={{ background: statusColor.bg, color: statusColor.text, letterSpacing: '0.02em' }}>
                             {STATUS_GLYPH[status]} {status}
                           </span>
-                          <span className="min-w-0 text-[11px] text-slate-500 truncate"
+                          <span className="min-w-0 text-[11px] text-slate-600 truncate"
                             title={s.taskDescription}>
                             {s.taskDescription}
                           </span>
@@ -1147,27 +1145,6 @@ export function GanttChart({
       <ScheduleFormModal isOpen={showAddModal || !!editTarget} schedule={editTarget}
         onSaved={handleSaved}
         onClose={() => { setEditTarget(null); onCloseAddModal() }} />
-      {saveNotice && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-5 py-3 text-sm font-medium
-                        bg-blue-50 border border-blue-200 text-blue-800 rounded-xl shadow-xl
-                        min-w-[260px] max-w-[420px]">
-          <span>✅ {saveNotice}</span>
-          <button type="button" onClick={() => setSaveNotice(null)}
-            className="ml-auto text-blue-400 hover:text-blue-600">✕</button>
-        </div>
-      )}
-      {copyNotice && (
-        <div className={`fixed top-20 right-4 z-50 flex items-center gap-2 px-5 py-3 text-sm font-medium
-                        rounded-xl shadow-xl min-w-[260px] max-w-[420px] ${
-                          copyNotice.kind === 'success'
-                            ? 'bg-green-50 border border-green-200 text-green-800'
-                            : 'bg-red-50 border border-red-200 text-red-800'
-                        }`}>
-          <span>{copyNotice.kind === 'success' ? '✅' : '⚠️'} {copyNotice.text}</span>
-          <button type="button" onClick={() => setCopyNotice(null)}
-            className={`ml-auto ${copyNotice.kind === 'success' ? 'text-green-400 hover:text-green-600' : 'text-red-400 hover:text-red-600'}`}>✕</button>
-        </div>
-      )}
       <DeleteConfirmDialog isOpen={!!deleteTarget}
         message={`確定要刪除「${deleteTarget?.projectName}」嗎？此操作無法復原。`}
         onConfirm={() => { remove(deleteTarget!.id); setDeleteTarget(null) }}

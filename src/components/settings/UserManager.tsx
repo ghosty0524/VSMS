@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
+import { AlertTriangle } from 'lucide-react'
+import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { api } from '../../lib/api'
 import { useOptionsStore } from '../../store/optionsStore'
 import type { User } from '../../types'
@@ -31,6 +33,17 @@ export function UserManager() {
   })
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  // 確認對話框：與排程刪除共用 DeleteConfirmDialog，取代瀏覽器原生 confirm()。
+  // 原生對話框無法標示危險程度、樣式不受控，在不同瀏覽器長得也不一樣，
+  // 而且焦點預設落在「確定」，容易誤按。
+  const [confirmState, setConfirmState] = useState<{
+    title: string
+    message: string
+    confirmLabel: string
+    danger: boolean
+    run: () => Promise<void>
+  } | null>(null)
 
   const allUnits = useMemo(
     () => options.testUnits.filter(u => u.isActive).map(u => u.label).sort(),
@@ -115,19 +128,28 @@ export function UserManager() {
     }
   }
 
-  const handleDisable = async (user: SafeUser) => {
-    if (!confirm(`確定要停用帳號 ${user.username}？`)) return
-    try {
-      await api.disableUser(user.id)
-      showMsg(`帳號 ${user.username} 已停用`)
-      await loadUsers()
-    } catch (e: unknown) {
-      showMsg((e as Error).message || '停用失敗', true)
-    }
+  const handleDisable = (user: SafeUser) => {
+    setConfirmState({
+      title: '停用帳號',
+      message: `停用後 ${user.username} 將無法登入，但帳號資料會保留，之後可以再啟用。`,
+      confirmLabel: '停用',
+      danger: false,
+      run: async () => {
+        try {
+          await api.disableUser(user.id)
+          showMsg(`帳號 ${user.username} 已停用`)
+          await loadUsers()
+        } catch (e: unknown) {
+          showMsg((e as Error).message || '停用失敗', true)
+        }
+      },
+    })
   }
 
+  // 啟用是可逆且無破壞性的動作，不再彈確認。
+  // 對無害的操作也要求確認，只會養成不看內容就按確定的習慣，
+  // 反而削弱了「永久刪除」那個對話框該有的作用。
   const handleEnable = async (user: SafeUser) => {
-    if (!confirm(`確定要啟用帳號 ${user.username}？`)) return
     try {
       await api.enableUser(user.id)
       showMsg(`帳號 ${user.username} 已啟用`)
@@ -137,15 +159,23 @@ export function UserManager() {
     }
   }
 
-  const handleDeletePermanent = async (user: SafeUser) => {
-    if (!confirm(`⚠️ 確定要永久刪除帳號 ${user.username}？\n此操作無法復原！`)) return
-    try {
-      await api.deleteUserPermanent(user.id)
-      showMsg(`帳號 ${user.username} 已永久刪除`)
-      await loadUsers()
-    } catch (e: unknown) {
-      showMsg((e as Error).message || '刪除失敗', true)
-    }
+  const handleDeletePermanent = (user: SafeUser) => {
+    setConfirmState({
+      title: '永久刪除帳號',
+      message: `即將永久刪除 ${user.username}（${user.displayName || '未設顯示名稱'}）。`
+        + '此操作無法復原，該帳號的設定與關聯都會一併消失。',
+      confirmLabel: '永久刪除',
+      danger: true,
+      run: async () => {
+        try {
+          await api.deleteUserPermanent(user.id)
+          showMsg(`帳號 ${user.username} 已永久刪除`)
+          await loadUsers()
+        } catch (e: unknown) {
+          showMsg((e as Error).message || '刪除失敗', true)
+        }
+      },
+    })
   }
 
   const UnitSelector = ({
@@ -461,8 +491,9 @@ export function UserManager() {
                           啟用
                         </button>
                         <button type="button" onClick={() => handleDeletePermanent(user)}
-                          className="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">
-                          ⚠️ 永久刪除
+                          className="flex items-center gap-1 text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">
+                          <AlertTriangle size={12} />
+                          永久刪除
                         </button>
                       </>
                     )}
@@ -473,6 +504,16 @@ export function UserManager() {
           </div>
         ))}
       </div>
+
+      <DeleteConfirmDialog
+        isOpen={!!confirmState}
+        title={confirmState?.title}
+        message={confirmState?.message ?? ''}
+        confirmLabel={confirmState?.confirmLabel}
+        danger={confirmState?.danger ?? true}
+        onConfirm={() => { const s = confirmState; setConfirmState(null); void s?.run() }}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

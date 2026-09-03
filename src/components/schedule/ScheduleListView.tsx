@@ -87,7 +87,9 @@ export default function ScheduleListView({
 
   return (
     <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto" onScroll={updateVisibleRange}>
-      <table className="w-full text-xs border-collapse">
+      {/* tnum = tabular-nums（見 index.css）。日期與 PDN 的數字在欄位裡逐列
+          對齊，捲動時不會左右抖動，260024 與 260034 也一眼分得出來。 */}
+      <table className="tnum w-full text-xs border-collapse">
         <thead className="sticky top-0 z-10">
           <tr className="bg-slate-100">
             {HEADERS.map(h => (

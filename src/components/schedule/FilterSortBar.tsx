@@ -4,7 +4,7 @@ import {
   SlidersHorizontal, ChevronUp, ChevronDown,
   ChevronLeft, ChevronRight,
   CalendarRange, RotateCcw,
-  Bookmark, ShieldCheck,
+  Bookmark, ShieldCheck, Eye, EyeOff,
 } from 'lucide-react'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useScheduleStore } from '../../store/scheduleStore'
@@ -93,6 +93,46 @@ export const DEFAULT_FILTER: FilterSortState = {
 }
 
 const ALL_STATUSES: ScheduleStatus[] = ['Completed', 'Delayed', 'Testing', 'Planned', 'Cancelled']
+
+/**
+ * 收合時「N 項篩選」要顯示的數字。
+ *
+ * 舊版把「勾了幾個值」當成「有幾項篩選」：登入時的預設狀態勾了三個
+ * （Delayed／Testing／Planned）算三項，起始日期與結束日期各算一項，
+ * 於是使用者什麼都還沒做就被告知有「5 項篩選」。訪客最常在這裡誤以為
+ * 資料不見了。
+ *
+ * 改成計算「有幾個條件正在縮小結果」—— 一個下拉不管勾了幾個值都只算
+ * 一項，起訖日期合起來算一項，狀態勾滿五個等於沒篩選所以不算。
+ *
+ * showAllUnits 刻意不列入：它是把結果變多而不是變少，舊版把它算成一項
+ * 是反的；而且它本來就有一顆常駐可見的切換鈕，不需要再由數字轉述。
+ */
+export function countNarrowingFilters(v: FilterSortState): number {
+  let n = 0
+  if (v.categories.length)    n++
+  if (v.testUnits.length)     n++
+  if (v.testEngineers.length) n++
+  if (v.devices.length)       n++
+  if (v.keyword.trim())       n++
+  // 空陣列 = 不限狀態；勾滿全部也等於不限
+  if (v.statuses.length > 0 && v.statuses.length < ALL_STATUSES.length) n++
+  // 起訖日期是同一個條件的兩端，合起來算一項
+  if (v.ganttStart || v.ganttEnd) n++
+  if (v.showUserFlagged)  n++
+  if (v.showAdminFlagged) n++
+  return n
+}
+
+/**
+ * 目前被狀態篩選擋在外面的狀態。空陣列代表沒有東西被狀態擋掉。
+ * 登入預設會擋掉 Completed 與 Cancelled，這件事必須說出來，否則使用者
+ * 只會看到「排程比預期少」而不知道原因。
+ */
+export function hiddenStatuses(v: FilterSortState): ScheduleStatus[] {
+  if (v.statuses.length === 0) return []
+  return ALL_STATUSES.filter(s => !v.statuses.includes(s))
+}
 
 function toInputVal(s: string): string { return s ? s.replace(/\//g, '-') : '' }
 function fromInputVal(s: string): string { return s ? s.replace(/-/g, '/') : '' }
@@ -184,14 +224,8 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
     rules.length === DEFAULT_SORT_RULES.length &&
     rules.every((r, i) => r.field === DEFAULT_SORT_RULES[i].field && r.dir === DEFAULT_SORT_RULES[i].dir)
 
-  const activeCount =
-    value.categories.length + value.testUnits.length +
-    value.testEngineers.length + value.statuses.length +
-    (value.keyword ? 1 : 0) + (value.ganttStart ? 1 : 0) + (value.ganttEnd ? 1 : 0) +
-    (role === 'user' && value.showAllUnits ? 1 : 0) +
-    (value.showUserFlagged ? 1 : 0) +
-    (value.showAdminFlagged ? 1 : 0) +
-    (value.devices.length)
+  const activeCount = countNarrowingFilters(value)
+  const hidden = hiddenStatuses(value)
 
   const hasGanttRange = !!(value.ganttStart || value.ganttEnd)
 
@@ -212,6 +246,23 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
             <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full">
               {activeCount} 項篩選
             </span>
+          )}
+          {/* 被狀態篩選擋掉的排程要說出來，而且要能一鍵取消。
+              登入預設就擋掉 Completed 與 Cancelled，不講的話使用者只會
+              覺得「排程比我記得的少」而找不到原因。 */}
+          {hidden.length > 0 && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); set({ statuses: [] }) }}
+              title={`目前的狀態篩選把 ${hidden.join('、')} 排除在外。點擊一併顯示。`}
+              className="inline-flex items-center gap-1 text-xs font-medium
+                         text-stone-600 bg-white border border-stone-300
+                         px-1.5 py-0.5 rounded-full
+                         hover:border-blue-400 hover:text-blue-700 transition-colors"
+            >
+              <EyeOff size={11} />
+              已隱藏 {hidden.join('、')}
+            </button>
           )}
           {!isDefault && (
             <span className="text-xs font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
@@ -324,7 +375,7 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
                   </button>
 
                   {/* 序號 + 欄位名 */}
-                  <span className="text-[10px] text-stone-400 font-mono ml-0.5">{idx + 1}</span>
+                  <span className="text-[10px] text-stone-500 font-mono ml-0.5">{idx + 1}</span>
                   <span className="text-stone-700 font-medium mx-1 whitespace-nowrap">
                     {getLabelForField(rule.field)}
                   </span>
@@ -419,8 +470,8 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
                     : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
                   }`}
               >
-                <span>👁</span>
-                {value.showAllUnits ? '所有單位 ✓' : '顯示所有單位'}
+                <Eye size={13} />
+                {value.showAllUnits ? '所有單位' : '顯示所有單位'}
               </button>
             )}
 
