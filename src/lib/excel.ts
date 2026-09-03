@@ -2,6 +2,11 @@ import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import type { Schedule } from '../types'
+// 狀態與日期一律走既有的權威實作，不在這個檔案裡另外抄一份。
+// 這裡曾經有兩份自己的複本，其中日期那份的解析方式與畫面不一致，
+// 導致 Agent Excel 的狀態與剩餘天數跟系統對不起來（見下方 daysUntil 的說明）。
+import { computeStatus } from './status'
+import { daysBetweenYmd, fmtYmd } from './analytics'
 
 // ─── 匯入相關型別 ────────────────────────────────────────────
 export interface ImportRow {
@@ -166,25 +171,24 @@ export function exportSchedules(schedules: Schedule[], selectedUnits?: string[])
 // 與 Dashboard 匯出同步觸發，直接下載至本機
 // ─────────────────────────────────────────────────────────────
 
-// 計算排程狀態（對齊後端邏輯）
-function computeStatus(s: Schedule): string {
-  if (s.isCancelled) return 'Cancelled'
-  if (s.isCompleted) return 'Completed'
-  if (s.isDelayed)   return 'Delayed'
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const start = new Date(s.startDate.replace(/\//g, '-'))
-  // 已開始（含逾期）但未勾 Completed/Delayed → 維持 Testing
-  if (today >= start) return 'Testing'
-  return 'Planned'
-}
-
-// 計算距今剩餘天數
-function daysUntil(dateStr: string): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const target = new Date(dateStr.replace(/\//g, '-'))
-  return Math.ceil((target.getTime() - today.getTime()) / 86400000)
+/**
+ * 距今剩餘天數。負數代表已經過期。
+ *
+ * 原本這裡有一份自己的實作，用 `new Date(dateStr.replace(/\//g, '-'))` 解析日期。
+ * 那個寫法會產生 ISO 的「僅日期」字串，依規範解析為 **UTC 午夜**，但比較對象
+ * `today` 是本機午夜 —— 在台北（UTC+8）差了 8 小時，於是每一個日期都多算一天：
+ *
+ *   - 今日到期算成 1 天，所以「今日到期」這個標籤永遠不會出現
+ *   - 「即將到期」的 7 天視窗整個位移：昨天就已逾期的排程被列入並標成「今日到期」，
+ *     真正 7 天後到期的反而被排除
+ *   - KPI 的「7 天內到期」用同一個函式，同樣位移
+ *
+ * 這份 Excel 是給 Copilot agent 讀的，數字錯一天會直接變成 agent 的錯誤回答。
+ * 改為共用 analytics.ts 既有的 `daysBetweenYmd`（本機解析），不再自己留一份。
+ * 匯出後供測試使用。
+ */
+export function daysUntil(dateStr: string, today: Date = new Date()): number {
+  return daysBetweenYmd(fmtYmd(today), dateStr)
 }
 
 // 設定表頭樣式（深色背景白字）
