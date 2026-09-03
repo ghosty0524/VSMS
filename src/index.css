@@ -91,6 +91,93 @@
   --animate-fade-in: fade-in 0.18s ease-out;
 }
 
+/* ────────────────────────────────────────────────────────────────
+   甘特圖畫布的顏色
+
+   這些原本是散在 GanttChart.tsx 裡的 50 幾個十六進位字面值 ——
+   同一個 #cbd5e1 出現 14 次，而且看程式碼看不出哪幾次指的是同一件事。
+   抽成具名 token 之後，「表頭的分隔線」與「月份的分界線」才有辦法各自
+   調整而不會誤傷對方。
+
+   為什麼是 CSS 變數而不是 TS 常數 —— SVG 的 fill／stroke 是 CSS 屬性，
+   用變數就能被 prefers-color-scheme 或 [data-theme] 換掉；
+   寫成 TS 常數就得靠重新 render 才換得掉。
+   （注意 fill="var(--x)" 這種「屬性」寫法無效，必須走 CSS，
+   所以下面配了一組 class 給 SVG 元素掛。）
+
+   這一版刻意只定義淺色值，沒有加深色覆寫。
+   全站其餘部分還是 Tailwind 的 bg-white / text-slate-800，
+   只讓甘特圖跟著系統深色模式翻過去，會得到一半深一半淺的畫面，
+   比完全不支援更糟。深色模式要做就整站一起做。
+   ──────────────────────────────────────────────────────────────── */
+:root {
+  /* 畫布底色與斑馬紋 */
+  --gantt-canvas:      #fafbfc;
+  --gantt-row-even:    #fafbfc;
+  --gantt-row-odd:     #f1f5f9;
+  /* bar 區的斑馬紋疊在畫布上，用半透明才不會蓋掉底下的休息日色帶 */
+  --gantt-row-even-a:  rgba(250, 251, 252, 0.5);
+  --gantt-row-odd-a:   rgba(241, 245, 249, 0.5);
+
+  /* 表頭 */
+  --gantt-header-left: #e2e8f0;   /* 左上角那格 */
+  --gantt-header-time: #f1f5f9;   /* 時間軸那條 */
+  --gantt-header-text: #334155;   /* 「工作排程」與月份 */
+  --gantt-label-text:  #64748b;   /* 日期與星期 */
+
+  /* 線 */
+  --gantt-rule:        #cbd5e1;   /* 表頭橫線、月份分界線 */
+  --gantt-grid:        #e2e8f0;   /* 列分隔線、日格線 */
+
+  /* 休息日色帶 —— 表頭與 bar 區的值本來就不同（表頭疊在 #f1f5f9 上、
+     bar 區疊在 #fafbfc 上），這裡照原值分成兩個 token 保留。
+     兩者實際疊出來的顏色略有差異，是既有狀況，這次不動它。 */
+  --gantt-restday-header: rgba(100, 116, 139, 0.14);
+  --gantt-restday-body:   rgba(0, 0, 0, 0.085);
+
+  /* 今日 */
+  --gantt-today:       #ef4444;
+  --gantt-today-text:  #ffffff;
+
+  /* 未指派測試人員的徽章 */
+  --gantt-unassigned-bg:   #e2e8f0;
+  --gantt-unassigned-text: #64748b;
+
+  /* 取消排程的刪除線 */
+  --gantt-strike:      #334155;
+  /* 內裡淡化後 bar 上的人名字色（深色工程師色配白字會消失，見 GanttBar） */
+  --gantt-bar-dim-text: #334155;
+
+  /* 逾期尾巴。刻意跟今日線同色 —— 它量的正是「到今日為止」，
+     兩者是一組的，要改就一起改。 */
+  --gantt-overdue:     var(--gantt-today);
+}
+
+/* SVG 的 fill／stroke 吃 CSS 屬性，不吃 fill="var(--x)" 這種屬性寫法，
+   所以每個角色配一個 class。呈現屬性的優先權低於 CSS，
+   萬一哪裡還留著舊的 fill="..." 也會被這裡蓋過去。 */
+@layer base {
+  .g-canvas       { fill: var(--gantt-canvas); }
+  /* 左欄的斑馬紋是 HTML 的 background，直接用 var() 就好，不需要 class；
+     這裡只有 bar 區的半透明版本需要（SVG 的 fill 吃不到 var() 屬性）。 */
+  .g-row-even-a   { fill: var(--gantt-row-even-a); }
+  .g-row-odd-a    { fill: var(--gantt-row-odd-a); }
+  .g-header-left  { fill: var(--gantt-header-left); }
+  .g-header-time  { fill: var(--gantt-header-time); }
+  .g-header-text  { fill: var(--gantt-header-text); }
+  .g-label-text   { fill: var(--gantt-label-text); }
+  .g-rule         { stroke: var(--gantt-rule); }
+  .g-grid         { stroke: var(--gantt-grid); }
+  .g-restday-hdr  { fill: var(--gantt-restday-header); }
+  .g-restday      { fill: var(--gantt-restday-body); }
+  .g-today-line   { stroke: var(--gantt-today); }
+  .g-today-pill   { fill: var(--gantt-today); }
+  .g-today-text   { fill: var(--gantt-today-text); }
+  .g-strike       { stroke: var(--gantt-strike); }
+  .g-overdue-fill { fill: var(--gantt-overdue); }
+  .g-overdue-line { stroke: var(--gantt-overdue); }
+}
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -111,6 +198,29 @@
   /* 代號與日期在列表裡要能對齊比較，等寬數字讓欄位不會左右抖動 */
   .tnum {
     font-variant-numeric: tabular-nums;
+  }
+
+  /*
+    甘特圖左欄的列操作按鈕：平時隱形且不擋點擊，滑鼠停留在該列、或鍵盤焦點
+    進入按鈕時才浮現。
+
+    為什麼不用 display:none —— 那會把按鈕整個移出 Tab 順序，鍵盤使用者
+    再也按不到。opacity: 0 仍可被 Tab 聚焦，焦點一進來就顯示出來。
+
+    為什麼不用 Tailwind 的 opacity-0 + focus-within:opacity-100 ——
+    實測 focus-within 變體蓋不過同一元素上的 opacity-0（同樣寫法的
+    pointer-events 卻可以），是工具類排序的問題。寫成自己的規則就不必
+    跟那個排序賭。
+  */
+  .row-actions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s ease-out;
+  }
+  .gantt-row:hover .row-actions,
+  .row-actions:focus-within {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 

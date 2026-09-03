@@ -7,7 +7,7 @@ import { useAuthStore } from '../../store/authStore'
 import { api } from '../../lib/api'
 import { STATUS_COLORS, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../../lib/colors'
-import { computeStatus } from '../../lib/status'
+import { computeStatus, overdueDays } from '../../lib/status'
 import { schedulesToTsv, schedulesToHtmlTable } from '../../lib/clipboardTable'
 import { copyTableToClipboard } from '../../lib/copyToClipboard'
 import { isRestDay } from '../../lib/restDays'
@@ -18,7 +18,7 @@ import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { FlagPopover } from './FlagPopover'
 import ScheduleListView from './ScheduleListView'
 import { ScheduleToolbar } from './ScheduleToolbar'
-import GanttBar, { BAR_H } from './GanttBar'
+import GanttBar, { BAR_H, OverdueHatchPattern } from './GanttBar'
 import type { FilterSortState, SortRule, SortableField } from './FilterSortBar'
 import type { Role, Schedule, VtmsProgress } from '../../types'
 import type { ScheduleStatus } from '../../lib/status'
@@ -32,9 +32,15 @@ const HEADER_DAY   = 36
 const PX_PER_DAY   = 22
 
 // 左欄寬度達此值才顯示完整 PDN Number；未達則只顯示編號段（如 PDN-250061）。
-// 實際資料最長達 33 字元（PDN-210079 NCA-5220A-NZ1 [Nozomi]），
-// 預設 260px 塞不下人員徽章、PDN 與四顆操作按鈕。
-export const PDN_FULL_THRESHOLD = 340
+//
+// 門檻原本是 340，理由是「預設 260px 塞不下人員徽章、PDN 與四顆操作按鈕」。
+// 四顆操作按鈕改成停留才浮現之後，那 85px 回到了 PDN 身上：260px 的預設寬度
+// 現在有約 154px 給 PDN，而編號段只需要 75px，放得下編號加大半個機種名，
+// 超出的部分交給 CSS 截字，編號段一定完整。
+//
+// 新門檻取 200：左欄可拖到最窄 180px，那時 PDN 只剩約 74px，剛好差 1px 放不下
+// 編號段，所以極窄時仍退回只顯示編號段。
+export const PDN_FULL_THRESHOLD = 200
 
 export function pdnDisplay(projectName: string, leftWidth: number): string {
   if (leftWidth >= PDN_FULL_THRESHOLD) return projectName
@@ -591,27 +597,27 @@ export function GanttChart({
                 <div className="shrink-0 border-r relative"
                   style={{ width: leftWidth, height: HEADER_H }} onWheel={forwardWheelToBody}>
                   <svg width={leftWidth} height={HEADER_H} className="block">
-                    <rect x={0} y={0} width={leftWidth} height={HEADER_H} fill="#e2e8f0" />
-                    <text x={12} y={HEADER_MONTH / 2 + 6} fontSize={13} fill="#334155" fontWeight="700">設備視角</text>
-                    <line x1={0} y1={HEADER_MONTH} x2={leftWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                    <line x1={0} y1={HEADER_H - 1} x2={leftWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
+                    <rect x={0} y={0} width={leftWidth} height={HEADER_H} className="g-header-left" />
+                    <text x={12} y={HEADER_MONTH / 2 + 6} fontSize={13} className="g-header-text" fontWeight="700">設備視角</text>
+                    <line x1={0} y1={HEADER_MONTH} x2={leftWidth} y2={HEADER_MONTH} className="g-rule" strokeWidth={1} />
+                    <line x1={0} y1={HEADER_H - 1} x2={leftWidth} y2={HEADER_H - 1} className="g-rule" strokeWidth={1.5} />
                   </svg>
                 </div>
                 <div ref={rightHeaderRef} className="flex-1 overflow-hidden" onWheel={forwardWheelToBody}>
                   <svg width={svgWidth} height={HEADER_H} className="block">
-                    <rect x={0} y={0} width={svgWidth} height={HEADER_H} fill="#f1f5f9" />
-                    <line x1={0} y1={HEADER_MONTH} x2={svgWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                    <line x1={0} y1={HEADER_H - 1} x2={svgWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
+                    <rect x={0} y={0} width={svgWidth} height={HEADER_H} className="g-header-time" />
+                    <line x1={0} y1={HEADER_MONTH} x2={svgWidth} y2={HEADER_MONTH} className="g-rule" strokeWidth={1} />
+                    <line x1={0} y1={HEADER_H - 1} x2={svgWidth} y2={HEADER_H - 1} className="g-rule" strokeWidth={1.5} />
                     {monthLabels.map((ml) => (
                       <g key={ml.label}>
-                        <line x1={ml.x} y1={0} x2={ml.x} y2={HEADER_H} stroke="#cbd5e1" strokeWidth={1} />
-                        <text x={ml.x + 5} y={12} fontSize={12} fill="#334155" fontWeight="700">{ml.label}</text>
+                        <line x1={ml.x} y1={0} x2={ml.x} y2={HEADER_H} className="g-rule" strokeWidth={1} />
+                        <text x={ml.x + 5} y={12} fontSize={12} className="g-header-text" fontWeight="700">{ml.label}</text>
                       </g>
                     ))}
                     {weekTicks.map((t) => (
                       <g key={t.label}>
-                        <line x1={t.x} y1={HEADER_MONTH - 12} x2={t.x} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                        <text x={t.x + 3} y={HEADER_MONTH - 3} fontSize={10} fill="#64748b" fontWeight="500">{t.label}</text>
+                        <line x1={t.x} y1={HEADER_MONTH - 12} x2={t.x} y2={HEADER_MONTH} className="g-rule" strokeWidth={1} />
+                        <text x={t.x + 3} y={HEADER_MONTH - 3} fontSize={10} className="g-label-text" fontWeight="500">{t.label}</text>
                       </g>
                     ))}
                     {dayLabelItems.map((d) => (
@@ -619,21 +625,21 @@ export function GanttChart({
                         {/* 休息日以淡灰底標示（紅色保留給今日線與 Delayed） */}
                         {d.isRest && (
                           <rect x={d.x} y={HEADER_MONTH} width={PX_PER_DAY} height={HEADER_DAY}
-                            fill="rgba(100,116,139,0.14)" />
+                            className="g-restday-hdr" />
                         )}
-                        <line x1={d.x} y1={HEADER_MONTH} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
+                        <line x1={d.x} y1={HEADER_MONTH} x2={d.x} y2={HEADER_H} className="g-grid" strokeWidth={0.5} />
                         {PX_PER_DAY >= 16 && (
                           <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_DAY / 2 + 5}
-                            fontSize={11} fill="#64748b" textAnchor="middle"
+                            fontSize={11} className="g-label-text" textAnchor="middle"
                             fontWeight={d.isRest ? '700' : '400'}>{d.label}</text>
                         )}
                       </g>
                     ))}
                     {today >= timelineStart && today <= timelineEnd && (
                       <>
-                        <line x1={todayX} y1={0} x2={todayX} y2={HEADER_H} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4 3" />
-                        <rect x={todayX - 1} y={4} width={32} height={16} rx={3} fill="#ef4444" />
-                        <text x={todayX + 3} y={16} fontSize={11} fill="#ffffff" fontWeight="600">今日</text>
+                        <line x1={todayX} y1={0} x2={todayX} y2={HEADER_H} className="g-today-line" strokeWidth={1.5} strokeDasharray="4 3" />
+                        <rect x={todayX - 1} y={4} width={32} height={16} rx={3} className="g-today-pill" />
+                        <text x={todayX + 3} y={16} fontSize={11} className="g-today-text" fontWeight="600">今日</text>
                       </>
                     )}
                   </svg>
@@ -647,7 +653,7 @@ export function GanttChart({
                   style={{ width: leftWidth }} onWheel={forwardWheelToBody}>
                   <div ref={leftBodyRef} style={{ willChange: 'transform' }}>
                     {deviceRows.map(({ device: dev, schedules: devSchedules }, i) => {
-                      const evenFill = i % 2 === 0 ? '#fafbfc' : '#f1f5f9'
+                      const evenFill = i % 2 === 0 ? 'var(--gantt-row-even)' : 'var(--gantt-row-odd)'
                       return (
                         <div key={dev.id} className="relative border-b flex items-center px-3"
                           style={{ height: ROW_H, background: evenFill }}>
@@ -664,20 +670,22 @@ export function GanttChart({
                 {/* 右下：Bar 區 */}
                 <div ref={rightBodyRef} className="flex-1 overflow-auto" onScroll={handleRightBodyScroll}>
                   <svg width={svgWidth} height={deviceRows.length * ROW_H} className="block">
-                    <rect x={0} y={0} width={svgWidth} height={deviceRows.length * ROW_H} fill="#fafbfc" />
+                    {/* 逾期斜紋整張圖共用一份定義 */}
+                  <defs><OverdueHatchPattern /></defs>
+                  <rect x={0} y={0} width={svgWidth} height={deviceRows.length * ROW_H} className="g-canvas" />
                     {restDayBgs.map(({ x }) => (
-                      <rect key={`rd-${x}`} x={x} y={0} width={PX_PER_DAY} height={deviceRows.length * ROW_H} fill="rgba(0,0,0,0.085)" />
+                      <rect key={`rd-${x}`} x={x} y={0} width={PX_PER_DAY} height={deviceRows.length * ROW_H} className="g-restday" />
                     ))}
                     {monthLabels.map((ml) => (
-                      <line key={`ml-${ml.x}`} x1={ml.x} y1={0} x2={ml.x} y2={deviceRows.length * ROW_H} stroke="#cbd5e1" strokeWidth={1} />
+                      <line key={`ml-${ml.x}`} x1={ml.x} y1={0} x2={ml.x} y2={deviceRows.length * ROW_H} className="g-rule" strokeWidth={1} />
                     ))}
                     {deviceRows.map(({ device: dev, schedules: devSchedules }, rowIdx) => {
                       const y = rowIdx * ROW_H
-                      const evenFillAlpha = rowIdx % 2 === 0 ? 'rgba(250,251,252,0.5)' : 'rgba(241,245,249,0.5)'
+                      const evenRowClass = rowIdx % 2 === 0 ? 'g-row-even-a' : 'g-row-odd-a'
                       return (
                         <g key={dev.id}>
-                          <rect x={0} y={y} width={svgWidth} height={ROW_H} fill={evenFillAlpha} />
-                          <line x1={0} y1={y + ROW_H} x2={svgWidth} y2={y + ROW_H} stroke="#e2e8f0" strokeWidth={1} />
+                          <rect x={0} y={y} width={svgWidth} height={ROW_H} className={evenRowClass} />
+                          <line x1={0} y1={y + ROW_H} x2={svgWidth} y2={y + ROW_H} className="g-grid" strokeWidth={1} />
                           {devSchedules.map((s) => {
                             const sDate = parseDate(s.startDate)
                             const eDate = parseDate(s.endDate)
@@ -692,6 +700,9 @@ export function GanttChart({
                             const workDayOffset = getWorkDayOffset(sDate, s.timeResource, restDayConfig)
                             const hasOverflow = totalBarDays > workDayOffset && workDayOffset > 0
                             const overflowX = barX + workDayOffset * PX_PER_DAY
+                            // 今日線不在時間軸內時就沒有終點可量，尾巴不畫
+                            const todayVisible = today >= timelineStart && today <= timelineEnd
+                            const overdue = todayVisible && overdueDays(s) > 0
                             return (
                               <g key={s.id}>
                                 {/* 設備視角的左欄是設備名稱，bar 上的人名是此視角唯一的人員線索，
@@ -700,6 +711,8 @@ export function GanttChart({
                                   barX={barX} barW={barW} barY={barY}
                                   unitColor={unitColor} engColor={engColor}
                                   overflowStartX={hasOverflow ? overflowX : null}
+                                  status={computeStatus(s)}
+                                  overdueToX={overdue ? todayX : null}
                                   label={engLabel(s.testEngineer)}
                                   clipId={`bc-dev-${s.id}`}
                                   onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
@@ -708,7 +721,7 @@ export function GanttChart({
                             )
                           })}
                           {today >= timelineStart && today <= timelineEnd && (
-                            <line x1={todayX} y1={y} x2={todayX} y2={y + ROW_H} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4 3" />
+                            <line x1={todayX} y1={y} x2={todayX} y2={y + ROW_H} className="g-today-line" strokeWidth={1.5} strokeDasharray="4 3" />
                           )}
                         </g>
                       )
@@ -739,29 +752,29 @@ export function GanttChart({
               <div className="shrink-0 border-r relative"
                 style={{ width: leftWidth, height: HEADER_H }} onWheel={forwardWheelToBody}>
                 <svg width={leftWidth} height={HEADER_H} className="block">
-                  <rect x={0} y={0} width={leftWidth} height={HEADER_H} fill="#e2e8f0" />
-                  <text x={12} y={HEADER_MONTH / 2 + 6} fontSize={13} fill="#334155" fontWeight="700">工作排程</text>
-                  <line x1={0} y1={HEADER_MONTH} x2={leftWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                  <line x1={0} y1={HEADER_H - 1} x2={leftWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
+                  <rect x={0} y={0} width={leftWidth} height={HEADER_H} className="g-header-left" />
+                  <text x={12} y={HEADER_MONTH / 2 + 6} fontSize={13} className="g-header-text" fontWeight="700">工作排程</text>
+                  <line x1={0} y1={HEADER_MONTH} x2={leftWidth} y2={HEADER_MONTH} className="g-rule" strokeWidth={1} />
+                  <line x1={0} y1={HEADER_H - 1} x2={leftWidth} y2={HEADER_H - 1} className="g-rule" strokeWidth={1.5} />
                 </svg>
               </div>
 
               <div ref={rightHeaderRef} className="flex-1 overflow-hidden" onWheel={forwardWheelToBody}>
                 <svg width={svgWidth} height={HEADER_H} className="block">
-                  <rect x={0} y={0} width={svgWidth} height={HEADER_H} fill="#f1f5f9" />
-                  <line x1={0} y1={HEADER_MONTH} x2={svgWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                  <line x1={0} y1={HEADER_H - 1} x2={svgWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
+                  <rect x={0} y={0} width={svgWidth} height={HEADER_H} className="g-header-time" />
+                  <line x1={0} y1={HEADER_MONTH} x2={svgWidth} y2={HEADER_MONTH} className="g-rule" strokeWidth={1} />
+                  <line x1={0} y1={HEADER_H - 1} x2={svgWidth} y2={HEADER_H - 1} className="g-rule" strokeWidth={1.5} />
 
                   {monthLabels.map((ml) => (
                     <g key={ml.label}>
-                      <line x1={ml.x} y1={0} x2={ml.x} y2={HEADER_H} stroke="#cbd5e1" strokeWidth={1} />
-                      <text x={ml.x + 5} y={12} fontSize={12} fill="#334155" fontWeight="700">{ml.label}</text>
+                      <line x1={ml.x} y1={0} x2={ml.x} y2={HEADER_H} className="g-rule" strokeWidth={1} />
+                      <text x={ml.x + 5} y={12} fontSize={12} className="g-header-text" fontWeight="700">{ml.label}</text>
                     </g>
                   ))}
                   {weekTicks.map((t) => (
                     <g key={t.label}>
-                      <line x1={t.x} y1={HEADER_MONTH - 12} x2={t.x} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                      <text x={t.x + 3} y={HEADER_MONTH - 3} fontSize={10} fill="#64748b" fontWeight="500">{t.label}</text>
+                      <line x1={t.x} y1={HEADER_MONTH - 12} x2={t.x} y2={HEADER_MONTH} className="g-rule" strokeWidth={1} />
+                      <text x={t.x + 3} y={HEADER_MONTH - 3} fontSize={10} className="g-label-text" fontWeight="500">{t.label}</text>
                     </g>
                   ))}
                   {dayLabelItems.map((d) => (
@@ -769,21 +782,21 @@ export function GanttChart({
                       {/* 休息日以淡灰底標示（紅色保留給今日線與 Delayed） */}
                       {d.isRest && (
                         <rect x={d.x} y={HEADER_MONTH} width={PX_PER_DAY} height={HEADER_DAY}
-                          fill="rgba(100,116,139,0.14)" />
+                          className="g-restday-hdr" />
                       )}
-                      <line x1={d.x} y1={HEADER_MONTH} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
+                      <line x1={d.x} y1={HEADER_MONTH} x2={d.x} y2={HEADER_H} className="g-grid" strokeWidth={0.5} />
                       {PX_PER_DAY >= 16 && (
                         <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_DAY / 2 + 5}
-                          fontSize={11} fill="#64748b" textAnchor="middle"
+                          fontSize={11} className="g-label-text" textAnchor="middle"
                           fontWeight={d.isRest ? '700' : '400'}>{d.label}</text>
                       )}
                     </g>
                   ))}
                   {today >= timelineStart && today <= timelineEnd && (
                     <>
-                      <line x1={todayX} y1={0} x2={todayX} y2={HEADER_H} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4 3" />
-                      <rect x={todayX - 1} y={4} width={32} height={16} rx={3} fill="#ef4444" />
-                      <text x={todayX + 3} y={16} fontSize={11} fill="#ffffff" fontWeight="600">今日</text>
+                      <line x1={todayX} y1={0} x2={todayX} y2={HEADER_H} className="g-today-line" strokeWidth={1.5} strokeDasharray="4 3" />
+                      <rect x={todayX - 1} y={4} width={32} height={16} rx={3} className="g-today-pill" />
+                      <text x={todayX + 3} y={16} fontSize={11} className="g-today-text" fontWeight="600">今日</text>
                     </>
                   )}
                 </svg>
@@ -803,13 +816,13 @@ export function GanttChart({
                     const i = visibleRange.start + sliceIdx
                     const status      = computeStatus(s)
                     const statusColor = STATUS_COLORS[status]
-                    const evenFill = i % 2 === 0 ? '#fafbfc' : '#f1f5f9'
+                    const evenFill = i % 2 === 0 ? 'var(--gantt-row-even)' : 'var(--gantt-row-odd)'
                     const engColor = s.testEngineer
                       ? resolveEngineerColor(s.testEngineer, s.testUnit, options)
-                      : '#e2e8f0'
-                    const engTextColor = s.testEngineer ? readableTextColor(engColor) : '#64748b'
+                      : 'var(--gantt-unassigned-bg)'
+                    const engTextColor = s.testEngineer ? readableTextColor(engColor) : 'var(--gantt-unassigned-text)'
                     return (
-                      <div key={s.id} className="relative border-b"
+                      <div key={s.id} className="gantt-row relative border-b"
                         style={{ height: ROW_H, background: evenFill }}>
 
                         {/* 第一行：人員徽章 → PDN Number → 操作按鈕 */}
@@ -825,7 +838,32 @@ export function GanttChart({
                             {pdnDisplay(s.projectName, leftWidth)}
                           </span>
 
-                          <div className="flex-shrink-0 flex gap-[3px]">
+                          {/* 旗標是狀態不是操作，所以即使按鈕收起來也要看得見。
+                              用小圓點而不是把按鈕留在版面上，免得又把 PDN 的寬度吃回去。 */}
+                          {s.adminFlag && (
+                            <span aria-hidden="true"
+                              title={s.adminFlagNote || 'Admin 旗標已標記'}
+                              className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-orange-500" />
+                          )}
+                          {s.userFlag && (
+                            <span aria-hidden="true"
+                              title={s.userFlagNote || '旗標已標記'}
+                              className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500" />
+                          )}
+
+                          {/*
+                            操作按鈕改成浮在列上、滑鼠停留或鍵盤焦點進入才出現。
+                            改版前這四顆常駐佔掉左欄 85px，PDN 只剩 68px 而它需要 75px，
+                            所以連編號段都被截掉 —— PDN-260024 與 PDN-260034 看起來一樣。
+                            用絕對定位而不是 hidden／flex 切換，是為了讓 PDN 的寬度固定，
+                            不會在滑鼠移入移出時跳動。
+                          */}
+                          {/* 顯示/隱藏的規則寫在 index.css 的 .row-actions，
+                              見那裡的註解說明為何不用 display:none 也不用 Tailwind 變體 */}
+                          <div
+                            className="row-actions absolute right-1 top-[3px] flex gap-[3px] pl-2"
+                            style={{ background: evenFill }}
+                          >
                             {/* Admin 旗標（Admin/SA 限定） */}
                             {canWrite && (
                               <div className="relative">
@@ -945,13 +983,15 @@ export function GanttChart({
               {/* ★ 右下：Bar 區（含溢出雙色） */}
               <div ref={rightBodyRef} className="flex-1 overflow-auto" onScroll={handleRightBodyScroll}>
                 <svg width={svgWidth} height={bodyHeight} className="block">
-                  <rect x={0} y={0} width={svgWidth} height={bodyHeight} fill="#fafbfc" />
+                  {/* 逾期斜紋整張圖共用一份定義 */}
+                  <defs><OverdueHatchPattern /></defs>
+                  <rect x={0} y={0} width={svgWidth} height={bodyHeight} className="g-canvas" />
 
                   {restDayBgs.map(({ x }) => (
-                    <rect key={`rd-${x}`} x={x} y={0} width={PX_PER_DAY} height={bodyHeight} fill="rgba(0,0,0,0.085)" />
+                    <rect key={`rd-${x}`} x={x} y={0} width={PX_PER_DAY} height={bodyHeight} className="g-restday" />
                   ))}
                   {monthLabels.map((ml) => (
-                    <line key={`ml-${ml.x}`} x1={ml.x} y1={0} x2={ml.x} y2={bodyHeight} stroke="#cbd5e1" strokeWidth={1} />
+                    <line key={`ml-${ml.x}`} x1={ml.x} y1={0} x2={ml.x} y2={bodyHeight} className="g-rule" strokeWidth={1} />
                   ))}
 
                   {/* 虛擬化：座標為絕對定位（y = i × ROW_H），非可視列直接略過 */}
@@ -967,21 +1007,27 @@ export function GanttChart({
                     const engColor  = s.testEngineer
                       ? resolveEngineerColor(s.testEngineer, s.testUnit, options)
                       : unitColor
-                    const evenFillAlpha = i % 2 === 0 ? 'rgba(250,251,252,0.5)' : 'rgba(241,245,249,0.5)'
+                    const evenRowClass = i % 2 === 0 ? 'g-row-even-a' : 'g-row-odd-a'
                     const barY   = y + Math.floor((ROW_H - BAR_H) / 2)
 
                     // ★ 溢出判定
                     const workDayOffset = getWorkDayOffset(sDate, s.timeResource, restDayConfig)
                     const hasOverflow = totalBarDays > workDayOffset && workDayOffset > 0
 
+                    // 今日線不在時間軸內時就沒有終點可量，尾巴不畫
+                    const todayVisible = today >= timelineStart && today <= timelineEnd
+                    const overdue = todayVisible && overdueDays(s) > 0
+
                     return (
                       <g key={s.id}>
-                        <rect x={0} y={y} width={svgWidth} height={ROW_H} fill={evenFillAlpha} />
-                        <line x1={0} y1={y + ROW_H} x2={svgWidth} y2={y + ROW_H} stroke="#e2e8f0" strokeWidth={1} />
+                        <rect x={0} y={y} width={svgWidth} height={ROW_H} className={evenRowClass} />
+                        <line x1={0} y1={y + ROW_H} x2={svgWidth} y2={y + ROW_H} className="g-grid" strokeWidth={1} />
                         <GanttBar
                           barX={barX} barW={barW} barY={barY}
                           unitColor={unitColor} engColor={engColor}
                           overflowStartX={hasOverflow ? barX + workDayOffset * PX_PER_DAY : null}
+                          status={computeStatus(s)}
+                          overdueToX={overdue ? todayX : null}
                           label={null}
                           clipId={`bc-${s.id}`}
                           onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, s })}
@@ -991,7 +1037,7 @@ export function GanttChart({
                   })}
 
                   {today >= timelineStart && today <= timelineEnd && (
-                    <line x1={todayX} y1={0} x2={todayX} y2={bodyHeight} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4 3" />
+                    <line x1={todayX} y1={0} x2={todayX} y2={bodyHeight} className="g-today-line" strokeWidth={1.5} strokeDasharray="4 3" />
                   )}
                 </svg>
               </div>
@@ -1018,6 +1064,23 @@ export function GanttChart({
             {tooltip.s.taskDescription && (
               <div className="text-slate-300 mb-2 text-sm">{tooltip.s.taskDescription}</div>
             )}
+            {/* bar 的形式（淡化／虛線／斜紋）只說得出「哪一類」，
+                說不出「幾天」。確切狀態與逾期天數在這裡補齊，
+                bar 的逾期尾巴也才敢設長度上限。 */}
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="px-1.5 py-0.5 rounded text-[11px] font-bold"
+                style={{
+                  background: STATUS_COLORS[computeStatus(tooltip.s)].bg,
+                  color: STATUS_COLORS[computeStatus(tooltip.s)].text,
+                }}>
+                {STATUS_GLYPH[computeStatus(tooltip.s)]} {computeStatus(tooltip.s)}
+              </span>
+              {overdueDays(tooltip.s) > 0 && (
+                <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-red-500/20 text-red-300 ring-1 ring-red-500/40">
+                  逾期 {overdueDays(tooltip.s)} 天
+                </span>
+              )}
+            </div>
             <div className="space-y-0.5 text-slate-300 text-xs">
               <div><span className="text-slate-400">工作類別：</span>{tooltip.s.category}</div>
               <div><span className="text-slate-400">測試單位：</span>{tooltip.s.testUnit}</div>

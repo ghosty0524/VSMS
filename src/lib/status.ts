@@ -19,3 +19,20 @@ export function computeStatus(s: Schedule): ScheduleStatus {
   if (today >= start) return 'Testing'
   return 'Planned'
 }
+
+/**
+ * 逾期天數 —— 已過完成日、仍未結案的天數；未逾期回傳 0。
+ *
+ * 逾期是算出來的，跟 isDelayed（有人勾的旗標）不是同一件事：排程可以
+ * 逾期而沒被標記，也可以被標記而還沒到完成日。server/src/routes/
+ * integration.ts 也是把 overdue 與 flaggedDelayed 分兩個欄位回報給
+ * Agent，前端這裡不能把兩者合併成同一個指標。
+ */
+export function overdueDays(s: Schedule, today: Date = new Date()): number {
+  if (s.isCompleted || s.isCancelled || !s.endDate) return 0
+  const t = new Date(today)
+  t.setHours(0, 0, 0, 0)
+  const end = parseDate(s.endDate)
+  const days = Math.round((t.getTime() - end.getTime()) / 86_400_000)
+  return days > 0 ? days : 0
+}
