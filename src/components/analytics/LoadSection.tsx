@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import ScaleToggle from './ScaleToggle'
+import { SegmentedControl } from '../shared/SegmentedControl'
 import { useOptionsStore } from '../../store/optionsStore'
 import { allocateTimeResource, periodKey } from '../../lib/analytics'
 import type { TimeScale } from '../../lib/analytics'
@@ -70,16 +71,15 @@ const LoadSection: React.FC<Props> = ({ schedules, categories, colorOf }) => {
             className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-600 focus:outline-none">
             {periodOptions.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-          <div className="inline-flex border border-gray-300 rounded-lg overflow-hidden text-xs">
-            {([['engineer', '人員'], ['unit', '單位']] as [Dimension, string][]).map(([v, label]) => (
-              <button key={v} type="button" onClick={() => setDim(v)}
-                className={`px-3 py-1 transition-colors ${
-                  dim === v ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
-                }`}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="負載分組維度"
+            value={dim}
+            onChange={setDim}
+            options={[
+              { value: 'engineer', label: '人員' },
+              { value: 'unit',     label: '單位' },
+            ]}
+          />
         </div>
       </div>
 

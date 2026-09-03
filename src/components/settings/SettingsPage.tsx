@@ -46,10 +46,13 @@ export function SettingsPage() {
             type="button"
             key={t.key}
             onClick={() => setSettingsTab(t.key)}
-            className={`flex-shrink-0 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+            aria-current={activeTab === t.key ? 'page' : undefined}
+            /* 底線式，跟標題列的導覽分頁同一套。改版前這裡是資料夾式
+               （rounded-t-lg 加邊框），是全站三種分頁樣式的其中一種。 */
+            className={`flex-shrink-0 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeTab === t.key
-                ? 'bg-white border border-b-white border-gray-200 text-blue-600 -mb-px'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
             {t.label}

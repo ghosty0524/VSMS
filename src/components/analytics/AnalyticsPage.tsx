@@ -5,6 +5,7 @@ import { computeStatus } from '../../lib/status'
 import { splitByStatsMode } from '../../lib/analytics'
 import { buildFilterOptions, buildInactiveValueSet, buildOptionLabels, buildLabelByValue } from '../../lib/filterOptions'
 import { CATEGORY_COLORS } from '../../constants'
+import { MultiSelectDropdown } from '../shared/MultiSelectDropdown'
 import KpiSection from './KpiSection'
 import TrendSection from './TrendSection'
 import LoadSection from './LoadSection'
@@ -36,81 +37,6 @@ function isFilterEmpty(f: AnalyticsFilter): boolean {
 }
 
 const STATUS_OPTIONS = ['Planned', 'Testing', 'Completed', 'Delayed', 'Cancelled']
-
-// 通用多選下拉元件
-interface MultiSelectProps {
-  label: string
-  options: string[]
-  selected: string[]
-  onChange: (val: string[]) => void
-  /** 選填：value → 顯示文字對照表（例如已停用項目加註「（已停用）」）。
-   *  只影響顯示文字，比對／勾選／onChange 一律仍用原始 value。 */
-  optionLabels?: Record<string, string>
-}
-
-function MultiSelect({ label, options, selected, onChange, optionLabels }: MultiSelectProps) {
-  const [open, setOpen] = useState(false)
-  const isAll = selected.length === 0
-
-  const toggle = (v: string) => {
-    if (selected.includes(v)) {
-      onChange(selected.filter(x => x !== v))
-    } else {
-      onChange([...selected, v])
-    }
-  }
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className={`px-2.5 py-1 text-xs border rounded-lg flex items-center gap-1 transition-colors ${
-          !isAll
-            ? 'border-blue-400 bg-blue-50 text-blue-700'
-            : 'border-gray-300 hover:bg-gray-50 text-gray-600'
-        }`}
-      >
-        {label}
-        {!isAll && (
-          <span className="bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
-            {selected.length}
-          </span>
-        )}
-        <span className="text-gray-400">▾</span>
-      </button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[160px] py-1">
-            <button
-              type="button"
-              onClick={() => { onChange([]); setOpen(false) }}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 ${
-                isAll ? 'font-semibold text-blue-600' : 'text-gray-600'
-              }`}
-            >
-              {isAll ? '✓ ' : '　'}全部
-            </button>
-            <div className="border-t border-gray-100 my-1" />
-            {options.map(opt => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => toggle(opt)}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-              >
-                <span className="w-3">{selected.includes(opt) ? '✓' : ''}</span>
-                {optionLabels?.[opt] ?? opt}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
 
 const AnalyticsPage: React.FC = () => {
   const schedules = useScheduleStore(s => s.schedules)
@@ -218,13 +144,13 @@ const AnalyticsPage: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-lg font-bold text-gray-800 mr-2">統計分析</h2>
           <span className="text-xs text-gray-500">篩選</span>
-          <MultiSelect label="工作類別" options={categoryFilterOptions} optionLabels={categoryFilterLabels}
+          <MultiSelectDropdown inline label="工作類別" options={categoryFilterOptions} optionLabels={categoryFilterLabels}
             selected={filter.categories} onChange={v => setFilter({ ...filter, categories: v })} />
-          <MultiSelect label="測試單位" options={unitOptions} optionLabels={unitLabels}
+          <MultiSelectDropdown inline label="測試單位" options={unitOptions} optionLabels={unitLabels}
             selected={filter.testUnits} onChange={v => setFilter({ ...filter, testUnits: v })} />
-          <MultiSelect label="測試人員" options={engineerOptions} optionLabels={engineerLabels}
+          <MultiSelectDropdown inline label="測試人員" options={engineerOptions} optionLabels={engineerLabels}
             selected={filter.testEngineers} onChange={v => setFilter({ ...filter, testEngineers: v })} />
-          <MultiSelect label="排程狀態" options={STATUS_OPTIONS}
+          <MultiSelectDropdown inline label="排程狀態" options={STATUS_OPTIONS}
             selected={filter.statuses} onChange={v => setFilter({ ...filter, statuses: v })} />
           {hasFilter && (
             <button type="button" onClick={() => setFilter(emptyFilter)}

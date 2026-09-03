@@ -28,9 +28,14 @@ interface Props {
   /** 選填：value → 顯示文字對照表（例如已停用項目加註「（已停用）」）。
    *  只影響顯示文字，比對／勾選／onChange 一律仍用原始 value。 */
   optionLabels?: Record<string, string>
+  /**
+   * 行內版：欄位名放進按鈕裡而不是上方，整顆只佔一行高度。
+   * 用於統計頁那種「標題與四個篩選排在同一列」的版面。
+   */
+  inline?: boolean
 }
 
-export function MultiSelectDropdown({ label, options, selected, onChange, minWidth = 130, optionLabels }: Props) {
+export function MultiSelectDropdown({ label, options, selected, onChange, minWidth = 130, optionLabels, inline = false }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -54,21 +59,28 @@ export function MultiSelectDropdown({ label, options, selected, onChange, minWid
     ? selected.map(v => optionLabels?.[v] ?? v).join('、')
     : '未篩選，顯示全部'
 
+  // 行內版：未篩選時只顯示欄位名，篩選後顯示「欄位名：值」。
+  // 統計頁的篩選列預設全部未篩選，所以平時看起來就是四個乾淨的欄位名。
+  const buttonText = inline
+    ? (selected.length === 0 ? label : `${label}：${labelText}`)
+    : labelText
+
   return (
-    <div className="flex flex-col gap-1" ref={ref}>
-      <span className="text-xs font-semibold text-gray-500 uppercase">{label}</span>
+    <div className={inline ? 'relative' : 'flex flex-col gap-1'} ref={ref}>
+      {!inline && <span className="text-xs font-semibold text-gray-500 uppercase">{label}</span>}
       <div className="relative">
         <button type="button"
           onClick={() => setOpen(o => !o)}
           title={`${label}：${fullList}`}
           className={`flex items-center justify-between gap-2 border rounded px-2 py-1 text-xs
-                      bg-white hover:bg-gray-50 whitespace-nowrap max-w-[190px]
+                      bg-white hover:bg-gray-50 whitespace-nowrap
+                      ${inline ? 'max-w-[230px]' : 'max-w-[190px]'}
                       ${selected.length > 0
                         ? 'border-blue-400 text-blue-800'
                         : 'border-gray-300 text-gray-600'}`}
-          style={{ minWidth }}
+          style={inline ? undefined : { minWidth }}
         >
-          <span className="truncate">{labelText}</span>
+          <span className="truncate">{buttonText}</span>
           <ChevronDown size={12} className="text-gray-400 flex-shrink-0" />
         </button>
         {open && (
