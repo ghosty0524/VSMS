@@ -44,6 +44,9 @@ export default function ScheduleListView({
   schedules, role, linkedEngineer, engLabel, options, onEdit, onDelete,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  // 表頭是 sticky 的，捲動後給它一道陰影，讓「內容從底下經過」讀得出來。
+  // 這裡有現成的 scroll handler，就不必像統計頁那樣用 IntersectionObserver。
+  const theadRef  = useRef<HTMLTableSectionElement>(null)
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 60 })
   const canWrite = role === 'super_admin' || role === 'admin'
 
@@ -53,6 +56,9 @@ export default function ScheduleListView({
     const start = Math.max(0, Math.floor(el.scrollTop / LIST_ROW_H) - VIRTUAL_BUFFER)
     const end = Math.ceil((el.scrollTop + el.clientHeight) / LIST_ROW_H) + VIRTUAL_BUFFER
     setVisibleRange(prev => (prev.start === start && prev.end === end ? prev : { start, end }))
+    // 直接切 class，不進 state —— 這份清單是虛擬化的，每個捲動幀重新
+    // render 一次代價太高。
+    theadRef.current?.classList.toggle('pin-y', el.scrollTop > 0)
   }, [])
 
   useEffect(() => {
@@ -90,7 +96,7 @@ export default function ScheduleListView({
       {/* tnum = tabular-nums（見 index.css）。日期與 PDN 的數字在欄位裡逐列
           對齊，捲動時不會左右抖動，260024 與 260034 也一眼分得出來。 */}
       <table className="tnum w-full text-xs border-collapse">
-        <thead className="sticky top-0 z-10">
+        <thead ref={theadRef} className="pin sticky top-0 z-10">
           <tr className="bg-slate-100">
             {HEADERS.map(h => (
               <th key={h} className="text-left font-semibold text-slate-600 px-2 py-2 border-b border-slate-300 whitespace-nowrap">

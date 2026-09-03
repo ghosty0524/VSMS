@@ -313,6 +313,9 @@ export function GanttChart({
   const rightBodyRef   = useRef<HTMLDivElement>(null)
   const rightHeaderRef = useRef<HTMLDivElement>(null)
   const leftBodyRef    = useRef<HTMLDivElement>(null)
+  // 凍結欄與表頭的捲動陰影靠這兩個 ref 直接切 class，見 handleRightBodyScroll
+  const leftHeaderRef  = useRef<HTMLDivElement>(null)
+  const leftColRef     = useRef<HTMLDivElement>(null)
   const rafRef         = useRef<number | null>(null)
 
   // ── 列虛擬化（工程師視角）───────────────────────────────
@@ -452,6 +455,16 @@ export function GanttChart({
     rafRef.current = requestAnimationFrame(() => {
       if (rightHeaderRef.current) rightHeaderRef.current.scrollLeft = scrollLeft
       if (leftBodyRef.current) leftBodyRef.current.style.transform = `translateY(-${scrollTop}px)`
+
+      // 捲動陰影：直接切 class，不走 state。改成 useState 會讓虛擬化的
+      // 整份清單每一個捲動幀都重新 render。
+      const pinX = scrollLeft > 0
+      const pinY = scrollTop > 0
+      leftHeaderRef.current?.classList.toggle('pin-x', pinX)
+      leftColRef.current?.classList.toggle('pin-x', pinX)
+      leftHeaderRef.current?.classList.toggle('pin-y', pinY)
+      rightHeaderRef.current?.classList.toggle('pin-y', pinY)
+
       updateVisibleRange()
     })
   }
@@ -594,7 +607,7 @@ export function GanttChart({
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
               {/* 上排 Header */}
               <div className="flex-shrink-0 flex" style={{ height: HEADER_H }}>
-                <div className="shrink-0 border-r relative"
+                <div ref={leftHeaderRef} className="pin shrink-0 border-r relative z-10"
                   style={{ width: leftWidth, height: HEADER_H }} onWheel={forwardWheelToBody}>
                   <svg width={leftWidth} height={HEADER_H} className="block">
                     <rect x={0} y={0} width={leftWidth} height={HEADER_H} className="g-header-left" />
@@ -603,7 +616,7 @@ export function GanttChart({
                     <line x1={0} y1={HEADER_H - 1} x2={leftWidth} y2={HEADER_H - 1} className="g-rule" strokeWidth={1.5} />
                   </svg>
                 </div>
-                <div ref={rightHeaderRef} className="flex-1 overflow-hidden" onWheel={forwardWheelToBody}>
+                <div ref={rightHeaderRef} className="pin flex-1 overflow-hidden relative z-10" onWheel={forwardWheelToBody}>
                   <svg width={svgWidth} height={HEADER_H} className="block">
                     <rect x={0} y={0} width={svgWidth} height={HEADER_H} className="g-header-time" />
                     <line x1={0} y1={HEADER_MONTH} x2={svgWidth} y2={HEADER_MONTH} className="g-rule" strokeWidth={1} />
@@ -649,7 +662,7 @@ export function GanttChart({
               {/* 下排 */}
               <div className="flex-1 min-h-0 flex overflow-hidden">
                 {/* 左下：設備名稱列 */}
-                <div className="shrink-0 border-r bg-white overflow-hidden"
+                <div ref={leftColRef} className="pin shrink-0 border-r bg-white overflow-hidden relative z-10"
                   style={{ width: leftWidth }} onWheel={forwardWheelToBody}>
                   <div ref={leftBodyRef} style={{ willChange: 'transform' }}>
                     {deviceRows.map(({ device: dev, schedules: devSchedules }, i) => {
@@ -749,7 +762,7 @@ export function GanttChart({
 
             {/* 上排 */}
             <div className="flex-shrink-0 flex" style={{ height: HEADER_H }}>
-              <div className="shrink-0 border-r relative"
+              <div ref={leftHeaderRef} className="pin shrink-0 border-r relative z-10"
                 style={{ width: leftWidth, height: HEADER_H }} onWheel={forwardWheelToBody}>
                 <svg width={leftWidth} height={HEADER_H} className="block">
                   <rect x={0} y={0} width={leftWidth} height={HEADER_H} className="g-header-left" />
@@ -759,7 +772,7 @@ export function GanttChart({
                 </svg>
               </div>
 
-              <div ref={rightHeaderRef} className="flex-1 overflow-hidden" onWheel={forwardWheelToBody}>
+              <div ref={rightHeaderRef} className="pin flex-1 overflow-hidden relative z-10" onWheel={forwardWheelToBody}>
                 <svg width={svgWidth} height={HEADER_H} className="block">
                   <rect x={0} y={0} width={svgWidth} height={HEADER_H} className="g-header-time" />
                   <line x1={0} y1={HEADER_MONTH} x2={svgWidth} y2={HEADER_MONTH} className="g-rule" strokeWidth={1} />
@@ -807,7 +820,7 @@ export function GanttChart({
             <div className="flex-1 min-h-0 flex overflow-hidden">
 
               {/* 左下 */}
-              <div className="shrink-0 border-r bg-white overflow-hidden"
+              <div ref={leftColRef} className="pin shrink-0 border-r bg-white overflow-hidden relative z-10"
                 style={{ width: leftWidth }} onWheel={forwardWheelToBody}>
                 <div ref={leftBodyRef} style={{ willChange: 'transform' }}>
                   {/* 虛擬化：以 spacer 撐住捲動位移，只渲染可視列 */}

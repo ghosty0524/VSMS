@@ -12,6 +12,7 @@ import LoadSection from './LoadSection'
 import RiskList from './RiskList'
 import UnitComparison from './UnitComparison'
 import DelayAnalysis from './DelayAnalysis'
+import { useStuckShadow } from '../shared/useStuckShadow'
 
 export interface AnalyticsFilter {
   categories: string[]
@@ -137,10 +138,16 @@ const AnalyticsPage: React.FC = () => {
 
   const hasFilter = !isFilterEmpty(filter)
 
+  // sticky 篩選列被卡住時給陰影，讓「內容從底下經過」讀得出來
+  const { targetRef } = useStuckShadow<HTMLDivElement>()
+
   return (
     <div>
-      {/* 全域篩選列：sticky 固定，捲動不消失 */}
-      <div className="sticky top-0 z-30 bg-gray-100/95 backdrop-blur border-b border-gray-200 px-6 py-3">
+      {/* 全域篩選列：sticky 固定，捲動不消失。
+          底色從 --app-ground 推導 —— 它要跟頁面底融為一體，
+          寫死 gray-100 的話，頁面底一改就會變成一條錯位的淺色帶。 */}
+      <div ref={targetRef}
+        className="pin sticky top-0 z-30 app-ground-soft backdrop-blur border-b border-gray-200 px-6 py-3">
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-lg font-bold text-gray-800 mr-2">統計分析</h2>
           <span className="text-xs text-gray-500">篩選</span>

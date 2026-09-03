@@ -92,6 +92,49 @@
 }
 
 /* ────────────────────────────────────────────────────────────────
+   層次
+
+   量過的現況：1355 個元素裡只有 2 個有陰影，白卡片對頁面底的對比是
+   1.111（1.0 就是完全一樣）。介面用 1px 細線分隔所有東西，而細線說得出
+   「這裡是邊界」，永遠說不出「這個在那個前面」。
+
+   這裡只補兩件最基本的：頁面底真的看得出來，可按的東西看起來可按。
+   面板的圓角與卡片陰影是另一個決定，還沒做。
+   ──────────────────────────────────────────────────────────────── */
+:root {
+  /* 頁面底。原本是 gray-100（#F1F3F7，對白卡 1.111，看不見），
+     加深到對比 1.22 —— 讀得出是兩層，又不會深到跟資料搶注意力。
+     不沿用 gray-100 是因為那個 class 還有 10 個別的地方在用，
+     那些地方要的是「淺灰色塊」而不是「頁面底」。 */
+  --app-ground: #E4E9F0;
+}
+
+@layer base {
+  .app-ground { background-color: var(--app-ground); }
+  /* 統計頁的 sticky 篩選列：要跟頁面底融為一體，又留一點透讓底下的內容
+     透出來（配 backdrop-blur）。從同一個 token 推導，改底色時不會漏掉這裡。 */
+  .app-ground-soft { background-color: color-mix(in oklab, var(--app-ground) 95%, transparent); }
+
+  /*
+    可按的東西要看起來可按。主要按鈕原本是一塊純平的青綠矩形。
+
+    用元素選擇器限定在 button／a 上，是因為 bg-blue-600 也用在指示點之類
+    的非互動元素上，那些不該有投影。
+
+    不設 transition —— 按壓回饋要即時；而且 Tailwind 的 transition-colors
+    在 utilities 層，會蓋掉這裡寫的 transition，寫了也不會生效。
+  */
+  button.bg-blue-600:not(:disabled),
+  a.bg-blue-600 {
+    box-shadow: 0 1px 0 rgba(23, 33, 46, 0.14), 0 2px 5px rgba(14, 107, 99, 0.24);
+  }
+  button.bg-blue-600:not(:disabled):active {
+    box-shadow: 0 1px 2px rgba(14, 107, 99, 0.28);
+  }
+  button.bg-blue-600:disabled { box-shadow: none; }
+}
+
+/* ────────────────────────────────────────────────────────────────
    甘特圖畫布的顏色
 
    這些原本是散在 GanttChart.tsx 裡的 50 幾個十六進位字面值 ——
@@ -176,6 +219,26 @@
   .g-strike       { stroke: var(--gantt-strike); }
   .g-overdue-fill { fill: var(--gantt-overdue); }
   .g-overdue-line { stroke: var(--gantt-overdue); }
+
+  /*
+    凍結欄與表頭的捲動陰影。
+
+    這不是裝飾 —— 甘特圖左欄是凍結的，右側有數千 px 的內容從它底下經過，
+    而先前畫面上沒有任何東西講出這件事：那條 1px 邊線同時被當成「欄位分隔」
+    與「捲動邊界」，兩件事講不清楚。
+
+    陰影只在真的捲動之後才出現（scrollLeft／scrollTop > 0），捲回原點就收掉，
+    所以它報告的是狀態，不是常駐的裝飾。
+
+    橫向與縱向各自獨立開關，但同一個元素（左上角那格）兩者都可能成立，
+    所以拆成兩個自訂屬性合成一條 box-shadow，而不是互相覆寫的兩條規則。
+  */
+  .pin {
+    box-shadow: var(--pin-x, 0 0 rgba(0,0,0,0)), var(--pin-y, 0 0 rgba(0,0,0,0));
+    transition: box-shadow 0.15s ease-out;
+  }
+  .pin.pin-x { --pin-x: 6px 0 12px -6px rgba(23, 33, 46, 0.24); }
+  .pin.pin-y { --pin-y: 0 6px 12px -6px rgba(23, 33, 46, 0.20); }
 }
 
 @keyframes fade-in {

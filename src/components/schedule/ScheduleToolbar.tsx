@@ -72,6 +72,7 @@ interface Props {
 
 const BTN = `flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs font-medium
              rounded-md border border-slate-300 bg-white text-slate-600
+             shadow-xs active:shadow-none
              hover:bg-slate-50 transition-colors`
 
 export function ScheduleToolbar({

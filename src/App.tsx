@@ -40,7 +40,7 @@ export function App() {
 
   return (
     <ProtectedLayout>
-      <div className="h-screen bg-gray-100 flex flex-col">
+      <div className="h-screen app-ground flex flex-col">
         <Header
           currentView={view}
           onNavigate={setView}
