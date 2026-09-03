@@ -1,14 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
-import {
-  ShieldCheck, Bookmark, Pencil, Trash2, CalendarRange, Maximize2, Minimize2, ClipboardCopy,
-  ClipboardList,
-} from 'lucide-react'
+import { ShieldCheck, Bookmark, Pencil, Trash2, ClipboardList } from 'lucide-react'
 import { toast } from '../../store/toastStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
 import { api } from '../../lib/api'
-import { STATUS_COLORS, OVERFLOW_COLOR, STATUS_GLYPH } from '../../constants'
+import { STATUS_COLORS, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../../lib/colors'
 import { computeStatus } from '../../lib/status'
 import { schedulesToTsv, schedulesToHtmlTable } from '../../lib/clipboardTable'
@@ -20,6 +17,7 @@ import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { FlagPopover } from './FlagPopover'
 import ScheduleListView from './ScheduleListView'
+import { ScheduleToolbar } from './ScheduleToolbar'
 import GanttBar, { BAR_H } from './GanttBar'
 import type { FilterSortState, SortRule, SortableField } from './FilterSortBar'
 import type { Role, Schedule, VtmsProgress } from '../../types'
@@ -28,10 +26,9 @@ import type { ScheduleStatus } from '../../lib/status'
 // ── 尺寸常數 ──────────────────────────────────────────
 const LEFT_W       = 260  // 狀態籤加寬 12px（72→84），預設欄寬同步補償
 const ROW_H        = 46
-const HEADER_H     = 90
-const HEADER_MONTH = 30
-const HEADER_WEEK  = 20
-const HEADER_DAY   = 40
+const HEADER_H     = 64
+const HEADER_MONTH = 28
+const HEADER_DAY   = 36
 const PX_PER_DAY   = 22
 
 // 左欄寬度達此值才顯示完整 PDN Number；未達則只顯示編號段（如 PDN-250061）。
@@ -182,13 +179,14 @@ interface FlagPopoverState {
 
 interface Props {
   showAddModal:    boolean
+  onAddSchedule:   () => void
   onCloseAddModal: () => void
   filterCollapsed: boolean
   onToggleFilter:  () => void
 }
 
 export function GanttChart({
-  showAddModal, onCloseAddModal,
+  showAddModal, onAddSchedule, onCloseAddModal,
   filterCollapsed, onToggleFilter,
 }: Props) {
   const { schedules, remove, update } = useScheduleStore()
@@ -430,7 +428,6 @@ export function GanttChart({
   const timelineStart = filterSort.ganttStart ? parseDate(filterSort.ganttStart) : defaultStart
   const rawEnd        = filterSort.ganttEnd   ? parseDate(filterSort.ganttEnd)   : defaultEnd
   const timelineEnd   = rawEnd > timelineStart ? rawEnd : defaultEnd
-  const hasGanttRange = !!(filterSort.ganttStart || filterSort.ganttEnd)
 
   const totalDays   = daysBetween(timelineStart, timelineEnd)
   const svgWidth    = totalDays * PX_PER_DAY
@@ -482,11 +479,26 @@ export function GanttChart({
         <FilterSortBar value={filterSort} onChange={setFilterSort}
           collapsed={filterCollapsed} onToggleCollapse={onToggleFilter}
           role={role} groupBy={groupBy} />
+        {/* 工具列在空狀態也要在。「新增排程」現在住在這裡，少了它就完全
+            沒有地方可以建立第一筆排程。 */}
+        <ScheduleToolbar
+          role={role}
+          viewMode={viewMode}
+          onViewModeChange={v => { setViewMode(v); localStorage.setItem('vsms-main-view-mode', v) }}
+          groupBy={groupBy}
+          onGroupByChange={v => { setGroupBy(v); localStorage.setItem('vsms-gantt-group-by', v) }}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          onCopyList={handleCopyList}
+          onAddSchedule={onAddSchedule}
+          filterSort={filterSort}
+          onFilterChange={setFilterSort}
+        />
         <div className="flex-1 flex items-center justify-center bg-white rounded-lg shadow m-4">
           <div className="flex flex-col items-center text-center text-gray-400">
             <ClipboardList size={44} strokeWidth={1.25} className="mb-4 text-gray-300" />
             <p className="text-base font-medium text-gray-600">尚無工作排程</p>
-            <p className="text-sm text-gray-500 mt-1">點擊右上角「＋ 新增排程」開始建立</p>
+            <p className="text-sm text-gray-500 mt-1">點擊上方的「＋ 新增排程」開始建立</p>
           </div>
         </div>
         <ScheduleFormModal isOpen={showAddModal} schedule={null} onSaved={handleSaved} onClose={onCloseAddModal} />
@@ -542,126 +554,19 @@ export function GanttChart({
         collapsed={filterCollapsed} onToggleCollapse={onToggleFilter}
         role={role} groupBy={groupBy} />
 
-      {/* ── 圖例 ── */}
-      <div className="flex-shrink-0 flex flex-wrap gap-4 px-4 py-2.5 border-b bg-slate-50">
-        {options.testUnits.filter(u => u.isActive).map(u => (
-          <span key={u.id} className="flex items-center gap-1.5 text-sm text-gray-700 font-medium">
-            <span className="inline-block w-3.5 h-3.5 rounded-sm flex-shrink-0 bg-transparent"
-              style={{ border: `2px solid ${resolveUnitColor(u.value, options)}` }} />
-            {u.label}
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5 text-sm text-gray-700 font-medium">
-          <span className="inline-block w-3.5 h-3.5 rounded-sm flex-shrink-0"
-            style={{ background: OVERFLOW_COLOR }} />
-          超出時間資源
-        </span>
-        <span className="text-xs text-gray-500 self-center">
-          外框為測試單位，內裡為測試人員
-        </span>
-      </div>
-
-      {/* ── 甘特圖控制列 ── */}
-      {/* whitespace-nowrap 會往下繼承到整列的按鈕文字。少了它，視窗一窄
-          Tailwind 的 flex 子項就會被壓縮，中文按鈕標籤變成逐字直排
-          （375px 下「甘特圖」會排成三行）。放不下時改為整列橫向捲動。 */}
-      <div
-        className="flex-shrink-0 flex items-center justify-between gap-2 px-4 py-2
-                   overflow-x-auto whitespace-nowrap
-                   bg-slate-50 border-b hover:bg-slate-100 transition-colors duration-150 select-none"
-      >
-        <div className="flex flex-shrink-0 items-center gap-2">
-          {/* 視圖切換：甘特圖 / 列表 */}
-          <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-medium"
-            onClick={e => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => { setViewMode('gantt'); localStorage.setItem('vsms-main-view-mode', 'gantt') }}
-              className={`px-2.5 py-1 transition-colors ${
-                viewMode === 'gantt' ? 'bg-slate-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              甘特圖
-            </button>
-            <button
-              type="button"
-              onClick={() => { setViewMode('list'); localStorage.setItem('vsms-main-view-mode', 'list') }}
-              className={`px-2.5 py-1 transition-colors border-l border-slate-300 ${
-                viewMode === 'list' ? 'bg-slate-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              列表
-            </button>
-          </div>
-          {hasGanttRange && viewMode === 'gantt' && (
-            <span className="flex items-center gap-1 text-xs text-blue-600
-                             bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full font-medium">
-              <CalendarRange size={11} />
-              {filterSort.ganttStart || '最早'} ～ {filterSort.ganttEnd || '最晚'}
-            </span>
-          )}
-        </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          {/* ★ 分組切換按鈕：列表模式下沒有分組概念，隱藏 */}
-          {viewMode === 'gantt' && (
-            <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-medium"
-              onClick={e => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => {
-                  setGroupBy('engineer')
-                  localStorage.setItem('vsms-gantt-group-by', 'engineer')
-                }}
-                className={`px-2.5 py-1 transition-colors ${
-                  groupBy === 'engineer'
-                    ? 'bg-slate-600 text-white'
-                    : 'bg-white text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                按工程師
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setGroupBy('device')
-                  localStorage.setItem('vsms-gantt-group-by', 'device')
-                }}
-                className={`px-2.5 py-1 transition-colors border-l border-slate-300 ${
-                  groupBy === 'device'
-                    ? 'bg-slate-600 text-white'
-                    : 'bg-white text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                按設備
-              </button>
-            </div>
-          )}
-          {/* ★ 複製表格：僅列表模式顯示，複製的是 filtered 全部資料而非畫面上的可視列 */}
-          {viewMode === 'list' && (
-            <button
-              type="button"
-              title="複製目前篩選結果的完整列表（可直接貼到 Excel／Google 試算表，或貼到 Word／Outlook 等文書處理器）"
-              onClick={e => { e.stopPropagation(); handleCopyList() }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-300 bg-white
-                         text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors"
-            >
-              <ClipboardCopy size={13} />
-              複製表格
-            </button>
-          )}
-          {/* ★ 全螢幕切換 */}
-          <button
-            type="button"
-            title={isFullscreen ? '離開全螢幕（Esc）' : '全螢幕檢視甘特圖'}
-            onClick={e => { e.stopPropagation(); toggleFullscreen() }}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-300 bg-white
-                       text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors"
-          >
-            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-            {isFullscreen ? '離開全螢幕' : '全螢幕'}
-          </button>
-        </div>
-      </div>
+      <ScheduleToolbar
+        role={role}
+        viewMode={viewMode}
+        onViewModeChange={v => { setViewMode(v); localStorage.setItem('vsms-main-view-mode', v) }}
+        groupBy={groupBy}
+        onGroupByChange={v => { setGroupBy(v); localStorage.setItem('vsms-gantt-group-by', v) }}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        onCopyList={handleCopyList}
+        onAddSchedule={onAddSchedule}
+        filterSort={filterSort}
+        onFilterChange={setFilterSort}
+      />
 
       {/* ══ 甘特圖主體（四象限凍結窗格）／列表主體 ══ */}
       {viewMode === 'list' ? (
@@ -689,7 +594,6 @@ export function GanttChart({
                     <rect x={0} y={0} width={leftWidth} height={HEADER_H} fill="#e2e8f0" />
                     <text x={12} y={HEADER_MONTH / 2 + 6} fontSize={13} fill="#334155" fontWeight="700">設備視角</text>
                     <line x1={0} y1={HEADER_MONTH} x2={leftWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                    <line x1={0} y1={HEADER_MONTH + HEADER_WEEK} x2={leftWidth} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
                     <line x1={0} y1={HEADER_H - 1} x2={leftWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
                   </svg>
                 </div>
@@ -697,30 +601,29 @@ export function GanttChart({
                   <svg width={svgWidth} height={HEADER_H} className="block">
                     <rect x={0} y={0} width={svgWidth} height={HEADER_H} fill="#f1f5f9" />
                     <line x1={0} y1={HEADER_MONTH} x2={svgWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                    <line x1={0} y1={HEADER_MONTH + HEADER_WEEK} x2={svgWidth} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
                     <line x1={0} y1={HEADER_H - 1} x2={svgWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
                     {monthLabels.map((ml) => (
                       <g key={ml.label}>
                         <line x1={ml.x} y1={0} x2={ml.x} y2={HEADER_H} stroke="#cbd5e1" strokeWidth={1} />
-                        <text x={ml.x + 5} y={HEADER_MONTH / 2 + 6} fontSize={12} fill="#334155" fontWeight="700">{ml.label}</text>
+                        <text x={ml.x + 5} y={12} fontSize={12} fill="#334155" fontWeight="700">{ml.label}</text>
                       </g>
                     ))}
                     {weekTicks.map((t) => (
                       <g key={t.label}>
-                        <line x1={t.x} y1={HEADER_MONTH} x2={t.x} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
-                        <text x={t.x + 2} y={HEADER_MONTH + HEADER_WEEK / 2 + 5} fontSize={11} fill="#64748b" fontWeight="600">{t.label}</text>
+                        <line x1={t.x} y1={HEADER_MONTH - 12} x2={t.x} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
+                        <text x={t.x + 3} y={HEADER_MONTH - 3} fontSize={10} fill="#64748b" fontWeight="500">{t.label}</text>
                       </g>
                     ))}
                     {dayLabelItems.map((d) => (
                       <g key={`day-${d.x}`}>
                         {/* 休息日以淡灰底標示（紅色保留給今日線與 Delayed） */}
                         {d.isRest && (
-                          <rect x={d.x} y={HEADER_MONTH + HEADER_WEEK} width={PX_PER_DAY} height={HEADER_DAY}
+                          <rect x={d.x} y={HEADER_MONTH} width={PX_PER_DAY} height={HEADER_DAY}
                             fill="rgba(100,116,139,0.14)" />
                         )}
-                        <line x1={d.x} y1={HEADER_MONTH + HEADER_WEEK} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
+                        <line x1={d.x} y1={HEADER_MONTH} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
                         {PX_PER_DAY >= 16 && (
-                          <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_WEEK + HEADER_DAY / 2 + 5}
+                          <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_DAY / 2 + 5}
                             fontSize={11} fill="#64748b" textAnchor="middle"
                             fontWeight={d.isRest ? '700' : '400'}>{d.label}</text>
                         )}
@@ -839,7 +742,6 @@ export function GanttChart({
                   <rect x={0} y={0} width={leftWidth} height={HEADER_H} fill="#e2e8f0" />
                   <text x={12} y={HEADER_MONTH / 2 + 6} fontSize={13} fill="#334155" fontWeight="700">工作排程</text>
                   <line x1={0} y1={HEADER_MONTH} x2={leftWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                  <line x1={0} y1={HEADER_MONTH + HEADER_WEEK} x2={leftWidth} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
                   <line x1={0} y1={HEADER_H - 1} x2={leftWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
                 </svg>
               </div>
@@ -848,31 +750,30 @@ export function GanttChart({
                 <svg width={svgWidth} height={HEADER_H} className="block">
                   <rect x={0} y={0} width={svgWidth} height={HEADER_H} fill="#f1f5f9" />
                   <line x1={0} y1={HEADER_MONTH} x2={svgWidth} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
-                  <line x1={0} y1={HEADER_MONTH + HEADER_WEEK} x2={svgWidth} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
                   <line x1={0} y1={HEADER_H - 1} x2={svgWidth} y2={HEADER_H - 1} stroke="#cbd5e1" strokeWidth={1.5} />
 
                   {monthLabels.map((ml) => (
                     <g key={ml.label}>
                       <line x1={ml.x} y1={0} x2={ml.x} y2={HEADER_H} stroke="#cbd5e1" strokeWidth={1} />
-                      <text x={ml.x + 5} y={HEADER_MONTH / 2 + 6} fontSize={12} fill="#334155" fontWeight="700">{ml.label}</text>
+                      <text x={ml.x + 5} y={12} fontSize={12} fill="#334155" fontWeight="700">{ml.label}</text>
                     </g>
                   ))}
                   {weekTicks.map((t) => (
                     <g key={t.label}>
-                      <line x1={t.x} y1={HEADER_MONTH} x2={t.x} y2={HEADER_MONTH + HEADER_WEEK} stroke="#cbd5e1" strokeWidth={1} />
-                      <text x={t.x + 2} y={HEADER_MONTH + HEADER_WEEK / 2 + 5} fontSize={11} fill="#64748b" fontWeight="600">{t.label}</text>
+                      <line x1={t.x} y1={HEADER_MONTH - 12} x2={t.x} y2={HEADER_MONTH} stroke="#cbd5e1" strokeWidth={1} />
+                      <text x={t.x + 3} y={HEADER_MONTH - 3} fontSize={10} fill="#64748b" fontWeight="500">{t.label}</text>
                     </g>
                   ))}
                   {dayLabelItems.map((d) => (
                     <g key={`day-${d.x}`}>
                       {/* 休息日以淡灰底標示（紅色保留給今日線與 Delayed） */}
                       {d.isRest && (
-                        <rect x={d.x} y={HEADER_MONTH + HEADER_WEEK} width={PX_PER_DAY} height={HEADER_DAY}
+                        <rect x={d.x} y={HEADER_MONTH} width={PX_PER_DAY} height={HEADER_DAY}
                           fill="rgba(100,116,139,0.14)" />
                       )}
-                      <line x1={d.x} y1={HEADER_MONTH + HEADER_WEEK} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
+                      <line x1={d.x} y1={HEADER_MONTH} x2={d.x} y2={HEADER_H} stroke="#e2e8f0" strokeWidth={0.5} />
                       {PX_PER_DAY >= 16 && (
-                        <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_WEEK + HEADER_DAY / 2 + 5}
+                        <text x={d.x + PX_PER_DAY / 2} y={HEADER_MONTH + HEADER_DAY / 2 + 5}
                           fontSize={11} fill="#64748b" textAnchor="middle"
                           fontWeight={d.isRest ? '700' : '400'}>{d.label}</text>
                       )}

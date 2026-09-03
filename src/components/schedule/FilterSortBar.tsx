@@ -4,11 +4,11 @@ import {
   SlidersHorizontal, ChevronUp, ChevronDown,
   ChevronLeft, ChevronRight,
   CalendarRange, RotateCcw,
-  Bookmark, ShieldCheck, Eye, EyeOff,
+  Bookmark, ShieldCheck, EyeOff, Search,
 } from 'lucide-react'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useScheduleStore } from '../../store/scheduleStore'
-import { MultiSelectDropdown } from '../shared/MultiSelectDropdown'
+import { MultiSelectDropdown, summarizeSelection } from '../shared/MultiSelectDropdown'
 import {
   buildFilterOptions, buildInactiveValueSet,
   buildEngineerFilterOptions, buildEngineerInactiveValueSet,
@@ -154,6 +154,18 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
   const { schedules } = useScheduleStore()
   const [addOpen, setAddOpen] = useState(false)
   const addRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // 面板改成浮層之後會蓋住下方內容，因此點外面要收掉。
+  // 面板內的多選下拉是渲染在面板裡（不是 portal），所以那些點擊仍算在 root 內。
+  useEffect(() => {
+    if (collapsed) return
+    const handler = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onToggleCollapse()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [collapsed, onToggleCollapse])
 
   // 點擊外部關閉新增下拉
   useEffect(() => {
@@ -229,55 +241,140 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
 
   const hasGanttRange = !!(value.ganttStart || value.ganttEnd)
 
-  return (
-    <div className="border-b-2 border-stone-300">
+  // ── 生效中的條件 ─────────────────────────────────────
+  // 改版前收合時只看得到「N 項篩選」一個數字，要展開才知道自己在看什麼，
+  // 而展開會把甘特圖往下推 126px。現在條件逐項列在永遠可見的一列上，
+  // 每顆都能直接移除，編輯用的面板改成浮層，不再推擠內容。
+  interface ActiveChip { key: string; label?: string; text: string; icon?: React.ReactNode; onRemove: () => void }
+  const chips: ActiveChip[] = []
 
-      {/* ── 收合 Header（暖灰） ── */}
-      <div
-        className="flex items-center justify-between px-4 py-2
-                   bg-stone-100 cursor-pointer
-                   hover:bg-stone-200 transition-colors duration-150 select-none"
-        onClick={onToggleCollapse}
-      >
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal size={14} className="text-stone-500" />
-          <span className="text-sm font-semibold text-stone-700">篩選與排序</span>
-          {activeCount > 0 && (
-            <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full">
-              {activeCount} 項篩選
-            </span>
-          )}
-          {/* 被狀態篩選擋掉的排程要說出來，而且要能一鍵取消。
-              登入預設就擋掉 Completed 與 Cancelled，不講的話使用者只會
-              覺得「排程比我記得的少」而找不到原因。 */}
-          {hidden.length > 0 && (
-            <button
-              type="button"
-              onClick={e => { e.stopPropagation(); set({ statuses: [] }) }}
-              title={`目前的狀態篩選把 ${hidden.join('、')} 排除在外。點擊一併顯示。`}
-              className="inline-flex items-center gap-1 text-xs font-medium
-                         text-stone-600 bg-white border border-stone-300
-                         px-1.5 py-0.5 rounded-full
-                         hover:border-blue-400 hover:text-blue-700 transition-colors"
-            >
-              <EyeOff size={11} />
-              已隱藏 {hidden.join('、')}
+  if (value.categories.length)
+    chips.push({ key: 'cat', label: '類別', text: summarizeSelection(value.categories, catLabels), onRemove: () => set({ categories: [] }) })
+  if (value.testUnits.length)
+    chips.push({ key: 'unit', label: '單位', text: summarizeSelection(value.testUnits, unitLabels), onRemove: () => set({ testUnits: [], testEngineers: [] }) })
+  if (value.testEngineers.length)
+    chips.push({ key: 'eng', label: '人員', text: summarizeSelection(value.testEngineers, engineerLabels), onRemove: () => set({ testEngineers: [] }) })
+  if (value.devices.length)
+    chips.push({ key: 'dev', label: '設備', text: summarizeSelection(value.devices), onRemove: () => set({ devices: [] }) })
+
+  // 狀態用「擋掉了什麼」還是「留下了什麼」來說，取決於哪一句比較短。
+  // 登入預設留三個、擋兩個，說「已隱藏 Completed、Cancelled」比說
+  // 「狀態：Delayed、Testing +1」更接近使用者真正需要知道的事。
+  if (value.statuses.length > 0 && value.statuses.length < ALL_STATUSES.length) {
+    const byHidden = hidden.length <= 2
+    chips.push({
+      key: 'status',
+      label: byHidden ? '已隱藏' : '狀態',
+      icon: byHidden ? <EyeOff size={11} /> : undefined,
+      text: byHidden ? hidden.join('、') : summarizeSelection(value.statuses),
+      onRemove: () => set({ statuses: [] }),
+    })
+  }
+  if (hasGanttRange)
+    chips.push({ key: 'range', label: '期間', text: `${value.ganttStart || '最早'} ～ ${value.ganttEnd || '最晚'}`, onRemove: () => set({ ganttStart: '', ganttEnd: '' }) })
+  if (value.showUserFlagged)
+    chips.push({ key: 'uflag', text: '只顯示已標記', onRemove: () => set({ showUserFlagged: false }) })
+  if (value.showAdminFlagged)
+    chips.push({ key: 'aflag', text: '只顯示 Admin 標記', onRemove: () => set({ showAdminFlagged: false }) })
+  // showAllUnits 不做成 chip：它在工具列已經有一組常駐可見的分段控制，
+  // 再多一顆 chip 等於同一件事在畫面上說兩次。
+
+  const sortSummary = rules.map(r => getLabelForField(r.field)).join(' › ')
+
+  return (
+    <div ref={rootRef} className="relative flex-shrink-0 border-b border-stone-300 bg-white">
+
+      {/* ── 條件列：永遠可見，一排 ── */}
+      <div className="flex items-center gap-2 px-4 py-1.5 overflow-x-auto whitespace-nowrap">
+
+        {/* 搜尋從面板裡搬出來。它是最常用的一項，卻原本藏在要展開才看得到的地方 */}
+        <div className="relative flex-shrink-0">
+          <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+          <input
+            type="text"
+            value={value.keyword}
+            onChange={e => set({ keyword: e.target.value })}
+            placeholder="搜尋 PDN、工作內容、人員…"
+            aria-label="搜尋排程"
+            className="w-56 border border-stone-300 rounded-md pl-7 pr-6 py-1 text-xs bg-white
+                       placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-400
+                       focus:border-transparent"
+          />
+          {value.keyword && (
+            <button type="button" aria-label="清除搜尋" onClick={() => set({ keyword: '' })}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+              <X size={12} />
             </button>
           )}
-          {!isDefault && (
-            <span className="text-xs font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
-              自訂排序
+        </div>
+
+        {/* 生效中的條件，每顆可直接移除 */}
+        {chips.map(c => (
+          <span key={c.key}
+            className="inline-flex flex-shrink-0 items-center gap-1 h-6 pl-2 pr-1 rounded-full
+                       text-xs bg-blue-50 border border-blue-200 text-blue-800">
+            {c.icon}
+            {c.label && <span className="text-blue-600">{c.label}</span>}
+            <span className="font-medium max-w-[200px] truncate">{c.text}</span>
+            <button
+              type="button"
+              aria-label={`移除篩選 ${c.label ?? ''}${c.text}`}
+              onClick={c.onRemove}
+              className="w-4 h-4 flex items-center justify-center rounded-full
+                         text-blue-500 hover:bg-blue-200 hover:text-blue-900 transition-colors"
+            >
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+
+        {/* 面板開關 */}
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          aria-expanded={!collapsed}
+          className={`inline-flex flex-shrink-0 items-center gap-1 h-6 px-2 rounded-full
+                      text-xs font-medium border transition-colors
+            ${collapsed
+              ? 'bg-white border-dashed border-stone-300 text-stone-500 hover:border-blue-400 hover:text-blue-700'
+              : 'bg-stone-700 border-stone-700 text-white'}`}
+        >
+          <SlidersHorizontal size={11} />
+          {chips.length > 0 ? '篩選' : '＋ 篩選'}
+          {activeCount > 0 && (
+            <span className="tnum text-[10px] font-semibold px-1 rounded-full bg-blue-100 text-blue-800">
+              {activeCount}
             </span>
           )}
-        </div>
-        <span className="text-stone-400">
-          {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-        </span>
+          {collapsed ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
+        </button>
+
+        {chips.length > 0 && (
+          <button type="button" onClick={() => onChange(EMPTY_FILTER)}
+            className="flex-shrink-0 px-1 text-xs text-stone-500 hover:text-red-600 hover:underline">
+            清除全部
+          </button>
+        )}
+
+        {/* 排序縮成一行字。多層排序不常改，不需要一直佔著四顆 chip 的寬度 */}
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          title="在篩選面板中調整排序"
+          className="ml-auto flex-shrink-0 px-1 text-xs text-stone-500 hover:text-blue-700"
+        >
+          排序：<span className="text-stone-700">{sortSummary}</span>
+          {!isDefault && <span className="ml-1 text-amber-600">（自訂）</span>}
+        </button>
       </div>
 
-      {/* ── 篩選內容（暖灰底） ── */}
+      {/* ── 編輯面板 ──
+          改為絕對定位的浮層。改版前展開會把甘特圖整個往下推 126px，
+          等於「想看清楚在篩什麼」與「想看到排程」二選一。 */}
       {!collapsed && (
-        <div className="px-4 pt-2 pb-3 bg-stone-50 space-y-2.5">
+        <div className="absolute left-0 right-0 top-full z-40
+                        bg-stone-50 border-b border-stone-300 shadow-lg
+                        px-4 pt-2 pb-3 space-y-2.5">
 
           {/* ═══ 第一排：篩選條件 ═══ */}
           <div className="flex flex-wrap gap-x-3 gap-y-2 items-end">
@@ -300,24 +397,7 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
               />
             )}
 
-            {/* 關鍵字 */}
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-stone-500">關鍵字</span>
-              <div className="relative">
-                <input type="text" value={value.keyword}
-                  onChange={e => set({ keyword: e.target.value })}
-                  placeholder="搜尋…"
-                  className="border border-stone-300 rounded-lg px-2.5 py-1.5 text-sm
-                             w-36 focus:outline-none focus:ring-2 focus:ring-blue-400
-                             focus:border-transparent bg-white placeholder-stone-400" />
-                {value.keyword && (
-                  <button type="button" onClick={() => set({ keyword: '' })}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-            </div>
+            {/* 關鍵字已搬到永遠可見的條件列，這裡不再重複一份輸入框 */}
           </div>
 
           {/* ═══ 第二排：甘特圖範圍 + 排序 + 清除 ═══ */}
@@ -457,38 +537,26 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
             {/* 分隔線 */}
             <div className="w-px h-5 bg-stone-300 hidden sm:block" />
 
-            {/* ★ 顯示所有單位切換 (User 專屬) */}
-            {role === 'user' && (
+            {/* 「我的排程／全部」已移到工具列的分段控制。測試人員登入後預設
+                只看自己的排程，那件事重要到不該埋在要展開才看得到的面板裡。 */}
+
+            {/* 使用者旗標篩選。訪客不顯示：guest 無法建立旗標，
+                給他一個篩自己標不了的東西的開關只是多餘的選項。 */}
+            {role !== 'guest' && (
               <button
                 type="button"
-                aria-pressed={value.showAllUnits}
-                title="切換顯示所有單位"
-                onClick={() => onChange({ ...value, showAllUnits: !value.showAllUnits })}
+                aria-pressed={value.showUserFlagged}
+                onClick={() => onChange({ ...value, showUserFlagged: !value.showUserFlagged })}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full border transition-colors
-                  ${value.showAllUnits
+                  ${value.showUserFlagged
                     ? 'bg-blue-500 text-white border-blue-500'
                     : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
                   }`}
               >
-                <Eye size={13} />
-                {value.showAllUnits ? '所有單位' : '顯示所有單位'}
+                <Bookmark size={13} />
+                只顯示已標記
               </button>
             )}
-
-            {/* 使用者旗標篩選（全角色） */}
-            <button
-              type="button"
-              aria-pressed={value.showUserFlagged}
-              onClick={() => onChange({ ...value, showUserFlagged: !value.showUserFlagged })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full border transition-colors
-                ${value.showUserFlagged
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
-                }`}
-            >
-              <Bookmark size={13} />
-              只顯示已標記
-            </button>
 
             {/* Admin 旗標篩選（Admin/SA 限定；guest 看不到 adminFlag 資料） */}
             {(role === 'super_admin' || role === 'admin') && (

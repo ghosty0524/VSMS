@@ -44,7 +44,6 @@ export function App() {
         <Header
           currentView={view}
           onNavigate={setView}
-          onAddSchedule={() => setShowAddModal(true)}
           role={role}
         />
         <main className="flex-1 min-h-0 overflow-hidden">
@@ -52,6 +51,7 @@ export function App() {
             <div className="h-full p-3">
               <GanttChart
                 showAddModal={showAddModal}
+                onAddSchedule={() => setShowAddModal(true)}
                 onCloseAddModal={() => setShowAddModal(false)}
                 filterCollapsed={filterCollapsed}
                 onToggleFilter={() => setFilterCollapsed(!filterCollapsed)}
