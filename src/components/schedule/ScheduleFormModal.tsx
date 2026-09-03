@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/authStore'
 import { ApiError } from '../../lib/api'
 import { MIN_DATE, FIELD_LIMITS } from '../../constants'
 import { useEscapeKey } from '../shared/useEscapeKey'
+import { SegmentedControl } from '../shared/SegmentedControl'
 import type { Schedule, ScheduleFormValues, VtmsTestPlan } from '../../types'
 
 interface Props {
@@ -188,193 +189,235 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
     </div>
   )
 
+  // 唯讀摘要用的顯示字串
+  const roRow = (label: string, value: string) => (
+    <div className="flex gap-2 min-w-0">
+      <span className="text-gray-500 flex-shrink-0">{label}</span>
+      <span className="text-gray-800 font-medium truncate" title={value}>{value || '—'}</span>
+    </div>
+  )
+
+  const section = (title: string, children: React.ReactNode) => (
+    <div>
+      <h3 className="text-xs font-semibold text-gray-500 tracking-wide mb-2">{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  )
+
+  const inputCls = (locked: boolean) =>
+    `w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
+     ${locked ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : 'border-gray-300'}`
+
+  // 生命週期：進行中／已完成／已取消 三者互斥（後端也擋 Cancelled+Completed）。
+  //
+  // 「延遲」刻意不放進這組選項。實際資料裡有 37 筆同時是 Completed 與 Delayed
+  // （做完了，但當初有延遲）、6 筆同時是 Cancelled 與 Delayed，後端也只禁止
+  // Cancelled+Completed 這一組。把延遲併進單選會讓那 43 筆在下次儲存時
+  // 靜默丟掉其中一個旗標，所以它維持成獨立的勾選。
+  const lifecycle: 'active' | 'completed' | 'cancelled' =
+    form.isCancelled ? 'cancelled' : form.isCompleted ? 'completed' : 'active'
+  const setLifecycle = (v: 'active' | 'completed' | 'cancelled') =>
+    setForm(f => ({ ...f, isCompleted: v === 'completed', isCancelled: v === 'cancelled' }))
+
+  const vtmsLocked = !!vtmsPlanId
+
   if (!isOpen) return null
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold">{schedule ? '編輯工作排程' : '新增工作排程'}</h2>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
         </div>
-        <div className="p-4 space-y-4">
-          {field('工作類別', 'category', (
-            <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-              disabled={isUser}
-              className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}>
-              <option value="">請選擇</option>
-              {activeCategories.map(c => <option key={c.id} value={c.value}>{c.label}</option>)}
-            </select>
-          ), true)}
+        <div className="p-4 space-y-5">
 
-          {field('PDN Number', 'projectName', (
-            <input type="text" maxLength={FIELD_LIMITS.PROJECT_NAME} value={form.projectName}
-              onChange={e => setForm(f => ({ ...f, projectName: e.target.value }))}
-              disabled={isUser}
-              className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`} />
-          ), true)}
-
-          {field('工作內容', 'taskDescription', (
-            <textarea maxLength={FIELD_LIMITS.TASK_DESCRIPTION} rows={3} value={form.taskDescription}
-              onChange={e => setForm(f => ({ ...f, taskDescription: e.target.value }))}
-              disabled={isUser}
-              className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`} />
-          ), true)}
-
-          {/* 設備（只在系統中有設備時顯示） */}
-          {activeDevices.length > 0 && field('設備', 'device', (
-            <select
-              value={form.device}
-              onChange={e => setForm(f => ({ ...f, device: e.target.value }))}
-              disabled={isUser}
-              className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}
-            >
-              <option value="">（無）</option>
-              {activeDevices.map(d => <option key={d.id} value={d.value}>{d.label}</option>)}
-            </select>
-          ))}
-
-          <div className="grid grid-cols-2 gap-4">
-            {field('測試單位', 'testUnit', (
-              <select value={form.testUnit} onChange={e => setForm(f => ({ ...f, testUnit: e.target.value, testEngineer: '' }))}
-                disabled={isUser}
-                className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                  ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}>
-                <option value="">請選擇</option>
-                {activeUnits.map(u => <option key={u.id} value={u.value}>{u.label}</option>)}
-              </select>
-            ), true)}
-            {field('測試人員', 'testEngineer', (
-              <select
-                value={form.testEngineer}
-                onChange={e => setForm(f => ({ ...f, testEngineer: e.target.value }))}
-                disabled={!form.testUnit || isUser}
-                className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                  ${!form.testUnit || isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}
-              >
-                <option value="">請選擇</option>
-                {/* 需求四插入的孤兒選項沒有 id；人員姓名建立時未去重，同名的兩位
-                    正常人員 value 也可能相同，因此用 id 當 key（孤兒選項退回 value），
-                    避免兩者皆用 value 時 React key 碰撞 */}
-                {engineerOptions.map(e => (
-                  <option key={'id' in e ? e.id : e.value} value={e.value}>{e.label}</option>
-                ))}
-              </select>
-            ), true)}
-          </div>
-
-          {field('時間資源（Day）', 'timeResource', (
-            <input type="number" min="1" step="1" value={form.timeResource}
-              onChange={e => setForm(f => ({ ...f, timeResource: e.target.value }))}
-              disabled={isUser}
-              className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`} />
-          ), true)}
-
-          <div className="grid grid-cols-2 gap-4">
-            {field('起始日期', 'startDate', (
-              <DatePicker selected={form.startDate}
-                onChange={(d: Date | null) => setForm(f => ({ ...f, startDate: d }))}
-                minDate={MIN_DATE} dateFormat="yyyy/MM/dd" placeholderText="YYYY/MM/DD"
-                disabled={isUser}
-                className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                  ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`} />
-            ), true)}
-            {field('完成日期', 'endDate', (
-              <DatePicker selected={form.endDate}
-                onChange={(d: Date | null) => setForm(f => ({ ...f, endDate: d }))}
-                minDate={form.startDate ?? MIN_DATE} dateFormat="yyyy/MM/dd" placeholderText="YYYY/MM/DD"
-                disabled={isUser}
-                className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                  ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`} />
-            ), true)}
-          </div>
-
-          {field('需求人員', 'requiredPersonnel', (
-            <input type="text" maxLength={FIELD_LIMITS.REQUIRED_PERSONNEL} value={form.requiredPersonnel}
-              onChange={e => setForm(f => ({ ...f, requiredPersonnel: e.target.value }))}
-              disabled={isUser}
-              className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                ${isUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`} />
-          ), true)}
-
-          {/* ★ 測試報告：required 改為 false（第四個參數不傳或傳 false） */}
-          {field('測試報告', 'testReport', (
-            <textarea maxLength={FIELD_LIMITS.TEST_REPORT} rows={2} value={form.testReport}
-              onChange={e => setForm(f => ({ ...f, testReport: e.target.value }))}
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          ))}
-
-          {/* VTMS 關聯（僅 canLinkVtms 使用者可見） */}
-          {canLinkVtms && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">關聯 VTMS 測試計畫</label>
-              <select
-                value={vtmsPlanId}
-                onChange={e => setVtmsPlanId(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">— 不關聯 —</option>
-                {vtmsPlans
-                  .filter(p =>
-                    p.id === vtmsPlanId ||
-                    (p.projectName === form.projectName.trim() &&
-                     form.testEngineer !== '' &&
-                     (p.assignees ?? []).includes(form.testEngineer))
-                  )
-                  .map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.projectName} / {p.name} [{p.status}]
-                    </option>
-                  ))}
-              </select>
+          {/* 測試人員只能改「進度」那一段。改版前這裡是九個 disabled 的灰欄位，
+              要捲過一整面灰色才找得到唯一能打字的地方。改成唯讀摘要卡。 */}
+          {isUser ? (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-gray-500 tracking-wide">排程內容</h3>
+                <span className="text-xs text-gray-400">由管理者維護，唯讀</span>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                {roRow('PDN', form.projectName)}
+                {roRow('工作類別', form.category)}
+                {roRow('測試單位', form.testUnit)}
+                {roRow('測試人員', form.testEngineer)}
+                {roRow('起始日期', form.startDate ? formatDate(form.startDate) : '')}
+                {roRow('完成日期', form.endDate ? formatDate(form.endDate) : '')}
+                {roRow('時間資源', form.timeResource ? `${form.timeResource} 天` : '')}
+                {roRow('需求人員', form.requiredPersonnel)}
+              </div>
+              {form.taskDescription && (
+                <div className="mt-2 pt-2 border-t border-gray-200 text-sm">
+                  <span className="text-gray-500">工作內容　</span>
+                  <span className="text-gray-800">{form.taskDescription}</span>
+                </div>
+              )}
             </div>
+          ) : (
+            <>
+              {section('案件資訊', <>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {field('工作類別', 'category', (
+                    <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                      className={inputCls(false)}>
+                      <option value="">請選擇</option>
+                      {activeCategories.map(c => <option key={c.id} value={c.value}>{c.label}</option>)}
+                    </select>
+                  ), true)}
+                  {field('PDN Number', 'projectName', (
+                    <input type="text" maxLength={FIELD_LIMITS.PROJECT_NAME} value={form.projectName}
+                      onChange={e => setForm(f => ({ ...f, projectName: e.target.value }))}
+                      className={inputCls(false)} />
+                  ), true)}
+                </div>
+                {field('工作內容', 'taskDescription', (
+                  <textarea maxLength={FIELD_LIMITS.TASK_DESCRIPTION} rows={2} value={form.taskDescription}
+                    onChange={e => setForm(f => ({ ...f, taskDescription: e.target.value }))}
+                    className={inputCls(false)} />
+                ), true)}
+                {activeDevices.length > 0 && (
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {field('設備', 'device', (
+                      <select value={form.device} onChange={e => setForm(f => ({ ...f, device: e.target.value }))}
+                        className={inputCls(false)}>
+                        <option value="">（無）</option>
+                        {activeDevices.map(d => <option key={d.id} value={d.value}>{d.label}</option>)}
+                      </select>
+                    ))}
+                  </div>
+                )}
+              </>)}
+
+              {section('指派與工時', (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {field('測試單位', 'testUnit', (
+                    <select value={form.testUnit}
+                      onChange={e => setForm(f => ({ ...f, testUnit: e.target.value, testEngineer: '' }))}
+                      className={inputCls(false)}>
+                      <option value="">請選擇</option>
+                      {activeUnits.map(u => <option key={u.id} value={u.value}>{u.label}</option>)}
+                    </select>
+                  ), true)}
+                  {field('測試人員', 'testEngineer', (
+                    <select value={form.testEngineer}
+                      onChange={e => setForm(f => ({ ...f, testEngineer: e.target.value }))}
+                      disabled={!form.testUnit}
+                      className={inputCls(!form.testUnit)}>
+                      <option value="">請選擇</option>
+                      {/* 孤兒選項沒有 id；同名人員的 value 也可能相同，因此用 id 當 key */}
+                      {engineerOptions.map(e => (
+                        <option key={'id' in e ? e.id : e.value} value={e.value}>{e.label}</option>
+                      ))}
+                    </select>
+                  ), true)}
+                  {field('需求人員', 'requiredPersonnel', (
+                    <input type="text" maxLength={FIELD_LIMITS.REQUIRED_PERSONNEL} value={form.requiredPersonnel}
+                      onChange={e => setForm(f => ({ ...f, requiredPersonnel: e.target.value }))}
+                      className={inputCls(false)} />
+                  ), true)}
+                  {field('時間資源（工作天）', 'timeResource', (
+                    <input type="number" min="1" step="1" value={form.timeResource}
+                      onChange={e => setForm(f => ({ ...f, timeResource: e.target.value }))}
+                      className={inputCls(false)} />
+                  ), true)}
+                </div>
+              ))}
+
+              {section('期間', (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {field('起始日期', 'startDate', (
+                    <DatePicker selected={form.startDate}
+                      onChange={(d: Date | null) => setForm(f => ({ ...f, startDate: d }))}
+                      minDate={MIN_DATE} dateFormat="yyyy/MM/dd" placeholderText="YYYY/MM/DD"
+                      className={inputCls(false)} />
+                  ), true)}
+                  {field('完成日期', 'endDate', (
+                    <DatePicker selected={form.endDate}
+                      onChange={(d: Date | null) => setForm(f => ({ ...f, endDate: d }))}
+                      minDate={form.startDate ?? MIN_DATE} dateFormat="yyyy/MM/dd" placeholderText="YYYY/MM/DD"
+                      className={inputCls(false)} />
+                  ), true)}
+                </div>
+              ))}
+            </>
           )}
 
-          {/* F11 Completed */}
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="isCompleted" checked={form.isCompleted}
-              onChange={e => setForm(f => ({ ...f, isCompleted: e.target.checked }))}
-              disabled={!!vtmsPlanId || form.isCancelled}
-              className={`w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${vtmsPlanId || form.isCancelled ? 'cursor-not-allowed opacity-50' : ''}`} />
-            <label htmlFor="isCompleted" className={`text-sm font-medium ${vtmsPlanId || form.isCancelled ? 'text-gray-400' : 'text-gray-700'}`}>Completed（工作已完成）</label>
-            {vtmsPlanId && <span className="text-xs text-gray-500">由 VTMS 控制</span>}
-          </div>
+          {section('進度', <>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+              <div>
+                <span className="block text-sm font-medium text-gray-700 mb-1">狀態</span>
+                <SegmentedControl
+                  ariaLabel="排程狀態"
+                  size="md"
+                  value={lifecycle}
+                  onChange={setLifecycle}
+                  options={[
+                    { value: 'active',    label: '進行中', disabled: vtmsLocked,
+                      title: vtmsLocked ? '已關聯 VTMS 測試計畫，完成狀態由 VTMS 控制' : undefined },
+                    { value: 'completed', label: '已完成', disabled: vtmsLocked,
+                      title: vtmsLocked ? '已關聯 VTMS 測試計畫，完成狀態由 VTMS 控制' : undefined },
+                    { value: 'cancelled', label: '已取消', disabled: isUser,
+                      title: isUser ? '取消排程需由管理者操作' : undefined },
+                  ]}
+                />
+              </div>
 
-          {/* F12 Delayed */}
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="isDelayed" checked={form.isDelayed}
-              onChange={e => setForm(f => ({ ...f, isDelayed: e.target.checked }))}
-              disabled={!!vtmsPlanId}
-              className={`w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 ${vtmsPlanId ? 'cursor-not-allowed opacity-50' : ''}`} />
-            <label htmlFor="isDelayed" className={`text-sm font-medium ${vtmsPlanId ? 'text-gray-400' : 'text-gray-700'}`}>Delayed（工作已延遲）</label>
-            {vtmsPlanId && <span className="text-xs text-gray-500">由 VTMS 控制</span>}
-          </div>
+              {/* 延遲是獨立的事實，可以與「已完成」或「已取消」並存 */}
+              <label className={`flex items-center gap-2 mt-5 ${vtmsLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                <input type="checkbox" checked={form.isDelayed}
+                  onChange={e => setForm(f => ({ ...f, isDelayed: e.target.checked }))}
+                  disabled={vtmsLocked}
+                  className={`w-4 h-4 rounded border-gray-300 accent-red-600 ${vtmsLocked ? 'cursor-not-allowed opacity-50' : ''}`} />
+                <span className={`text-sm font-medium ${vtmsLocked ? 'text-gray-400' : 'text-gray-700'}`}>
+                  這筆排程有延遲
+                </span>
+              </label>
 
-          {/* F13 延遲原因 */}
-          {form.isDelayed && field('延遲原因', 'delayReason', (
-            <div>
+              {vtmsLocked && (
+                <span className="text-xs text-gray-500 mt-5">完成與延遲由 VTMS 控制</span>
+              )}
+            </div>
+
+            {form.isDelayed && field('延遲原因', 'delayReason', (
               <textarea maxLength={FIELD_LIMITS.DELAY_REASON} rows={2} value={form.delayReason}
                 onChange={e => setForm(f => ({ ...f, delayReason: e.target.value }))}
-                disabled={!!vtmsPlanId}
+                disabled={vtmsLocked}
                 placeholder="請說明延遲原因…"
-                className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500
-                  ${vtmsPlanId ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : 'border-gray-300'}`} />
-              {vtmsPlanId && <span className="text-xs text-gray-500">由 VTMS 控制</span>}
-            </div>
-          ), true)}
+                className={inputCls(vtmsLocked)} />
+            ), true)}
 
-          {/* Cancelled：與 Completed 互斥、僅 Admin 可操作、VTMS 關聯不鎖定 */}
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="isCancelled" checked={form.isCancelled}
-              onChange={e => setForm(f => ({ ...f, isCancelled: e.target.checked, isCompleted: e.target.checked ? false : f.isCompleted }))}
-              disabled={isUser || form.isCompleted}
-              className={`w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500 ${isUser || form.isCompleted ? 'cursor-not-allowed opacity-50' : ''}`} />
-            <label htmlFor="isCancelled" className={`text-sm font-medium ${isUser || form.isCompleted ? 'text-gray-400' : 'text-gray-700'}`}>Cancelled（工作已取消）</label>
-          </div>
+            {field('測試報告', 'testReport', (
+              <textarea maxLength={FIELD_LIMITS.TEST_REPORT} rows={2} value={form.testReport}
+                onChange={e => setForm(f => ({ ...f, testReport: e.target.value }))}
+                className={inputCls(false)} />
+            ))}
+
+            {canLinkVtms && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">關聯 VTMS 測試計畫</label>
+                <select value={vtmsPlanId} onChange={e => setVtmsPlanId(e.target.value)}
+                  className={inputCls(false)}>
+                  <option value="">— 不關聯 —</option>
+                  {vtmsPlans
+                    .filter(p =>
+                      p.id === vtmsPlanId ||
+                      (p.projectName === form.projectName.trim() &&
+                       form.testEngineer !== '' &&
+                       (p.assignees ?? []).includes(form.testEngineer))
+                    )
+                    .map(p => (
+                      <option key={p.id} value={p.id}>{p.projectName} / {p.name} [{p.status}]</option>
+                    ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  只列出 PDN 與測試人員都吻合的計畫。關聯之後完成與延遲改由 VTMS 決定。
+                </p>
+              </div>
+            )}
+          </>)}
         </div>
         <div className="flex items-center justify-between gap-2 p-4 border-t">
           {submitError
