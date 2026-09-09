@@ -17,7 +17,7 @@ import { buildPeopleView, type SafeUser, type PersonRow } from '../../lib/people
 type AccountRole = 'admin' | 'user'
 
 /** 建立帳號的來源：從人員列（角色與對應人員鎖定）或從管理帳號區塊 */
-type CreateTarget = { kind: 'admin' } | { kind: 'engineer'; engineerValue: string }
+type CreateTarget = { kind: 'admin' } | { kind: 'engineer'; engineerId: string; engineerValue: string }
 
 interface CreateForm {
   username: string
@@ -393,7 +393,7 @@ export function PeopleManager() {
     const { engineer, account } = row
     if (!account) {
       return (
-        <button type="button" onClick={() => openCreate({ kind: 'engineer', engineerValue: engineer.value })}
+        <button type="button" onClick={() => openCreate({ kind: 'engineer', engineerId: engineer.id, engineerValue: engineer.value })}
           className="flex items-center gap-1 text-xs px-2 py-1 border border-dashed border-gray-300 rounded text-gray-500 hover:bg-gray-50 hover:text-gray-700">
           <UserPlus size={12} />建立帳號
         </button>
@@ -466,7 +466,7 @@ export function PeopleManager() {
         {deleteErrors[eng.id] && <p className="text-xs text-red-500 pl-8">{deleteErrors[eng.id]}</p>}
         {actionErrors[eng.id] && <p className="text-xs text-red-500 pl-8">{actionErrors[eng.id]}</p>}
         {row.account && editTarget?.id === row.account.id && <div className="pl-8 pt-1">{editFormPanel(row.account)}</div>}
-        {createTarget?.kind === 'engineer' && createTarget.engineerValue === eng.value && <div className="pl-8 pt-1">{createFormPanel()}</div>}
+        {createTarget?.kind === 'engineer' && createTarget.engineerId === eng.id && <div className="pl-8 pt-1">{createFormPanel()}</div>}
       </div>
     )
   }
