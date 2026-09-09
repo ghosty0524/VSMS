@@ -6,7 +6,8 @@ import { appendAudit } from '../lib/storage.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { validateSchedule, collectScheduleErrors } from '../middleware/validateSchedule.js'
 import type { Schedule } from '../types.js'
-import { listTestPlans, getTestPlanProgress } from '../lib/vtmsClient.js'
+import { listTestPlans, getTestPlanProgress, listProjects } from '../lib/vtmsClient.js'
+import { matchPdn } from '../lib/pdnMatch.js'
 import { completedAtPatch } from '../lib/completedAt.js'
 
 const router = Router()
@@ -127,6 +128,26 @@ router.get('/vtms-plans', async (req, res) => {
     res.status(502).json({ error: 'VTMS unavailable' });
   }
 });
+
+// GET /api/schedules/vtms-project-check?pdn=… — 排程表單填 PDN 時提示 VTMS 是否已建專案。
+// 只給能建排程的角色。這是提示不是資料：VTMS 停機時表單仍要能用，所以回 200
+// unavailable 而不是 502；前端也不會因此擋儲存。
+router.get('/vtms-project-check', async (req, res) => {
+  if (req.session.role !== 'admin' && req.session.role !== 'super_admin') {
+    res.status(403).json({ ok: false, message: '權限不足', code: 'ROLE_NOT_ALLOWED' })
+    return
+  }
+  const pdn = String(req.query.pdn ?? '').trim()
+  if (!pdn) {
+    res.status(400).json({ ok: false, message: 'pdn 為必填' })
+    return
+  }
+  try {
+    res.json(matchPdn(pdn, await listProjects()))
+  } catch {
+    res.json({ status: 'unavailable' })
+  }
+})
 
 // GET /api/schedules/:id/vtms-progress — proxy VTMS progress for this schedule's linked plan
 router.get('/:id/vtms-progress', async (req, res) => {
