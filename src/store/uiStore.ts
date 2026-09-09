@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { View } from '../types'
 
-type SettingsTab = 'categories' | 'units' | 'engineers' | 'restdays' | 'users' | 'devices' | 'notify'
+type SettingsTab = 'categories' | 'units' | 'people' | 'restdays' | 'devices' | 'notify'
 
 interface UIState {
   view: View

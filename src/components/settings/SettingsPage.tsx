@@ -2,14 +2,13 @@ import { useAuthStore } from '../../store/authStore'
 import { useUIStore } from '../../store/uiStore'
 import { CategoryManager } from './CategoryManager'
 import { TestUnitManager } from './TestUnitManager'
-import { EngineerManager } from './EngineerManager'
+import { PeopleManager } from './PeopleManager'
 import { RestDaysManager } from './RestDaysManager'
-import { UserManager } from './UserManager'
 import { DeviceManager } from './DeviceManager'
 import { NotifyManager } from './NotifyManager'
 import CalendarImport from './CalendarImport'
 
-type SettingsTab = 'categories' | 'units' | 'engineers' | 'restdays' | 'users' | 'devices' | 'notify'
+type SettingsTab = 'categories' | 'units' | 'people' | 'restdays' | 'devices' | 'notify'
 
 export function SettingsPage() {
   const { role } = useAuthStore()
@@ -19,11 +18,11 @@ export function SettingsPage() {
   const tabs: { key: SettingsTab; label: string; superAdminOnly?: boolean }[] = [
     { key: 'categories', label: '工作類別' },
     { key: 'units',      label: '測試單位' },
-    { key: 'engineers',  label: '測試人員' },
+    // 「測試人員」與「帳號管理」合併。名冊維護從此只有 super_admin 能做（2026-09-09 決定）。
+    { key: 'people',     label: '人員', superAdminOnly: true },
     { key: 'restdays',   label: '休息日設定' },
     { key: 'devices',    label: '設備管理' },
     { key: 'notify',     label: '預告通知' },
-    { key: 'users',      label: '帳號管理', superAdminOnly: true },
   ]
 
   const visibleTabs = tabs.filter((t) => !t.superAdminOnly || isSuperAdmin)
@@ -67,7 +66,7 @@ export function SettingsPage() {
       <div className="bg-white rounded-xl shadow p-5">
         {activeTab === 'categories' && <CategoryManager />}
         {activeTab === 'units'      && <TestUnitManager />}
-        {activeTab === 'engineers'  && <EngineerManager />}
+        {activeTab === 'people'     && isSuperAdmin && <PeopleManager />}
         {activeTab === 'notify'     && <NotifyManager />}
 
         {activeTab === 'restdays' && (
@@ -94,7 +93,6 @@ export function SettingsPage() {
         )}
 
         {activeTab === 'devices' && <DeviceManager />}
-        {activeTab === 'users' && isSuperAdmin && <UserManager />}
       </div>
     </div>
   )
