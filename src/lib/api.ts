@@ -1,5 +1,5 @@
 import type {
-  Schedule, OptionsMap, Option, User, AuditLog, VtmsProgress,
+  Schedule, OptionsMap, Option, User, AuditLog, VtmsProgress, VtmsProjectCheck,
   NotifyConfig, NotifyRule, NotifyLog, NotifyPreview, NotifyRunResult, FallbackRecipient,
 } from '../types'
 
@@ -127,9 +127,14 @@ export const api = {
   deleteDevice: (id: string) =>
     req<{ ok: boolean }>('DELETE', `/options/devices/${id}`),
 
-  // ── VTMS progress ─────────────────────────────────────
+  // ── VTMS ──────────────────────────────────────────────
   getScheduleVtmsProgress: (scheduleId: string) =>
     req<VtmsProgress>('GET', `/schedules/${scheduleId}/vtms-progress`),
+  checkVtmsProject: (pdn: string) =>
+    req<VtmsProjectCheck>('GET', `/schedules/vtms-project-check?pdn=${encodeURIComponent(pdn)}`),
+  // 關聯只能走這支：POST/PUT 會把 vtmsPlanId 過濾掉（2026-07-06 安全強化）
+  setVtmsLink: (scheduleId: string, vtmsPlanId: string | null) =>
+    req<Schedule>('PATCH', `/schedules/${scheduleId}/vtms-link`, { vtmsPlanId }),
 
   // ── Notify ────────────────────────────────────────────
   notifyConfig: () =>

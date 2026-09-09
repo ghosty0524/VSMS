@@ -161,6 +161,12 @@ export interface VtmsTestPlan {
   assignees: string[]
 }
 
+/** GET /api/schedules/vtms-project-check 的回應。unavailable 是 200 不是錯誤。 */
+export type VtmsProjectCheck =
+  | { status: 'found'; name: string; planCount: number }
+  | { status: 'not_found'; similar: string[] }
+  | { status: 'unavailable' }
+
 export interface NotifyConfig {
   enabled: boolean
   systemUrl: string
