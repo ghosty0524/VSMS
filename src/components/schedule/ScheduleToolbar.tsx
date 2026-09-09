@@ -13,10 +13,10 @@
 // 單位色塊改成可點擊的篩選，並同時保留圖例功能。色塊本來就帶單位色，
 // 點下去就是篩選那個單位，因此不需要另外一列圖例，也不需要那句
 // 「外框為測試單位，內裡為測試人員」——改放進 title。
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import {
-  Upload, Download, FileSpreadsheet, Plus, ChevronDown,
-  ClipboardCopy, Maximize2, Minimize2, LayoutList,
+  Upload, Download, FileSpreadsheet, Plus,
+  ClipboardCopy, Maximize2, Minimize2,
 } from 'lucide-react'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
@@ -26,7 +26,7 @@ import { resolveUnitColor, readableTextColor } from '../../lib/colors'
 import { toast } from '../../store/toastStore'
 import { SegmentedControl } from '../shared/SegmentedControl'
 import { ExcelImportModal } from './ExcelImportModal'
-import { ExportExcelModal } from './ExportExcelModal'
+import { ExportModal } from './ExportModal'
 import { OVERFLOW_COLOR } from '../../constants'
 import type { Role } from '../../types'
 import type { FilterSortState } from './FilterSortBar'
@@ -83,26 +83,13 @@ export function ScheduleToolbar({
   const { schedules } = useScheduleStore()
   const { options } = useOptionsStore()
   const [showImport, setShowImport] = useState(false)
-  const [showExportMenu, setShowExportMenu] = useState(false)
-  const [showExportExcelModal, setShowExportExcelModal] = useState(false)
-  const exportRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
-        setShowExportMenu(false)
-      }
-    }
-    if (showExportMenu) document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showExportMenu])
+  const [showExport, setShowExport] = useState(false)
 
   const canWrite = role === 'super_admin' || role === 'admin'
   const activeUnits = (options.testUnits ?? []).filter(u => u.isActive)
   const allUnitLabels = (options.testUnits ?? []).map(u => u.label).sort()
 
   const handleExportDashboard = async () => {
-    setShowExportMenu(false)
     const html = generateDashboardHTML(schedules, options)
     await saveDashboardHTML(html)
     try {
@@ -146,40 +133,10 @@ export function ScheduleToolbar({
               匯入
             </button>
 
-            <div className="relative flex-shrink-0" ref={exportRef}>
-              <button type="button" onClick={() => setShowExportMenu(o => !o)} title="匯出" className={BTN}>
-                <Download size={13} />
-                匯出
-                <ChevronDown size={12} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
-              </button>
-              {showExportMenu && (
-                <div className="absolute left-0 top-full mt-1.5 bg-white border border-gray-200
-                                rounded-xl shadow-xl z-50 min-w-[195px] overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => { setShowExportMenu(false); setShowExportExcelModal(true) }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700
-                               hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 transition-colors"
-                  >
-                    <FileSpreadsheet size={15} className="text-green-600" />
-                    匯出排程 Excel
-                  </button>
-                  <div className="border-t border-gray-100" />
-                  <button
-                    type="button"
-                    onClick={handleExportDashboard}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700
-                               hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 transition-colors"
-                  >
-                    <LayoutList size={15} className="text-blue-600" />
-                    匯出 Dashboard
-                  </button>
-                  <div className="px-4 py-2 text-xs text-slate-500 bg-slate-50 border-t border-gray-100">
-                    同時產生 Agent Excel 供上傳 SharePoint
-                  </div>
-                </div>
-              )}
-            </div>
+            <button type="button" onClick={() => setShowExport(true)} title="匯出排程或 Dashboard" className={BTN}>
+              <Download size={13} />
+              匯出
+            </button>
 
             <button
               type="button"
@@ -312,11 +269,12 @@ export function ScheduleToolbar({
       </div>
 
       <ExcelImportModal isOpen={showImport} onClose={() => setShowImport(false)} />
-      <ExportExcelModal
-        isOpen={showExportExcelModal}
+      <ExportModal
+        isOpen={showExport}
         allUnits={allUnitLabels}
-        onConfirm={selectedUnits => exportSchedules(schedules, selectedUnits)}
-        onClose={() => setShowExportExcelModal(false)}
+        onExportExcel={selectedUnits => exportSchedules(schedules, selectedUnits)}
+        onExportDashboard={handleExportDashboard}
+        onClose={() => setShowExport(false)}
       />
     </>
   )

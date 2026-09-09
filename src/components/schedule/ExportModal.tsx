@@ -22,7 +22,7 @@ interface Props {
 export function ExportModal({ isOpen, allUnits, onExportExcel, onExportDashboard, onClose }: Props) {
   useEscapeKey(isOpen, onClose)
   const [kind, setKind] = useState<ExportKind | null>(null)
-  // 空陣列 = 不過濾（全部單位），語意與舊 ExportExcelModal 相同
+  // 空陣列 = 不過濾（全部單位），語意與舊版下拉的匯出行為相同
   const [selected, setSelected] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const sortedUnits = useMemo(() => [...allUnits].sort(), [allUnits])
