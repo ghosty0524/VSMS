@@ -203,7 +203,7 @@ export function matchPdn(pdn: string, projects: { name: string; planCount: numbe
 - VTMS `server/src/routes/integration.projects.test.ts`：mock `db.select`（比照 `integration.stats.test.ts` 用表物件分辨查詢），驗證排除 `deletedAt` 專案、`planCount` 正確、無計畫的專案 `planCount: 0`。
 - VSMS `server/src/__tests__/pdnMatch.test.ts`：精確相等、大小寫與空白、`similar` 雙向包含、上限 5 筆、空清單。
 - VSMS `server/src/__tests__/vtmsProjectCheckRoute.test.ts`：user 角色 403、空 pdn 400、`vtmsClient` mock 拋錯時回 `unavailable`。
-- VSMS 前端 `src/__tests__/scheduleStore-vtmsLink.test.ts`：`add` 回傳 schedule；模擬 `setVtmsLink` 失敗時 store 仍含新排程。
+- VSMS 前端 `src/__tests__/scheduleStore-returnsSaved.test.ts`：`add` / `update` 回傳 schedule、`replaceInStore` 以 id 取代；`src/__tests__/vtmsLinkAfterSave.test.ts`：儲存後的關聯流程抽成純函式 `syncVtmsLink`，涵蓋無權限跳過、未變動跳過、關聯、取消關聯、失敗不外拋。
 
 ### 三系統檢查
 
