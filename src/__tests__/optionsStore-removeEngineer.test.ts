@@ -1,6 +1,6 @@
 // src/__tests__/optionsStore-removeEngineer.test.ts
 // 需求三（前端部分）：removeEngineer 需讓後端 400 ENGINEER_IN_USE 的錯誤往上
-// 拋，讓 EngineerManager 能顯示訊息而非無聲失敗；未被引用者仍可正常移除。
+// 拋，讓人員名冊管理頁能顯示訊息而非無聲失敗；未被引用者仍可正常移除。
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { useOptionsStore } from '../store/optionsStore'
 import { ApiError } from '../lib/api'

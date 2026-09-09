@@ -129,7 +129,7 @@ export function PeopleManager() {
     title: string; message: string; confirmLabel: string; danger: boolean; run: () => Promise<void>
   } | null>(null)
 
-  // ── 名冊（沿用 EngineerManager 的狀態與錯誤分桶）──
+  // ── 名冊（狀態與錯誤分桶）──
   const [newNames, setNewNames] = useState<Record<string, string>>({})
   const [editKeys, setEditKeys] = useState<Record<string, string>>({})
   const [draftColors, setDraftColors] = useState<Record<string, string>>({})
@@ -247,7 +247,7 @@ export function PeopleManager() {
     },
   })
 
-  // ── 名冊操作（與 EngineerManager 相同：await 後 set，失敗顯示在該列）──
+  // ── 名冊操作：await persist 後才 set，失敗顯示在該列 ──
 
   const clearDraftColor = (id: string) =>
     setDraftColors(d => { if (!(id in d)) return d; const n = { ...d }; delete n[id]; return n })

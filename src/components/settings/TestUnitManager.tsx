@@ -15,7 +15,7 @@ export function TestUnitManager() {
   const [draftColors, setDraftColors] = useState<Record<string, string>>({})
   // 刪除單位失敗訊息（依 unit id 分開）。deleteTestUnit 會把該單位所有人員一併
   // 從 body 移除，若其中有人仍被排程引用，後端會回 400 ENGINEER_IN_USE——比照
-  // EngineerManager 的 handleRemove 模式，吞下例外並顯示訊息，不無聲失敗。
+  // 比照人員名冊的 handleRemove 模式，吞下例外並顯示訊息，不無聲失敗。
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({})
 
   const clearDeleteError = (id: string) => {

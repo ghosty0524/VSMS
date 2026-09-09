@@ -8,6 +8,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Check, FileSpreadsheet, LayoutList, X } from 'lucide-react'
 import { useEscapeKey } from '../shared/useEscapeKey'
+import { toast } from '../../store/toastStore'
 
 export type ExportKind = 'excel' | 'dashboard'
 
@@ -47,7 +48,9 @@ export function ExportModal({ isOpen, allUnits, onExportExcel, onExportDashboard
     if (kind === 'excel') { onExportExcel(selected); onClose(); return }
     if (kind === 'dashboard') {
       setBusy(true)
-      try { await onExportDashboard() } finally { setBusy(false); onClose() }
+      try { await onExportDashboard() }
+      catch (err) { toast.error(`Dashboard 匯出失敗：${String(err)}`) }
+      finally { setBusy(false); onClose() }
     }
   }
 

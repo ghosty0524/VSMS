@@ -70,6 +70,8 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
   const { options } = useOptionsStore()
   const { role, canLinkVtms } = useAuthStore()
   const isUser = role === 'user'
+  // 與後端 /vtms-project-check 的角色門檻一致（admin / super_admin），其他角色不查也不顯示
+  const canCheckPdn = role === 'admin' || role === 'super_admin'
   const [form, setForm] = useState<ScheduleFormValues>(EMPTY)
   const [errors, setErrors] = useState<Partial<Record<keyof ScheduleFormValues, string>>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -82,7 +84,8 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
 
   const runPdnCheck = (raw: string) => {
     const pdn = raw.trim()
-    if (isUser || !pdn) { setPdnCheck(null); return }
+    if (!canCheckPdn || !pdn) { setPdnCheck(null); return }
+    if (pdnCheck && pdnCheck.pdn === pdn && pdnCheck.result !== 'loading') return
     setPdnCheck(cur => (cur && cur.pdn === pdn && cur.result !== 'loading') ? cur : { pdn, result: 'loading' })
     api.checkVtmsProject(pdn)
       .catch((): VtmsProjectCheck => ({ status: 'unavailable' }))
@@ -101,6 +104,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
   }, [canLinkVtms])
 
   useEffect(() => {
+    if (!isOpen) return
     setSubmitError('')
     if (schedule) {
       setForm({
@@ -230,6 +234,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
      ${locked ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : 'border-gray-300'}`
 
   const pdnHint = () => {
+    if (!canCheckPdn) return null
     if (!pdnCheck) return null
     const r = pdnCheck.result
     if (r === 'loading') return <p className="text-xs text-gray-400 mt-1">查詢 VTMS 中…</p>

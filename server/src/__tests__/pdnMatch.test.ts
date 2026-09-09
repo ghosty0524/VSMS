@@ -53,4 +53,9 @@ describe('matchPdn', () => {
   it('空字串不會把整份清單當成相近', () => {
     expect(matchPdn('   ', projects)).toEqual({ status: 'not_found', similar: [] })
   })
+
+  it('輸入少於 3 個字元時不列相近名稱', () => {
+    expect(matchPdn('P', projects)).toEqual({ status: 'not_found', similar: [] })
+    expect(matchPdn('PD', projects)).toEqual({ status: 'not_found', similar: [] })
+  })
 })

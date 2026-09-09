@@ -18,6 +18,9 @@ export function matchPdn(pdn: string, projects: { name: string; planCount: numbe
   const exact = projects.find(p => norm(p.name) === key)
   if (exact) return { status: 'found', name: exact.name, planCount: exact.planCount }
 
+  // 太短的輸入（例如打到一半就離開欄位）會匹配到一大堆不相干的名稱，不列相近
+  if (key.length < 3) return { status: 'not_found', similar: [] }
+
   const similar = projects
     .filter(p => {
       const n = norm(p.name)
