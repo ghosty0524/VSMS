@@ -19,6 +19,14 @@ describe('matchPdn', () => {
     expect(matchPdn('  pdn-12345', projects)).toEqual({ status: 'found', name: 'pdn-12345 ', planCount: 1 })
   })
 
+  it('多筆正規化後相等時取第一筆', () => {
+    const dupes = [
+      { name: 'PDN-7777', planCount: 1 },
+      { name: 'pdn-7777', planCount: 9 },
+    ]
+    expect(matchPdn('PDN-7777', dupes)).toEqual({ status: 'found', name: 'PDN-7777', planCount: 1 })
+  })
+
   it('不相等時列出雙向包含的名稱（少一碼會列出多一碼的、多一碼也會列出少一碼的）', () => {
     expect(matchPdn('PDN-999', projects)).toEqual({ status: 'not_found', similar: ['PDN-9999', 'PDN-99990'] })
     expect(matchPdn('PDN-999901', projects)).toEqual({ status: 'not_found', similar: ['PDN-9999', 'PDN-99990'] })
