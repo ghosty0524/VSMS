@@ -4,11 +4,13 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useAuthStore } from '../../store/authStore'
-import { ApiError } from '../../lib/api'
+import { api, ApiError } from '../../lib/api'
+import { toast } from '../../store/toastStore'
+import { syncVtmsLink } from '../../lib/vtmsLinkAfterSave'
 import { MIN_DATE, FIELD_LIMITS } from '../../constants'
 import { useEscapeKey } from '../shared/useEscapeKey'
 import { SegmentedControl } from '../shared/SegmentedControl'
-import type { Schedule, ScheduleFormValues, VtmsTestPlan } from '../../types'
+import type { Schedule, ScheduleFormValues, VtmsTestPlan, VtmsProjectCheck } from '../../types'
 
 interface Props {
   isOpen: boolean
@@ -64,7 +66,7 @@ function formatDate(d: Date): string {
 
 export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props) {
   useEscapeKey(isOpen, onClose)
-  const { add, update } = useScheduleStore()
+  const { add, update, replaceInStore } = useScheduleStore()
   const { options } = useOptionsStore()
   const { role, canLinkVtms } = useAuthStore()
   const isUser = role === 'user'
@@ -74,6 +76,18 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
   const [submitError, setSubmitError] = useState('')
   const [vtmsPlans, setVtmsPlans] = useState<VtmsTestPlan[]>([])
   const [vtmsPlanId, setVtmsPlanId] = useState<string>('')
+
+  // PDN 對 VTMS 的檢查結果。只提示，不影響 validate()，不擋儲存。
+  const [pdnCheck, setPdnCheck] = useState<{ pdn: string; result: VtmsProjectCheck | 'loading' } | null>(null)
+
+  const runPdnCheck = (raw: string) => {
+    const pdn = raw.trim()
+    if (isUser || !pdn) { setPdnCheck(null); return }
+    setPdnCheck(cur => (cur && cur.pdn === pdn && cur.result !== 'loading') ? cur : { pdn, result: 'loading' })
+    api.checkVtmsProject(pdn)
+      .catch((): VtmsProjectCheck => ({ status: 'unavailable' }))
+      .then(result => setPdnCheck(cur => (cur && cur.pdn === pdn) ? { pdn, result } : cur))
+  }
 
   useEffect(() => {
     if (!canLinkVtms) return
@@ -101,9 +115,11 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
         device: schedule.device ?? '',
       })
       setVtmsPlanId(schedule.vtmsPlanId ?? '')
+      runPdnCheck(schedule.projectName)
     } else {
       setForm(EMPTY)
       setVtmsPlanId('')
+      setPdnCheck(null)
     }
     setErrors({})
   }, [schedule, isOpen])
@@ -159,11 +175,16 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
       ...(isUser ? {} : { isCancelled: form.isCancelled }),
       delayReason: form.isDelayed ? form.delayReason.trim() : '',
       ...(isUser ? {} : { device: form.device }),
-      ...(canLinkVtms ? { vtmsPlanId: vtmsPlanId || null } : {}),
     }
     try {
-      if (schedule) await update(schedule.id, data)
-      else await add(data)
+      const saved = schedule ? await update(schedule.id, data) : await add(data)
+      // 關聯只能走 PATCH /:id/vtms-link；失敗時排程已經存好，分開講。
+      const link = await syncVtmsLink({
+        canLinkVtms, savedId: saved.id, previous: schedule?.vtmsPlanId, next: vtmsPlanId,
+        setLink: api.setVtmsLink,
+      })
+      if (link.status === 'linked') replaceInStore(link.schedule)
+      else if (link.status === 'failed') toast.error('排程已儲存，但 VTMS 關聯失敗，請重新開啟排程再試')
       onSaved?.({ isCompleted: data.isCompleted })
       onClose()
     } catch (err) {
@@ -207,6 +228,23 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
   const inputCls = (locked: boolean) =>
     `w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
      ${locked ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : 'border-gray-300'}`
+
+  const pdnHint = () => {
+    if (!pdnCheck) return null
+    const r = pdnCheck.result
+    if (r === 'loading') return <p className="text-xs text-gray-400 mt-1">查詢 VTMS 中…</p>
+    if (r.status === 'found') {
+      return <p className="text-xs text-green-700 mt-1">VTMS 已建立此專案（{r.planCount} 個測試計畫）</p>
+    }
+    if (r.status === 'not_found') {
+      return (
+        <p className="text-xs text-amber-700 mt-1">
+          VTMS 尚未建立此專案{r.similar.length > 0 ? `。相近：${r.similar.join('、')}` : ''}
+        </p>
+      )
+    }
+    return <p className="text-xs text-gray-400 mt-1">目前無法查詢 VTMS</p>
+  }
 
   // 生命週期：進行中／已完成／已取消 三者互斥（後端也擋 Cancelled+Completed）。
   //
@@ -268,9 +306,13 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
                     </select>
                   ), true)}
                   {field('PDN Number', 'projectName', (
-                    <input type="text" maxLength={FIELD_LIMITS.PROJECT_NAME} value={form.projectName}
-                      onChange={e => setForm(f => ({ ...f, projectName: e.target.value }))}
-                      className={inputCls(false)} />
+                    <>
+                      <input type="text" maxLength={FIELD_LIMITS.PROJECT_NAME} value={form.projectName}
+                        onChange={e => setForm(f => ({ ...f, projectName: e.target.value }))}
+                        onBlur={e => runPdnCheck(e.target.value)}
+                        className={inputCls(false)} />
+                      {pdnHint()}
+                    </>
                   ), true)}
                 </div>
                 {field('工作內容', 'taskDescription', (
