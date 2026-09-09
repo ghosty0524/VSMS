@@ -28,6 +28,14 @@ export interface VtmsProgress {
   completionPct: number;
 }
 
+export interface VtmsProject {
+  id: string
+  /** 就是 PDN Number */
+  name: string
+  productName: string
+  planCount: number
+}
+
 const VTMS_URL = process.env.VTMS_API_URL ?? 'https://localhost:4000';
 const VTMS_KEY = process.env.VTMS_API_KEY ?? '';
 
@@ -80,4 +88,8 @@ export async function getTestPlanProgressBatch(
   return vtmsGet<Record<string, VtmsProgress>>(
     `/api/integration/test-plans/progress-batch?ids=${ids.join(',')}`
   );
+}
+
+export async function listProjects(): Promise<VtmsProject[]> {
+  return vtmsGet<VtmsProject[]>('/api/integration/projects');
 }
