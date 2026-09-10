@@ -45,6 +45,8 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
 
   // ── 帳號段 ──
   const [newRole, setNewRole] = useState<NewRole>('user')
+  /** 既有帳號的角色（admin ↔ user 可切換；super_admin 唯讀，不經這個 state） */
+  const [editRole, setEditRole] = useState<NewRole>('user')
   const [password, setPassword] = useState('')
   const [allowedUnits, setAllowedUnits] = useState<string[]>([])
   const [canLinkVtms, setCanLinkVtms] = useState(false)
@@ -71,6 +73,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
     setConfirmedUnitDrop(false)
     const a = person.account
     setNewRole('user')
+    setEditRole(a?.role === 'admin' ? 'admin' : 'user')
     setPassword('')
     setAllowedUnits(a?.allowedUnits ?? person.memberships.map(m => m.unitLabel))
     setCanLinkVtms(a?.canLinkVtms ?? false)
@@ -144,10 +147,14 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
       const displayNamePatch = hasRoster
         ? (label.trim() && label.trim() !== person.label ? { displayName: label.trim() } : {})
         : (label.trim() && label.trim() !== account.displayName ? { displayName: label.trim() } : {})
+      // 角色可在 admin ↔ user 之間切換；後端會依新角色清掉另一邊的欄位，
+      // 這裡只送「切換後」那個角色需要的欄位。
+      const roleChanged = editRole !== account.role
       await api.updateUser(account.id, {
         password: password || undefined,
-        allowedUnits: account.role === 'admin' ? allowedUnits : [],
-        linkedEngineer: account.role === 'user' ? person.name : undefined,
+        ...(roleChanged ? { role: editRole } : {}),
+        allowedUnits: editRole === 'admin' ? allowedUnits : [],
+        linkedEngineer: editRole === 'user' ? person.name : undefined,
         canLinkVtms, canViewVtmsProgress,
         ...(accountActive !== account.isActive ? { isActive: accountActive } : {}),
         ...displayNamePatch,
@@ -196,7 +203,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
       <div className="space-y-3">{children}</div>
     </div>
   )
-  const showAllowedUnits = account ? account.role === 'admin' : newRole === 'admin'
+  const showAllowedUnits = account ? (!isSuperAdminAccount && editRole === 'admin') : newRole === 'admin'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -245,8 +252,18 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">角色</label>
-                {account ? (
+                {account && isSuperAdminAccount ? (
                   <p className="text-sm px-2 py-1.5 bg-gray-50 border border-gray-200 rounded">{roleLabel(account.role)}</p>
+                ) : account ? (
+                  <SegmentedControl<NewRole>
+                    options={[{ value: 'user', label: '測試人員' }, { value: 'admin', label: '部級主管' }]}
+                    value={editRole}
+                    onChange={v => {
+                      setEditRole(v)
+                      // 升為部級主管時，管轄單位預設帶入他自己的單位（與建立帳號時一致）
+                      if (v === 'admin' && allowedUnits.length === 0) setAllowedUnits(person.memberships.map(m => m.unitLabel))
+                    }}
+                    size="md" ariaLabel="角色" />
                 ) : (
                   <SegmentedControl<NewRole>
                     options={[{ value: 'user', label: '測試人員' }, { value: 'admin', label: '部級主管' }]}

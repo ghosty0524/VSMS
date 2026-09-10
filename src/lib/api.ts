@@ -98,7 +98,7 @@ export const api = {
     req<Omit<User, 'passwordHash'>[]>('GET', '/users'),
   createUser: (data: { username: string; displayName?: string; password: string; allowedUnits?: string[]; role?: 'admin' | 'user'; linkedEngineer?: string }) =>
     req<Omit<User, 'passwordHash'>>('POST', '/users', data),
-  updateUser: (id: string, data: { displayName?: string; password?: string; isActive?: boolean; allowedUnits?: string[]; linkedEngineer?: string; canLinkVtms?: boolean; canViewVtmsProgress?: boolean }) =>
+  updateUser: (id: string, data: { displayName?: string; password?: string; isActive?: boolean; allowedUnits?: string[]; linkedEngineer?: string; canLinkVtms?: boolean; canViewVtmsProgress?: boolean; role?: 'admin' | 'user' }) =>
     req<Omit<User, 'passwordHash'>>('PUT', `/users/${id}`, data),
   disableUser: (id: string) =>
     req<{ ok: boolean }>('DELETE', `/users/${id}`),

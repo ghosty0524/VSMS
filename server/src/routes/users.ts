@@ -93,7 +93,7 @@ router.put('/:id', async (req, res) => {
     return
   }
 
-  const { displayName, password, isActive, allowedUnits, linkedEngineer, canLinkVtms, canViewVtmsProgress } = req.body as {
+  const { displayName, password, isActive, allowedUnits, linkedEngineer, canLinkVtms, canViewVtmsProgress, role } = req.body as {
     displayName?: string
     password?: string
     isActive?: boolean
@@ -101,9 +101,40 @@ router.put('/:id', async (req, res) => {
     linkedEngineer?: string
     canLinkVtms?: boolean
     canViewVtmsProgress?: boolean
+    role?: string
   }
   const changedFields: string[] = []
   const updates: Record<string, unknown> = {}
+
+  // 角色變更（admin ↔ user，2026-09-10 起開放）。先算出「這次請求生效後的角色」，
+  // 後面 allowedUnits / linkedEngineer 的門檻都用它判斷，而不是資料庫裡的舊角色。
+  let effectiveRole: string = dbUser.role
+  if (role !== undefined && role !== dbUser.role) {
+    if (role !== 'admin' && role !== 'user') {
+      res.status(400).json({ ok: false, message: 'role 只能是 admin 或 user' })
+      return
+    }
+    if (dbUser.role === 'super_admin') {
+      res.status(403).json({ ok: false, message: 'Super Admin 角色不可變更' })
+      return
+    }
+    if (dbUser.username === req.session.username) {
+      res.status(403).json({ ok: false, message: '不能變更自己的角色' })
+      return
+    }
+    effectiveRole = role
+    updates.role = role
+    changedFields.push('role')
+    if (role === 'admin') {
+      // 升為部級主管：不再對應名冊人員；管轄單位以 body 為準，沒帶就是全部（空陣列）
+      updates.linkedEngineer = ''
+      updates.allowedUnits = Array.isArray(allowedUnits) ? allowedUnits : []
+    } else {
+      // 降為測試人員：管轄單位清空；對應人員預設就是自己（名冊名稱 = 帳號）
+      updates.allowedUnits = []
+      updates.linkedEngineer = dbUser.username
+    }
+  }
 
   if (displayName !== undefined) {
     updates.displayName = displayName.trim() || dbUser.username
@@ -128,13 +159,14 @@ router.put('/:id', async (req, res) => {
     changedFields.push('isActive')
   }
 
-  if (allowedUnits !== undefined && dbUser.role !== 'super_admin') {
+  // 降為測試人員時 allowedUnits 已在上面清空，不讓 body 再覆寫
+  if (allowedUnits !== undefined && effectiveRole !== 'super_admin' && !(updates.role === 'user')) {
     updates.allowedUnits = Array.isArray(allowedUnits) ? allowedUnits : []
     changedFields.push('allowedUnits')
   }
 
   if (linkedEngineer !== undefined) {
-    if (dbUser.role !== 'user') {
+    if (effectiveRole !== 'user') {
       res.status(400).json({ ok: false, message: 'linkedEngineer 欄位僅適用於 User 角色帳號' })
       return
     }
