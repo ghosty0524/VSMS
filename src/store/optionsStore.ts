@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
 import { api } from '../lib/api'
 import { DEFAULT_OPTIONS } from '../constants'
-import type { OptionsMap, Option, CategoryOption, CategoryStatsMode, TestUnitOption, RestDaysConfig } from '../types'
+import type { OptionsMap, Option, CategoryOption, CategoryStatsMode, TestUnitOption, RestDaysConfig, EngineerOption } from '../types'
 
 interface OptionsState {
   options: OptionsMap
@@ -24,6 +24,13 @@ interface OptionsState {
   removeEngineer: (unitId: string, engId: string) => Promise<void>
   setTestUnitColor: (id: string, color: string | null) => Promise<void>
   setEngineerColor: (unitId: string, engId: string, color: string | null) => Promise<void>
+  /** 一次 PUT 把同一個 patch 套到多個單位列（人員頁「一個人一份屬性」） */
+  patchEngineers: (
+    targets: { unitId: string; engId: string }[],
+    patch: Partial<Pick<EngineerOption, 'label' | 'isActive' | 'color'>>,
+  ) => Promise<void>
+  /** 讓 name 這個人恰好屬於 unitIds 這些單位：缺的新增一列、多的刪掉，一次 PUT；無變動不發 */
+  setPersonUnits: (name: string, unitIds: string[]) => Promise<void>
   addDevice:    (value: string) => Promise<void>
   updateDevice: (id: string, label: string) => Promise<void>
   toggleDevice: (id: string, isActive: boolean) => Promise<void>
@@ -197,6 +204,41 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
         return { ...u, engineers: u.engineers.map((e) => e.id === engId ? { ...e, color } : e) }
       }),
     }
+    await persistOptions(next)
+    set({ options: next })
+  },
+
+  patchEngineers: async (targets, patch) => {
+    const wanted = new Set(targets.map(t => `${t.unitId}/${t.engId}`))
+    const next = {
+      ...get().options,
+      testUnits: get().options.testUnits.map((u) => ({
+        ...u,
+        engineers: u.engineers.map((e) => wanted.has(`${u.id}/${e.id}`) ? { ...e, ...patch } : e),
+      })),
+    }
+    await persistOptions(next)
+    set({ options: next })
+  },
+
+  setPersonUnits: async (name, unitIds) => {
+    const want = new Set(unitIds)
+    let changed = false
+    const testUnits = get().options.testUnits.map((u) => {
+      const has = u.engineers.some(e => e.value === name)
+      if (want.has(u.id) && !has) {
+        changed = true
+        const eng: Option = { id: uuidv4(), value: name, label: name, isActive: true, sortOrder: u.engineers.length }
+        return { ...u, engineers: [...u.engineers, eng] }
+      }
+      if (!want.has(u.id) && has) {
+        changed = true
+        return { ...u, engineers: u.engineers.filter(e => e.value !== name) }
+      }
+      return u
+    })
+    if (!changed) return
+    const next = { ...get().options, testUnits }
     await persistOptions(next)
     set({ options: next })
   },
