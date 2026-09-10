@@ -9,7 +9,6 @@ import { api } from '../../lib/api'
 import { useOptionsStore } from '../../store/optionsStore'
 import { resolveEngineerColor } from '../../lib/colors'
 import { roleLabel, type Person } from '../../lib/peopleRows'
-import type { OptionsMap } from '../../types'
 import { membershipTargets } from '../../lib/peopleActions'
 import { useEscapeKey } from '../shared/useEscapeKey'
 import { SegmentedControl } from '../shared/SegmentedControl'
@@ -52,28 +51,30 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; run: () => Promise<void> } | null>(null)
 
-  // 换人（或 options 帶回最新顏色）時重置整份表單。用 render 期間比對＋setState
-  // 而非 useEffect：這是 React 官方認可的「依 prop 調整 state」寫法，
-  // react-hooks/set-state-in-effect 只抓 effect 內的 setState，這裡不觸發。
-  const [syncedWith, setSyncedWith] = useState<{ person: Person | null; options: OptionsMap } | null>(null)
-  if (!syncedWith || syncedWith.person !== person || syncedWith.options !== options) {
-    setSyncedWith({ person, options })
-    if (person) {
-      const first = person.memberships[0]
-      setLabel(person.label)
-      setColor(first ? (first.engineer.color ?? resolveEngineerColor(person.name, first.unitValue, options)) : '#94a3b8')
-      setUnitIds(person.memberships.map(m => m.unitId))
-      setRosterActive(person.rosterActive)
-      setRosterError('')
-      const a = person.account
-      setNewRole('user')
-      setPassword('')
-      setAllowedUnits(a?.allowedUnits ?? person.memberships.map(m => m.unitLabel))
-      setCanLinkVtms(a?.canLinkVtms ?? false)
-      setCanViewVtmsProgress(a?.canViewVtmsProgress ?? false)
-      setAccountActive(a?.isActive ?? true)
-      setAccountError('')
-    }
+  // 换人時重置整份表單。用 render 期間比對＋setState 而非 useEffect：這是
+  // React 官方認可的「依 prop 調整 state」寫法，react-hooks/set-state-in-effect
+  // 只抓 effect 內的 setState，這裡不觸發。
+  // 重置只在開啟或換人時做；部分成功後 onSaved 會換掉 person/options 的參考，
+  // 若跟著重置會洗掉剛顯示的錯誤訊息。
+  const [syncedName, setSyncedName] = useState<string | null>(null)
+  if (person && person.name !== syncedName) {
+    const first = person.memberships[0]
+    setLabel(person.label)
+    setColor(first ? (first.engineer.color ?? resolveEngineerColor(person.name, first.unitValue, options)) : '#94a3b8')
+    setUnitIds(person.memberships.map(m => m.unitId))
+    setRosterActive(person.rosterActive)
+    setRosterError('')
+    const a = person.account
+    setNewRole('user')
+    setPassword('')
+    setAllowedUnits(a?.allowedUnits ?? person.memberships.map(m => m.unitLabel))
+    setCanLinkVtms(a?.canLinkVtms ?? false)
+    setCanViewVtmsProgress(a?.canViewVtmsProgress ?? false)
+    setAccountActive(a?.isActive ?? true)
+    setAccountError('')
+    setSyncedName(person.name)
+  } else if (!person && syncedName !== null) {
+    setSyncedName(null)
   }
 
   if (!person) return null
