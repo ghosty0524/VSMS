@@ -19,6 +19,8 @@ export function TestUnitManager() {
   // 從 body 移除，若其中有人仍被排程引用，後端會回 400 ENGINEER_IN_USE——比照
   // 比照人員名冊的 handleRemove 模式，吞下例外並顯示訊息，不無聲失敗。
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({})
+  // 部門輸入框失敗訊息（依 unit id 分開）。失敗時保留草稿讓使用者修正後重試。
+  const [departmentErrors, setDepartmentErrors] = useState<Record<string, string>>({})
 
   const clearDeleteError = (id: string) => {
     setDeleteErrors(d => {
@@ -128,12 +130,20 @@ export function TestUnitManager() {
                       const draft = draftDepts[u.id]
                       if (draft === undefined) return
                       const next = draft.trim() || null
-                      if (next !== (u.department ?? null)) {
-                        try { await setTestUnitDepartment(u.id, next) }
-                        catch (err) { setDeleteErrors(d => ({ ...d, [u.id]: err instanceof Error ? err.message : String(err) })) }
+                      if (next === (u.department ?? null)) {
+                        setDraftDepts(d => { const n = { ...d }; delete n[u.id]; return n })
+                        return
                       }
-                      setDraftDepts(d => { const n = { ...d }; delete n[u.id]; return n })
+                      try {
+                        await setTestUnitDepartment(u.id, next)
+                        setDepartmentErrors(d => { const n = { ...d }; delete n[u.id]; return n })
+                        setDraftDepts(d => { const n = { ...d }; delete n[u.id]; return n })
+                      } catch (err) {
+                        // 失敗時保留草稿讓使用者修正後重試，不要把打好的字清掉
+                        setDepartmentErrors(d => ({ ...d, [u.id]: err instanceof Error ? err.message : String(err) }))
+                      }
                     }}
+                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                   />
                   <button type="button" onClick={() => { setEditId(u.id); setEditValue(u.label) }}
                     className="text-xs px-2 py-1 border rounded hover:bg-gray-50">編輯</button>
@@ -148,6 +158,9 @@ export function TestUnitManager() {
             </div>
             {deleteErrors[u.id] && (
               <p className="text-xs text-red-500 pl-1">{deleteErrors[u.id]}</p>
+            )}
+            {departmentErrors[u.id] && (
+              <p className="text-xs text-red-500 pl-1">{departmentErrors[u.id]}</p>
             )}
           </div>
         ))}
