@@ -40,7 +40,8 @@ describe('deactivatePerson', () => {
 
   it('沒有帳號只停名冊', async () => {
     const d = deps()
-    await deactivatePerson(person({ account: null }), d)
+    const r = await deactivatePerson(person({ account: null }), d)
+    expect(r).toEqual({ ok: true })
     expect(d.disableUser).not.toHaveBeenCalled()
   })
 
@@ -71,6 +72,14 @@ describe('deactivatePerson', () => {
     const r = await deactivatePerson(person(), d)
     expect(r).toEqual({ ok: false, message: '名冊已停用，但帳號停用失敗：403' })
   })
+
+  it('沒有名冊列時第二步失敗：訊息沒有「名冊已停用，但」前綴', async () => {
+    const d = deps()
+    d.disableUser = vi.fn().mockRejectedValue(new Error('403'))
+    const r = await deactivatePerson(person({ memberships: [], rosterActive: false }), d)
+    expect(r).toEqual({ ok: false, message: '帳號停用失敗：403' })
+    expect(d.patchEngineers).not.toHaveBeenCalled()
+  })
 })
 
 describe('activatePerson', () => {
@@ -92,5 +101,35 @@ describe('activatePerson', () => {
     d.enableUser = vi.fn().mockRejectedValue(new Error('500'))
     const r = await activatePerson(person({ account: { ...account, isActive: false } }), d)
     expect(r).toEqual({ ok: false, message: '名冊已啟用，但帳號啟用失敗：500' })
+  })
+
+  it('沒有帳號只啟名冊，回 ok:true', async () => {
+    const d = deps()
+    const r = await activatePerson(person({ account: null, rosterActive: false }), d)
+    expect(r).toEqual({ ok: true })
+    expect(d.patchEngineers).toHaveBeenCalledWith([{ unitId: 'u-hw', engId: 'e2' }, { unitId: 'u-sw', engId: 'e4' }], { isActive: true })
+    expect(d.enableUser).not.toHaveBeenCalled()
+  })
+
+  it('沒有名冊列只啟帳號', async () => {
+    const d = deps()
+    await activatePerson(person({ memberships: [], rosterActive: false, account: { ...account, isActive: false } }), d)
+    expect(d.patchEngineers).not.toHaveBeenCalled()
+    expect(d.enableUser).toHaveBeenCalledWith('acc-1')
+  })
+
+  it('第一步失敗：回 ok:false，不呼叫 enableUser', async () => {
+    const d = deps()
+    d.patchEngineers = vi.fn().mockRejectedValue(new Error('500'))
+    const r = await activatePerson(person({ rosterActive: false, account: { ...account, isActive: false } }), d)
+    expect(r).toEqual({ ok: false, message: '名冊啟用失敗：500' })
+    expect(d.enableUser).not.toHaveBeenCalled()
+  })
+
+  it('沒有名冊列時第二步失敗：訊息沒有前綴', async () => {
+    const d = deps()
+    d.enableUser = vi.fn().mockRejectedValue(new Error('500'))
+    const r = await activatePerson(person({ memberships: [], rosterActive: false, account: { ...account, isActive: false } }), d)
+    expect(r).toEqual({ ok: false, message: '帳號啟用失敗：500' })
   })
 })
