@@ -971,12 +971,15 @@ Run: `cd /f/vsms/vsms-export && git status --short server/`
 cd /f/vsms/vsms-export && git stash push -u -m "someone-else-login-validation" -- server/src/routes/auth.ts server/src/lib/crypto.ts server/src/__tests__/loginPasswordValidation.test.ts
 ```
 
-- [ ] **Step 2: 時間與備份**
+- [ ] **Step 2: 時間與備份（前端與 server 兩份）**
 
 PowerShell：`Get-Date -Format "yyyy-MM-dd HH:mm dddd"`（不用 bash 的 `TZ`）。VSMS 的通知 job 只在 08:00 跑，重啟時間沒有窗口限制，但仍記錄時間。
 ```bash
 cd /f/vsms/vsms-export && cmd //c "xcopy /E /I /Y /Q dist dist.stable-$(date +%Y%m%d)-pre-people" | tail -1
+cd /f/vsms/vsms-export && cmd //c "xcopy /E /I /Y /Q server\dist server\dist.stable-$(date +%Y%m%d)-pre-people" | tail -1
 ```
+
+**Gate：Step 3 的 ALTER 未完成前，不得執行 Step 4，也不得讓 vsms 行程重啟（含 pm2 resurrect、機器重開、`tsx` 開發伺服器）。** 原因不是「新碼會 select 那個欄位」——是 Task 1 跑過的 `npx prisma generate` 已讓 `node_modules/.prisma/client` 含 `department`，Prisma 的 SELECT 明列欄位來自產生後的 client，所以**連舊的 server/dist 重啟後都會 P2022**。
 
 - [ ] **Step 3: schema（additive，一次一條）**
 
@@ -985,7 +988,7 @@ cd /f/vsms/vsms-export && echo "ALTER TABLE test_units ADD COLUMN department VAR
 cd /f/vsms/vsms-export && echo "UPDATE test_units SET department='SIT' WHERE value IN ('SIT-HW','SIT-SW');" | npx prisma db execute --stdin
 ```
 
-驗證（唯讀）：用 repo 的 prisma client 查 `testUnit.findMany({ select: { value: true, department: true } })`，預期 SIT-HW/SIT-SW = SIT、RA/SI = null。
+驗證（唯讀）：用 repo 的 prisma client 查 `testUnit.findMany({ select: { value: true, department: true } })`，預期 SIT-HW/SIT-SW = SIT、RA/SI = null。**同時實跑 C# 名冊那條 SQL**（spec 三系統檢查要求）：`SELECT e.value AS Name, e.label AS Label, u.value AS TestUnit, e.isActive AS IsActive FROM engineers e JOIN test_units u ON u.id = e.testUnitId ORDER BY u.sortOrder, e.sortOrder`，確認欄位數與筆數（26）不變。
 
 - [ ] **Step 4: VSMS server**
 
@@ -1007,6 +1010,16 @@ cd /f/vsms/vsms-export && git stash pop && git status --short
 cd /f/vsms/vsms-export && git push origin feat/guest-role-and-uiux
 ```
 
-- [ ] **Step 7: 記錄**
+- [ ] **Step 7: 上線後的保留驗證（需 super_admin 操作，由使用者做）**
+
+在「測試單位」分頁把任一單位的部門改一次再改回來（發兩次完整 PUT），重新整理後確認 SIT-HW／SIT-SW 的 `SIT` 仍在。這是本次唯一有邏輯風險的後端行為（保留），guest 只能 GET，無法代驗。
+
+- [ ] **Step 8: 記錄**
 
 在 `.superpowers/sdd/progress.md` 記部署時間、備份目錄名、commit 範圍；更新 memory `vsms-people-identity-and-org-model.md` 的進度段落。
+
+## Rollback（ALTER 是 additive，欄位可以留著，不需 DROP COLUMN）
+
+1. `xcopy /E /I /Y server\dist.stable-<日期>-pre-people server\dist` 後 `pm2.cmd restart vsms`（舊 client 不會 select 新欄位，留著無害；但**舊 server/dist 必須配舊的 `node_modules/.prisma/client`**——若 client 已重新產生，改用 `git checkout <舊 commit> -- prisma/schema.prisma && npx prisma generate` 再重啟）。
+2. `xcopy /E /I /Y dist.stable-<日期>-pre-people dist`（前端即時生效，不用重啟）。
+3. 不要 `DROP COLUMN`：資料留著，下次再上時 seed 不用重跑。
