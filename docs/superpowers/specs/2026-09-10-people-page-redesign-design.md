@@ -83,7 +83,7 @@ export function buildPeopleModel(testUnits: TestUnitOption[], users: SafeUser[])
 
 **帳號段**
 - 無帳號：標題「建立帳號」，username 唯讀等於姓名，角色單選「測試人員／部級主管」（不提供 super_admin），密碼（≥8 字元）。選部級主管時「管轄單位」預設帶入該人的 memberships；選測試人員時 `linkedEngineer` 自動等於姓名。
-- 有帳號：角色（唯讀，改角色不在範圍內）、管轄單位（admin）、VTMS 兩個權限、新密碼（留空不改）、帳號啟用開關。
+- 有帳號：角色（**2026-09-10 追加**：測試人員 ↔ 部級主管可切換，super_admin 唯讀；後端 `PUT /api/users/:id` 接受 `role`，不能改 super_admin、不能改自己，升 admin 清 `linkedEngineer` 並套用管轄單位、降 user 清管轄單位並把 `linkedEngineer` 設為 username）、管轄單位（admin）、VTMS 兩個權限、新密碼（留空不改）、帳號啟用開關。
 - 沒有名冊列的帳號（`unassigned`）：只顯示帳號段。
 
 **底部危險區**：「刪除人員」（有名冊列時；逐單位 `removeEngineer`，任一單位被 `ENGINEER_IN_USE` 擋下就顯示訊息並保留其餘）與「永久刪除帳號」（帳號已停用時才顯示；沿用兩段式）。都用 `DeleteConfirmDialog`。
@@ -121,6 +121,6 @@ export function buildPeopleModel(testUnits: TestUnitOption[], users: SafeUser[])
 
 ## 不做
 
-- 拖曳排序、批次停用、匯入名冊、改帳號角色、建立 super_admin。
+- 拖曳排序、批次停用、匯入名冊、建立 super_admin。（改帳號角色原本在此清單，2026-09-10 已追加實作。）
 - 甘特圖工具列與篩選列不動。
 - 部 → 課分組與部級上浮（B）。
