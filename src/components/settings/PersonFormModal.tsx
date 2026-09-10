@@ -11,6 +11,7 @@ import { useScheduleStore } from '../../store/scheduleStore'
 import { resolveEngineerColor } from '../../lib/colors'
 import { roleLabel, type Person } from '../../lib/peopleRows'
 import { membershipTargets, referencedUnits } from '../../lib/peopleActions'
+import { groupUnitLabelsByDepartment, deptCheckState, toggleDepartment, toggleUnit } from '../../lib/allowedUnitsExpand'
 import { useEscapeKey } from '../shared/useEscapeKey'
 import { SegmentedControl } from '../shared/SegmentedControl'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
@@ -31,7 +32,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
   useEscapeKey(isOpen, onClose)
   const { options, patchEngineers, setPersonUnits } = useOptionsStore()
   const activeUnits = options.testUnits.filter(u => u.isActive)
-  const allUnitLabels = activeUnits.map(u => u.label)
+  const deptUnits = groupUnitLabelsByDepartment(options.testUnits)
 
   // ── 人員段 ──
   const [label, setLabel] = useState('')
@@ -270,13 +271,26 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
                 {showAllowedUnits && (
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">管轄單位<span className="ml-1 text-gray-400">（不選 = 全部）</span></label>
-                    <div className="flex flex-wrap gap-2">
-                      {allUnitLabels.map(u => (
-                        <label key={u} className={`text-xs px-2 py-1 rounded border cursor-pointer ${allowedUnits.includes(u) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600'}`}>
-                          <input type="checkbox" className="sr-only" checked={allowedUnits.includes(u)} onChange={() => setAllowedUnits(l => toggleIn(l, u))} />
-                          {u}
-                        </label>
-                      ))}
+                    <div className="space-y-1.5">
+                      {deptUnits.map(d => {
+                        const state = deptCheckState(allowedUnits, d.unitLabels)
+                        const chip = (label: string, checked: boolean, onChange: () => void, extra = '') => (
+                          <label key={label} className={`text-xs px-2 py-1 rounded border cursor-pointer ${checked ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600'} ${extra}`}>
+                            <input type="checkbox" className="sr-only" checked={checked} onChange={onChange} />
+                            {label}
+                          </label>
+                        )
+                        if (d.isSingleLevel) {
+                          return <div key={d.department} className="flex flex-wrap gap-2">{chip(d.department, allowedUnits.includes(d.department), () => setAllowedUnits(l => toggleUnit(l, d.department)))}</div>
+                        }
+                        return (
+                          <div key={d.department} className="flex flex-wrap items-center gap-2">
+                            {chip(`${d.department}（整個部門）`, state === 'all', () => setAllowedUnits(l => toggleDepartment(l, d.unitLabels)), state === 'some' ? 'border-dashed' : '')}
+                            <span className="text-gray-300">|</span>
+                            {d.unitLabels.map(u => chip(u, allowedUnits.includes(u), () => setAllowedUnits(l => toggleUnit(l, u))))}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )}

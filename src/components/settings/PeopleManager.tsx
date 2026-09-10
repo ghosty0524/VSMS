@@ -13,6 +13,7 @@ import { useOptionsStore } from '../../store/optionsStore'
 import { useUIStore } from '../../store/uiStore'
 import { buildPeopleModel, UNASSIGNED_LABEL, type Person, type SafeUser, type PersonGroup, type PeopleModel } from '../../lib/peopleRows'
 import { deactivatePerson, activatePerson, membershipTargets } from '../../lib/peopleActions'
+import { groupByDepartment, type DeptGroup, type SectionGroup } from '../../lib/orgGroups'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { PersonRow, PEOPLE_GRID } from './PersonRow'
 import { PersonFormModal } from './PersonFormModal'
@@ -130,6 +131,45 @@ export function PeopleManager() {
     </div>
   )
 
+  /** 課的子區塊（部門卡片內） */
+  const sectionBlock = (s: SectionGroup, variant: 'active' | 'inactive') => (
+    <div key={s.unitId} className="mt-3">
+      <p className="text-xs font-medium text-gray-500 mb-1">{s.unitLabel}<span className="ml-2 text-gray-400">{s.people.length} 人</span></p>
+      <div className="overflow-x-auto"><div className="space-y-0.5">{rows(s.people, variant)}</div></div>
+      {variant === 'active' && (
+        <div className="flex gap-2 mt-2">
+          <input className="border rounded px-2 py-1 text-xs flex-1" placeholder="新增人員姓名（等於未來的帳號名稱）"
+            value={newNames[s.unitId] ?? ''}
+            onChange={e => setNewNames(n => ({ ...n, [s.unitId]: e.target.value }))}
+            onKeyDown={e => { if (e.key === 'Enter') void handleAdd(s.unitId) }} />
+          <button type="button" onClick={() => handleAdd(s.unitId)} className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">新增</button>
+        </div>
+      )}
+      {addErrors[s.unitId] && <p className="text-xs text-red-500 mt-1">{addErrors[s.unitId]}</p>}
+    </div>
+  )
+
+  /** 部門卡片：單層部門直接沿用 groupCard；兩層部門先列部級再列各課 */
+  const deptCard = (d: DeptGroup, variant: 'active' | 'inactive') => {
+    if (d.isSingleLevel) {
+      const s = d.sections[0]
+      return groupCard({ unitId: s.unitId, unitLabel: s.unitLabel, people: s.people }, variant)
+    }
+    const total = d.deptLevel.length + d.sections.reduce((n, s) => n + s.people.length, 0)
+    return (
+      <div key={`dept-${d.department}`} className="border rounded-lg p-3">
+        <p className="font-medium text-sm text-gray-600">{d.department}<span className="ml-2 text-xs text-gray-400">{total} 人</span></p>
+        {d.deptLevel.length > 0 && (
+          <div className="mt-2">
+            <p className="text-xs font-medium text-gray-500 mb-1">部級<span className="ml-2 text-gray-400">跨課，{d.deptLevel.length} 人</span></p>
+            <div className="overflow-x-auto"><div className="space-y-0.5">{rows(d.deptLevel, variant)}</div></div>
+          </div>
+        )}
+        {d.sections.map(s => sectionBlock(s, variant))}
+      </div>
+    )
+  }
+
   if (loading) return <p className="text-sm text-gray-400">載入中...</p>
 
   return (
@@ -139,7 +179,7 @@ export function PeopleManager() {
 
       {header}
       <div className="space-y-4">
-        {model.active.map(g => groupCard(g, 'active'))}
+        {groupByDepartment(model.active, options.testUnits).map(d => deptCard(d, 'active'))}
         {model.unassigned.length > 0 && groupCard({ unitId: null, unitLabel: UNASSIGNED_LABEL, people: model.unassigned }, 'active')}
       </div>
 
@@ -153,7 +193,12 @@ export function PeopleManager() {
         {peopleInactiveOpen && (
           inactiveCount === 0
             ? <p className="text-xs text-gray-400 mt-2">目前沒有停用的人員。</p>
-            : <div className="space-y-4 mt-3">{model.inactive.map(g => groupCard(g, 'inactive'))}</div>
+            : (
+              <div className="space-y-4 mt-3">
+                {groupByDepartment(model.inactive, options.testUnits).map(d => deptCard(d, 'inactive'))}
+                {model.inactive.filter(g => g.unitId === null).map(g => groupCard(g, 'inactive'))}
+              </div>
+            )
         )}
       </div>
 
