@@ -30,6 +30,7 @@ function makeTxHandle(state: FakeState) {
       deleteMany: async () => { state.engineers = [] },
     },
     testUnit: {
+      findMany: async () => state.testUnits,
       deleteMany: async () => { state.testUnits = [] },
       create: async ({ data }: { data: Record<string, unknown> & { engineers?: { create: Omit<FakeEngineer, 'testUnitId'>[] } } }) => {
         const { engineers, ...unit } = data

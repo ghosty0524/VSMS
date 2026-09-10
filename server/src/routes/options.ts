@@ -74,6 +74,11 @@ router.put('/', async (req, res) => {
       // REPEATABLE READ 下，仍可能有另一筆交易在此刻插入排程並提交、引用到
       // 這裡即將刪除的人員。真要完全關閉需要 SELECT ... FOR UPDATE 或外鍵約束，
       // 兩者都超出本次範圍，這裡先接受此殘餘視窗。
+      // department 是 additive 欄位；舊前端的 body 不會帶這個鍵，全刪重建前先把
+      // 舊值讀出來，讓「沒表態」等於「不變」。
+      const existingUnits = await tx.testUnit.findMany({ select: { id: true, department: true } })
+      const existingDepartment = new Map(existingUnits.map(u => [u.id, u.department ?? null]))
+
       const existingEngineers = await tx.engineer.findMany({ select: { value: true } })
       const existingEngineerValues = new Set(existingEngineers.map(e => e.value))
       const schedules = await tx.schedule.findMany({ select: { testEngineer: true } })
@@ -101,7 +106,7 @@ router.put('/', async (req, res) => {
       for (const unit of body.testUnits) {
         await tx.testUnit.create({
           data: {
-            ...toTestUnitCreateData(unit),
+            ...toTestUnitCreateData(unit, existingDepartment.get(unit.id) ?? null),
             engineers: { create: unit.engineers.map(toEngineerCreateData) },
           },
         })

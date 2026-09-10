@@ -58,7 +58,15 @@ interface EngineerRow {
 
 interface TestUnitRow extends Omit<EngineerRow, 'color'> {
   color: string | null
+  department: string | null
   engineers: EngineerRow[]
+}
+
+/** trim 後空字串或非字串一律 null（清掉部門） */
+export function normalizeDepartment(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const v = value.trim()
+  return v ? v : null
 }
 
 export function toEngineerResponse(row: EngineerRow): EngineerOption {
@@ -74,6 +82,7 @@ export function toTestUnitResponse(row: TestUnitRow): TestUnitOption {
     id: row.id, value: row.value, label: row.label,
     isActive: row.isActive, sortOrder: row.sortOrder,
     color: normalizeColor(row.color),
+    department: row.department ?? null,
     engineers: row.engineers.map(toEngineerResponse),
   }
 }
@@ -86,10 +95,15 @@ export function toEngineerCreateData(e: EngineerOption) {
   }
 }
 
-export function toTestUnitCreateData(u: TestUnitOption) {
+/**
+ * PUT 是全刪重建：body 沒帶 department 鍵（舊前端）要保留資料庫原值，
+ * 所以由路由先讀舊值當 fallback 傳進來；帶了鍵就以 body 為準（含清空）。
+ */
+export function toTestUnitCreateData(u: TestUnitOption, fallbackDepartment: string | null) {
   return {
     id: u.id, value: u.value, label: u.label,
     isActive: u.isActive, sortOrder: u.sortOrder,
     color: normalizeColor(u.color),
+    department: 'department' in u ? normalizeDepartment(u.department) : fallbackDepartment,
   }
 }

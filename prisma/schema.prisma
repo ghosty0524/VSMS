@@ -81,6 +81,8 @@ model TestUnit {
   isActive  Boolean    @default(true)
   sortOrder Int
   color     String?    @db.VarChar(7)
+  /** 所屬部門標籤；NULL = 這個單位自己就是一個部。只給畫面分組與管轄單位選擇用。 */
+  department String?   @db.VarChar(100)
   engineers Engineer[]
 
   @@map("test_units")

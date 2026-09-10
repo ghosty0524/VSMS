@@ -50,6 +50,8 @@ export interface EngineerOption extends Option {
 
 export interface TestUnitOption extends Option {
   color?: string | null
+  /** 所屬部門；null = 自成一部；undefined = 呼叫端沒表態（PUT 時保留舊值） */
+  department?: string | null
   engineers: EngineerOption[]
 }
 
