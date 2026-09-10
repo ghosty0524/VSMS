@@ -6,13 +6,15 @@ import { ApiError } from '../../lib/api'
 import { formatUnitDeleteError } from '../../lib/optionsErrors'
 
 export function TestUnitManager() {
-  const { options, addTestUnit, updateTestUnit, toggleTestUnit, deleteTestUnit, setTestUnitColor } = useOptionsStore()
+  const { options, addTestUnit, updateTestUnit, toggleTestUnit, deleteTestUnit, setTestUnitColor, setTestUnitDepartment } = useOptionsStore()
   const [newValue, setNewValue] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
   // 拖曳色盤期間的暫存值（依 unit id 分開），避免每個 input 事件都寫回並觸發整表重寫
   const [draftColors, setDraftColors] = useState<Record<string, string>>({})
+  // 部門輸入框編輯中的暫存值（依 unit id 分開），失焦時才送出
+  const [draftDepts, setDraftDepts] = useState<Record<string, string>>({})
   // 刪除單位失敗訊息（依 unit id 分開）。deleteTestUnit 會把該單位所有人員一併
   // 從 body 移除，若其中有人仍被排程引用，後端會回 400 ENGINEER_IN_USE——比照
   // 比照人員名冊的 handleRemove 模式，吞下例外並顯示訊息，不無聲失敗。
@@ -35,6 +37,9 @@ export function TestUnitManager() {
       return next
     })
   }
+
+  // 既有部門標籤清單（去重、排序），給部門輸入框的 <datalist> 建議用
+  const knownDepartments = [...new Set(options.testUnits.map(u => (u.department ?? '').trim()).filter(Boolean))].sort()
 
   const handleAdd = async () => {
     const v = newValue.trim()
@@ -63,6 +68,8 @@ export function TestUnitManager() {
   return (
     <div>
       <h3 className="font-semibold text-gray-700 mb-3">測試單位</h3>
+      <p className="text-xs text-gray-400 mb-3">「所屬部門」只影響人員頁的分組與管轄單位的勾選方式；排程、篩選與統計仍以單位為準。</p>
+      <datalist id="vsms-department-list">{knownDepartments.map(d => <option key={d} value={d} />)}</datalist>
       <div className="space-y-2 mb-3">
         {options.testUnits.map(u => (
           <div key={u.id} className="flex flex-col gap-0.5">
@@ -110,6 +117,24 @@ export function TestUnitManager() {
                     {u.label}
                     <span className="ml-1 text-xs text-gray-400">（{u.engineers.length} 人）</span>
                   </span>
+                  <input
+                    list="vsms-department-list"
+                    className="border rounded px-2 py-1 text-xs w-32"
+                    placeholder="所屬部門（空白＝自成一部）"
+                    title="同部門的單位在人員頁會排在同一張卡片；空白代表這個單位自己就是一個部"
+                    value={draftDepts[u.id] ?? u.department ?? ''}
+                    onChange={e => setDraftDepts(d => ({ ...d, [u.id]: e.target.value }))}
+                    onBlur={async () => {
+                      const draft = draftDepts[u.id]
+                      if (draft === undefined) return
+                      const next = draft.trim() || null
+                      if (next !== (u.department ?? null)) {
+                        try { await setTestUnitDepartment(u.id, next) }
+                        catch (err) { setDeleteErrors(d => ({ ...d, [u.id]: err instanceof Error ? err.message : String(err) })) }
+                      }
+                      setDraftDepts(d => { const n = { ...d }; delete n[u.id]; return n })
+                    }}
+                  />
                   <button type="button" onClick={() => { setEditId(u.id); setEditValue(u.label) }}
                     className="text-xs px-2 py-1 border rounded hover:bg-gray-50">編輯</button>
                   <button type="button" onClick={() => toggleTestUnit(u.id, !u.isActive)}

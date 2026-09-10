@@ -23,6 +23,8 @@ interface OptionsState {
   toggleEngineer: (unitId: string, engId: string, isActive: boolean) => Promise<void>
   removeEngineer: (unitId: string, engId: string) => Promise<void>
   setTestUnitColor: (id: string, color: string | null) => Promise<void>
+  /** 所屬部門標籤（null = 自成一部），一次 PUT */
+  setTestUnitDepartment: (id: string, department: string | null) => Promise<void>
   setEngineerColor: (unitId: string, engId: string, color: string | null) => Promise<void>
   /** 一次 PUT 把同一個 patch 套到多個單位列（人員頁「一個人一份屬性」） */
   patchEngineers: (
@@ -191,6 +193,15 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
     const next = {
       ...get().options,
       testUnits: get().options.testUnits.map((u) => u.id === id ? { ...u, color } : u),
+    }
+    await persistOptions(next)
+    set({ options: next })
+  },
+
+  setTestUnitDepartment: async (id, department) => {
+    const next = {
+      ...get().options,
+      testUnits: get().options.testUnits.map((u) => u.id === id ? { ...u, department } : u),
     }
     await persistOptions(next)
     set({ options: next })

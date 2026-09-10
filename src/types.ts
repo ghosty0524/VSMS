@@ -53,6 +53,8 @@ export interface EngineerOption extends Option {
 
 export interface TestUnitOption extends Option {
   color?: string | null
+  /** 所屬部門；null 或 undefined = 自成一部（舊後端不回這個欄位） */
+  department?: string | null
   engineers: EngineerOption[]
 }
 
