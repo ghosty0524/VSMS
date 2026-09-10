@@ -19,6 +19,11 @@ export interface DeptGroup {
   sections: SectionGroup[]
 }
 
+/**
+ * 部門鍵。department 為空的單位以自己的 label 當部門名，所以若另一個單位把
+ * department 設成這個 label，兩者會合併成同一個部（那個單位成為它底下的課）。
+ * 這是刻意的：NULL 的意思是「自己就是一個部」，不是「不屬於任何部」。
+ */
 export function departmentOf(unit: Pick<TestUnitOption, 'label' | 'department'>): string {
   const d = (unit.department ?? '').trim()
   return d || unit.label
@@ -43,6 +48,7 @@ export function groupByDepartment(groups: PersonGroup[], testUnits: TestUnitOpti
     // 每個人在這個部門的幾個課裡出現
     const seen = new Map<string, { person: Person; count: number }>()
     for (const unit of units) {
+      // sortedUnits は byUnitId.has() でフィルタ済み、この get() は安全
       for (const person of byUnitId.get(unit.id)!.people) {
         const entry = seen.get(person.name)
         if (entry) entry.count += 1
@@ -52,6 +58,7 @@ export function groupByDepartment(groups: PersonGroup[], testUnits: TestUnitOpti
     const deptLevel = [...seen.values()].filter(e => e.count > 1).map(e => e.person)
     const lifted = new Set(deptLevel.map(p => p.name))
     const sections: SectionGroup[] = units.map(unit => {
+      // sortedUnits は byUnitId.has() でフィルタ済み、この get() は安全
       const g = byUnitId.get(unit.id)!
       return { unitId: unit.id, unitLabel: unit.label, people: g.people.filter(p => !lifted.has(p.name)) }
     })

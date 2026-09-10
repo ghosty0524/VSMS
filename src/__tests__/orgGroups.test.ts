@@ -81,4 +81,14 @@ describe('groupByDepartment', () => {
     expect(d[0].deptLevel).toEqual([])
     expect(d[0].sections[0].people.map(x => x.name)).toEqual(['Ericct_Hsieh'])
   })
+
+  it('單位 label 與另一單位的 department 同名時合併成一個部（label 那個單位成為課）', () => {
+    const mixed = [u('u-ra', 'RA', 0, null), u('u-lab', 'RA-Lab', 1, 'RA')]
+    const d = groupByDepartment([g('u-ra', 'RA', ['Will_Wang']), g('u-lab', 'RA-Lab', ['Will_Wang', 'Lily_Lee'])], mixed)
+    expect(d).toHaveLength(1)
+    expect(d[0]).toMatchObject({ department: 'RA', isSingleLevel: false })
+    expect(d[0].sections.map(s => s.unitLabel)).toEqual(['RA', 'RA-Lab'])
+    expect(d[0].deptLevel.map(x => x.name)).toEqual(['Will_Wang'])
+    expect(d[0].sections[1].people.map(x => x.name)).toEqual(['Lily_Lee'])
+  })
 })
