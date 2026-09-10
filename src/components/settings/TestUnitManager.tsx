@@ -131,6 +131,7 @@ export function TestUnitManager() {
                       if (draft === undefined) return
                       const next = draft.trim() || null
                       if (next === (u.department ?? null)) {
+                        setDepartmentErrors(d => { const n = { ...d }; delete n[u.id]; return n })
                         setDraftDepts(d => { const n = { ...d }; delete n[u.id]; return n })
                         return
                       }

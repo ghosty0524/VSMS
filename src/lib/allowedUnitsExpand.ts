@@ -10,7 +10,7 @@ export interface DeptUnits { department: string; unitLabels: string[]; isSingleL
 export type DeptCheckState = 'all' | 'some' | 'none'
 
 export function groupUnitLabelsByDepartment(testUnits: TestUnitOption[]): DeptUnits[] {
-  const active = [...testUnits].filter(u => u.isActive).sort((a, b) => a.sortOrder - b.sortOrder)
+  const active = testUnits.filter(u => u.isActive).sort((a, b) => a.sortOrder - b.sortOrder)
   const map = new Map<string, TestUnitOption[]>()
   for (const unit of active) {
     const key = departmentOf(unit)

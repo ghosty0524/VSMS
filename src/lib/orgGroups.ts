@@ -48,7 +48,7 @@ export function groupByDepartment(groups: PersonGroup[], testUnits: TestUnitOpti
     // 每個人在這個部門的幾個課裡出現
     const seen = new Map<string, { person: Person; count: number }>()
     for (const unit of units) {
-      // sortedUnits は byUnitId.has() でフィルタ済み、この get() は安全
+      // sortedUnits 已用 byUnitId.has() 過濾，這個 get() 一定有值
       for (const person of byUnitId.get(unit.id)!.people) {
         const entry = seen.get(person.name)
         if (entry) entry.count += 1
@@ -58,7 +58,7 @@ export function groupByDepartment(groups: PersonGroup[], testUnits: TestUnitOpti
     const deptLevel = [...seen.values()].filter(e => e.count > 1).map(e => e.person)
     const lifted = new Set(deptLevel.map(p => p.name))
     const sections: SectionGroup[] = units.map(unit => {
-      // sortedUnits は byUnitId.has() でフィルタ済み、この get() は安全
+      // sortedUnits 已用 byUnitId.has() 過濾，這個 get() 一定有值
       const g = byUnitId.get(unit.id)!
       return { unitId: unit.id, unitLabel: unit.label, people: g.people.filter(p => !lifted.has(p.name)) }
     })
