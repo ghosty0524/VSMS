@@ -101,7 +101,7 @@ export function buildPeopleModel(testUnits: TestUnitOption[], users: SafeUser[])
 | 檔案 | 責任 |
 |---|---|
 | `src/lib/peopleRows.ts`（重寫） | `buildPeopleModel`、`roleLabel(role)`、`isPersonInactive(person)` 純函式 |
-| `src/lib/peopleActions.ts`（新） | `deactivatePerson`、`activatePerson`、`setPersonColor`、`renamePerson`、`setPersonUnits`：把「套到所有 membership」的迴圈與 store 呼叫集中，回傳 `{ ok: true } | { ok: false; message }`，可用 stub store 測試 |
+| `src/lib/peopleActions.ts`（新） | `deactivatePerson`、`activatePerson`、`membershipTargets`：橫跨名冊與帳號兩個 API 的流程，回傳 `{ ok: true } | { ok: false; message }`，相依注入可測。改色、改名、單位歸屬則直接用 `optionsStore` 的兩個批次動作 `patchEngineers`／`setPersonUnits`（一次 PUT 套到所有 membership） |
 | `src/components/settings/PeopleManager.tsx`（重寫） | 分組、列、摺疊區塊；不含表單 |
 | `src/components/settings/PersonRow.tsx`（新） | 單一列，grid 欄位與滑過動作 |
 | `src/components/settings/PersonFormModal.tsx`（新） | 一人一份的表單 |
