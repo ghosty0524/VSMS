@@ -82,15 +82,19 @@ export function PeopleManager() {
   ))
 
   const header = (
-    <div className={`${PEOPLE_GRID} px-3 text-xs text-gray-400 mb-1`}>
-      <span /><span>姓名</span><span>單位</span><span>帳號</span><span /><span />
+    <div className="overflow-x-auto">
+      <div className={`${PEOPLE_GRID} px-3 text-xs text-gray-400 mb-1`}>
+        <span /><span>姓名</span><span>單位</span><span>帳號</span><span /><span />
+      </div>
     </div>
   )
 
   const groupCard = (g: PersonGroup, variant: 'active' | 'inactive') => (
     <div key={g.unitId ?? 'unassigned'} className="border rounded-lg p-3">
       <p className="font-medium text-sm text-gray-600 mb-2">{g.unitLabel}<span className="ml-2 text-xs text-gray-400">{g.people.length} 人</span></p>
-      <div className="space-y-0.5">{rows(g.people, variant)}</div>
+      <div className="overflow-x-auto">
+        <div className="space-y-0.5">{rows(g.people, variant)}</div>
+      </div>
       {variant === 'active' && g.unitId && (
         <div className="flex gap-2 mt-2">
           <input className="border rounded px-2 py-1 text-xs flex-1" placeholder="新增人員姓名（等於未來的帳號名稱）"

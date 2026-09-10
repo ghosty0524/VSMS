@@ -10,7 +10,7 @@ import { resolveEngineerColor, resolveUnitColor, readableTextColor } from '../..
 import { roleLabel, type Person } from '../../lib/peopleRows'
 
 // 設定頁容器 768px，扣掉內距約 680px；姓名保底 140px，單位籤 `auto` 依實際籤數，帳號 190px，動作各 56px
-export const PEOPLE_GRID = 'grid grid-cols-[28px_minmax(140px,1fr)_auto_190px_56px_56px] items-center gap-2'
+export const PEOPLE_GRID = 'grid grid-cols-[28px_minmax(140px,1fr)_auto_190px_56px_56px] items-center gap-2 min-w-[600px]'
 
 const ACTION_BTN = 'text-xs px-1.5 py-1 rounded border transition-colors w-full'
 
