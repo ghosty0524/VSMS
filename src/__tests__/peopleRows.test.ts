@@ -61,10 +61,12 @@ describe('buildPeopleModel', () => {
   })
 
   it('只有帳號沒有名冊的人進 unassigned', () => {
-    const m = buildPeopleModel(units, [user({ username: 'admin', role: 'super_admin' })])
+    const m = buildPeopleModel(units, [user({ username: 'admin', role: 'super_admin', displayName: '系統管理員' })])
     expect(m.unassigned.map(p => p.name)).toEqual(['admin'])
     expect(m.unassigned[0].memberships).toEqual([])
+    expect(m.unassigned[0].label).toBe('系統管理員')
     expect(findPerson(m.active, 'admin')).toBeUndefined()
+    expect(findPerson(m.active, 'Rock_Cai')!.label).toBe('Rock_Cai')
   })
 
   it('名冊全停且無帳號 → 停用區塊；名冊全停但帳號啟用 → 仍在啟用清單', () => {

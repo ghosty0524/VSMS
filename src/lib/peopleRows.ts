@@ -91,7 +91,7 @@ export function buildPeopleModel(testUnits: TestUnitOption[], users: SafeUser[])
   const accountOnly: Person[] = users
     .filter(u => !persons.has(u.username))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map(u => ({ name: u.username, label: u.username, memberships: [], rosterActive: false, account: u }))
+    .map(u => ({ name: u.username, label: u.displayName || u.username, memberships: [], rosterActive: false, account: u }))
 
   // 3. 分組
   const active: PersonGroup[] = []
