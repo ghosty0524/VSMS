@@ -86,4 +86,18 @@ describe('setPersonUnits', () => {
     expect(eng('u-hw', 'Ericct_Hsieh')).toBeUndefined()
     expect(eng('u-sw', 'Ericct_Hsieh')).toBeUndefined()
   })
+
+  it('重新加回單位時延用既有的 label 與 color，不重置', async () => {
+    useOptionsStore.setState(s => ({
+      options: {
+        ...s.options,
+        testUnits: s.options.testUnits.map(u => u.id === 'u-hw'
+          ? { ...u, engineers: u.engineers.map(e => e.value === 'Rock_Cai' ? { ...e, label: 'Rock', color: '#abcdef' } : e) }
+          : u),
+      },
+    }))
+    stubFetchEcho()
+    await useOptionsStore.getState().setPersonUnits('Rock_Cai', ['u-hw', 'u-ra'])
+    expect(eng('u-ra', 'Rock_Cai')).toMatchObject({ label: 'Rock', color: '#abcdef' })
+  })
 })

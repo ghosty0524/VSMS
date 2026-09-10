@@ -38,3 +38,17 @@ async function setActive(p: Person, isActive: boolean, deps: PeopleDeps): Promis
 
 export const deactivatePerson = (p: Person, deps: PeopleDeps) => setActive(p, false, deps)
 export const activatePerson = (p: Person, deps: PeopleDeps) => setActive(p, true, deps)
+
+/** 取消單位歸屬前的引用檢查：回傳仍有排程指到此人的那些單位（只看要移除的 unitIds） */
+export function referencedUnits(
+  person: Person,
+  removedUnitValues: string[],
+  schedules: { testUnit: string; testEngineer: string }[],
+): { unitValue: string; count: number }[] {
+  const result: { unitValue: string; count: number }[] = []
+  for (const value of removedUnitValues) {
+    const count = schedules.filter(s => s.testUnit === value && s.testEngineer === person.name).length
+    if (count > 0) result.push({ unitValue: value, count })
+  }
+  return result
+}

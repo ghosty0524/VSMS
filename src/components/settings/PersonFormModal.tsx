@@ -7,9 +7,10 @@ import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useOptionsStore } from '../../store/optionsStore'
+import { useScheduleStore } from '../../store/scheduleStore'
 import { resolveEngineerColor } from '../../lib/colors'
 import { roleLabel, type Person } from '../../lib/peopleRows'
-import { membershipTargets } from '../../lib/peopleActions'
+import { membershipTargets, referencedUnits } from '../../lib/peopleActions'
 import { useEscapeKey } from '../shared/useEscapeKey'
 import { SegmentedControl } from '../shared/SegmentedControl'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
@@ -38,6 +39,8 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
   const [unitIds, setUnitIds] = useState<string[]>([])
   const [rosterActive, setRosterActive] = useState(true)
   const [rosterError, setRosterError] = useState('')
+  // 使用者已看過「單位仍有排程指到此人」的警告並按了第二次「儲存」
+  const [confirmedUnitDrop, setConfirmedUnitDrop] = useState(false)
 
   // ── 帳號段 ──
   const [newRole, setNewRole] = useState<NewRole>('user')
@@ -64,6 +67,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
     setUnitIds(person.memberships.map(m => m.unitId))
     setRosterActive(person.rosterActive)
     setRosterError('')
+    setConfirmedUnitDrop(false)
     const a = person.account
     setNewRole('user')
     setPassword('')
@@ -80,6 +84,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
   if (!person) return null
   const hasRoster = person.memberships.length > 0
   const account = person.account
+  const isSuperAdminAccount = account?.role === 'super_admin'
 
   const saveRoster = async (): Promise<boolean> => {
     if (!hasRoster) return true
@@ -92,6 +97,23 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
       if (color.toLowerCase() !== base.toLowerCase()) patch.color = color
       if (rosterActive !== person.rosterActive) patch.isActive = rosterActive
       if (Object.keys(patch).length > 0) await patchEngineers(membershipTargets(person), patch)
+
+      // 伺服器的引用檢查是跨單位的（同一個 value 在任一單位有排程就擋），
+      // 沒辦法分辨「這次要取消的單位」是不是那個仍被引用的單位，所以在這裡先擋一次。
+      const removedUnitValues = person.memberships
+        .filter(m => !unitIds.includes(m.unitId))
+        .map(m => m.unitValue)
+      if (removedUnitValues.length > 0 && !confirmedUnitDrop) {
+        const refs = referencedUnits(person, removedUnitValues, useScheduleStore.getState().schedules)
+        if (refs.length > 0) {
+          setRosterError(
+            refs.map(r => `${r.unitValue} 仍有 ${r.count} 筆排程指到此人，取消後該單位無法再指派他`).join('；')
+            + '；再按一次「儲存」確認',
+          )
+          setConfirmedUnitDrop(true)
+          return false
+        }
+      }
       await setPersonUnits(person.name, unitIds)
       return true
     } catch (e) {
@@ -102,12 +124,14 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
 
   const saveAccount = async (): Promise<boolean> => {
     setAccountError('')
+    if (isSuperAdminAccount) return true   // 系統管理員帳號段是唯讀，不呼叫任何 API
     try {
       if (!account) {
         if (mode !== 'create-account' && !password) return true   // 編輯模式下沒填密碼 = 不建帳號
         if (password.length < 8) { setAccountError('密碼長度至少需要 8 個字元'); return false }
         await api.createUser({
           username: person.name,
+          displayName: label.trim() || person.name,
           password,
           role: newRole,
           allowedUnits: newRole === 'admin' ? allowedUnits : [],
@@ -116,12 +140,16 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
         return true
       }
       if (password && password.length < 8) { setAccountError('新密碼長度至少需要 8 個字元'); return false }
+      const displayNamePatch = hasRoster
+        ? (label.trim() && label.trim() !== person.label ? { displayName: label.trim() } : {})
+        : (label.trim() && label.trim() !== account.displayName ? { displayName: label.trim() } : {})
       await api.updateUser(account.id, {
         password: password || undefined,
         allowedUnits: account.role === 'admin' ? allowedUnits : [],
         linkedEngineer: account.role === 'user' ? person.name : undefined,
         canLinkVtms, canViewVtmsProgress,
         ...(accountActive !== account.isActive ? { isActive: accountActive } : {}),
+        ...displayNamePatch,
       })
       return true
     } catch (e) {
@@ -142,7 +170,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
 
   const removeFromRoster = () => setConfirm({
     title: '刪除人員',
-    message: `將 ${person.label} 從所有單位的名冊移除。有排程引用的單位會被後端擋下並保留。帳號不受影響。`,
+    message: `將 ${person.label} 從所有單位的名冊移除。若任何單位仍有排程指到此人，後端會整筆擋下，名冊不會有任何變動。帳號不受影響。`,
     confirmLabel: '刪除人員',
     run: async () => {
       try { await setPersonUnits(person.name, []); await onSaved(); onClose() }
@@ -225,53 +253,65 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
                 )}
               </div>
             </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">{account ? '新密碼（留空表示不修改）' : '密碼（至少 8 個字元）'}</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} className={INPUT} autoComplete="new-password" />
-            </div>
-            {showAllowedUnits && (
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">管轄單位<span className="ml-1 text-gray-400">（不選 = 全部）</span></label>
-                <div className="flex flex-wrap gap-2">
-                  {allUnitLabels.map(u => (
-                    <label key={u} className={`text-xs px-2 py-1 rounded border cursor-pointer ${allowedUnits.includes(u) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600'}`}>
-                      <input type="checkbox" className="sr-only" checked={allowedUnits.includes(u)} onChange={() => setAllowedUnits(l => toggleIn(l, u))} />
-                      {u}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-            {account && (
+            {isSuperAdminAccount ? (
+              <p className="text-xs text-gray-400">系統管理員帳號的密碼、管轄單位與啟用狀態請在其他地方管理，這裡唯讀。</p>
+            ) : (
               <>
-                <div className="space-y-1">
-                  <p className="text-xs text-gray-600">VTMS 整合權限</p>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" checked={canLinkVtms} onChange={e => setCanLinkVtms(e.target.checked)} className="w-4 h-4 accent-blue-600" />
-                    可連結排程至 VTMS 測試計畫
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" checked={canViewVtmsProgress} onChange={e => setCanViewVtmsProgress(e.target.checked)} className="w-4 h-4 accent-blue-600" />
-                    可檢視 VTMS 測試進度統計
-                  </label>
+                {!hasRoster && account && (
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">顯示名稱</label>
+                    <input type="text" value={label} onChange={e => setLabel(e.target.value)} className={INPUT} />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">{account ? '新密碼（留空表示不修改）' : '密碼（至少 8 個字元）'}</label>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} className={INPUT} autoComplete="new-password" />
                 </div>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox" checked={accountActive} onChange={e => setAccountActive(e.target.checked)} className="w-4 h-4 accent-blue-600" />
-                  帳號啟用（可登入）
-                </label>
+                {showAllowedUnits && (
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">管轄單位<span className="ml-1 text-gray-400">（不選 = 全部）</span></label>
+                    <div className="flex flex-wrap gap-2">
+                      {allUnitLabels.map(u => (
+                        <label key={u} className={`text-xs px-2 py-1 rounded border cursor-pointer ${allowedUnits.includes(u) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600'}`}>
+                          <input type="checkbox" className="sr-only" checked={allowedUnits.includes(u)} onChange={() => setAllowedUnits(l => toggleIn(l, u))} />
+                          {u}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {account && (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-600">VTMS 整合權限</p>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" checked={canLinkVtms} onChange={e => setCanLinkVtms(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                        可連結排程至 VTMS 測試計畫
+                      </label>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" checked={canViewVtmsProgress} onChange={e => setCanViewVtmsProgress(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                        可檢視 VTMS 測試進度統計
+                      </label>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="checkbox" checked={accountActive} onChange={e => setAccountActive(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                      帳號啟用（可登入）
+                    </label>
+                  </>
+                )}
               </>
             )}
             {accountError && <p className="text-xs text-red-600">{accountError}</p>}
           </>)}
 
-          {(hasRoster || (account && !account.isActive)) && (
+          {(hasRoster || (account && !account.isActive && !isSuperAdminAccount)) && (
             <div className="border-t pt-3 flex flex-wrap gap-2">
               {hasRoster && (
                 <button type="button" onClick={removeFromRoster} className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
                   從名冊刪除此人
                 </button>
               )}
-              {account && !account.isActive && (
+              {account && !account.isActive && !isSuperAdminAccount && (
                 <button type="button" onClick={deleteAccountPermanently} className="flex items-center gap-1 text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">
                   <AlertTriangle size={12} />永久刪除帳號
                 </button>

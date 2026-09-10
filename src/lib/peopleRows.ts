@@ -59,7 +59,7 @@ export function isPersonInactive(p: Person): boolean {
   return !p.rosterActive && (!p.account || !p.account.isActive)
 }
 
-const UNASSIGNED_LABEL = '無單位'
+export const UNASSIGNED_LABEL = '無單位'
 
 export function buildPeopleModel(testUnits: TestUnitOption[], users: SafeUser[]): PeopleModel {
   const byUsername = new Map(users.map(u => [u.username, u]))

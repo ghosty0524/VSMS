@@ -224,11 +224,16 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
   setPersonUnits: async (name, unitIds) => {
     const want = new Set(unitIds)
     let changed = false
+    // 重新加回某個單位時延用這個人現有列的 label／color，不要重置成 name／預設色
+    const existing = get().options.testUnits.flatMap(u => u.engineers).find(e => e.value === name)
     const testUnits = get().options.testUnits.map((u) => {
       const has = u.engineers.some(e => e.value === name)
       if (want.has(u.id) && !has) {
         changed = true
-        const eng: Option = { id: uuidv4(), value: name, label: name, isActive: true, sortOrder: u.engineers.length }
+        const eng: EngineerOption = {
+          id: uuidv4(), value: name, label: existing?.label ?? name, isActive: true,
+          sortOrder: u.engineers.length, color: existing?.color,
+        }
         return { ...u, engineers: [...u.engineers, eng] }
       }
       if (!want.has(u.id) && has) {

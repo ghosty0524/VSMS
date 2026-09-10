@@ -11,18 +11,31 @@ import { api } from '../../lib/api'
 import { toast } from '../../store/toastStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useUIStore } from '../../store/uiStore'
-import { buildPeopleModel, type Person, type SafeUser, type PersonGroup } from '../../lib/peopleRows'
+import { buildPeopleModel, UNASSIGNED_LABEL, type Person, type SafeUser, type PersonGroup, type PeopleModel } from '../../lib/peopleRows'
 import { deactivatePerson, activatePerson, membershipTargets } from '../../lib/peopleActions'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { PersonRow, PEOPLE_GRID } from './PersonRow'
 import { PersonFormModal } from './PersonFormModal'
+
+/** 表單只存 name，畫面用當下的 model 現查現人，避免拿著儲存前的舊快照 */
+function findPerson(model: PeopleModel, name: string): Person | null {
+  for (const g of model.active) {
+    const p = g.people.find(x => x.name === name)
+    if (p) return p
+  }
+  for (const g of model.inactive) {
+    const p = g.people.find(x => x.name === name)
+    if (p) return p
+  }
+  return model.unassigned.find(x => x.name === name) ?? null
+}
 
 export function PeopleManager() {
   const { options, patchEngineers, addEngineer } = useOptionsStore()
   const { peopleInactiveOpen, setPeopleInactiveOpen } = useUIStore()
   const [users, setUsers] = useState<SafeUser[]>([])
   const [loading, setLoading] = useState(true)
-  const [form, setForm] = useState<{ person: Person; mode: 'edit' | 'create-account' } | null>(null)
+  const [form, setForm] = useState<{ name: string; mode: 'edit' | 'create-account' } | null>(null)
   const [newNames, setNewNames] = useState<Record<string, string>>({})
   const [addErrors, setAddErrors] = useState<Record<string, string>>({})
   const [confirm, setConfirm] = useState<{ title: string; message: string; run: () => Promise<void> } | null>(null)
@@ -36,6 +49,11 @@ export function PeopleManager() {
 
   const model = useMemo(() => buildPeopleModel(options.testUnits, users), [options.testUnits, users])
   const inactiveCount = model.inactive.reduce((n, g) => n + g.people.length, 0)
+
+  // 表單開著時人從 model 消失了（例如剛被刪除）就自動關閉；用 render 期間的
+  // 判斷式而非 useEffect，理由同 PersonFormModal 開頭那段註解。
+  const formPerson = form ? findPerson(model, form.name) : null
+  if (form && !formPerson) setForm(null)
 
   const deps = { patchEngineers, disableUser: api.disableUser, enableUser: api.enableUser }
 
@@ -69,16 +87,20 @@ export function PeopleManager() {
     const v = (newNames[unitId] ?? '').trim()
     if (!v) return
     setAddErrors(d => { const n = { ...d }; delete n[unitId]; return n })
+    if (users.some(u => u.role === 'super_admin' && u.username.toLowerCase() === v.toLowerCase())) {
+      setAddErrors(d => ({ ...d, [unitId]: '此名稱是系統管理員帳號，不能加入名冊' }))
+      return
+    }
     try { await addEngineer(unitId, v); setNewNames(n => ({ ...n, [unitId]: '' })) }
     catch (e) { setAddErrors(d => ({ ...d, [unitId]: e instanceof Error ? e.message : String(e) })) }
   }
 
   const rows = (people: Person[], variant: 'active' | 'inactive') => people.map(p => (
     <PersonRow key={p.name} person={p} variant={variant}
-      onEdit={x => setForm({ person: x, mode: 'edit' })}
+      onEdit={x => setForm({ name: x.name, mode: 'edit' })}
       onToggleActive={x => handleToggleActive(x, variant === 'inactive')}
       onColorChange={handleColorChange}
-      onCreateAccount={x => setForm({ person: x, mode: 'create-account' })} />
+      onCreateAccount={x => setForm({ name: x.name, mode: 'create-account' })} />
   ))
 
   const header = (
@@ -118,7 +140,7 @@ export function PeopleManager() {
       {header}
       <div className="space-y-4">
         {model.active.map(g => groupCard(g, 'active'))}
-        {model.unassigned.length > 0 && groupCard({ unitId: null, unitLabel: '無單位帳號', people: model.unassigned }, 'active')}
+        {model.unassigned.length > 0 && groupCard({ unitId: null, unitLabel: UNASSIGNED_LABEL, people: model.unassigned }, 'active')}
       </div>
 
       <div className="mt-6 border-t pt-3">
@@ -135,7 +157,7 @@ export function PeopleManager() {
         )}
       </div>
 
-      <PersonFormModal person={form?.person ?? null} mode={form?.mode ?? 'edit'}
+      <PersonFormModal person={formPerson} mode={form?.mode ?? 'edit'}
         onClose={() => setForm(null)} onSaved={loadUsers} />
 
       <DeleteConfirmDialog

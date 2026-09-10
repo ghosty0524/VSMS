@@ -65,7 +65,7 @@ export function PersonRow({ person, variant, onEdit, onToggleActive, onColorChan
         {person.memberships.map(m => {
           const bg = resolveUnitColor(m.unitValue, options)
           return (
-            <span key={m.unitId} className="text-xs px-1.5 py-0.5 rounded font-medium"
+            <span key={m.engineer.id} className="text-xs px-1.5 py-0.5 rounded font-medium"
               style={{ backgroundColor: bg, color: readableTextColor(bg) }}>
               {m.unitLabel}
             </span>
@@ -97,21 +97,22 @@ export function PersonRow({ person, variant, onEdit, onToggleActive, onColorChan
         )}
       </div>
 
-      {/* 動作：佔位不變，滑過或聚焦才顯示 */}
-      {isSuperAdmin ? (<><span /><span /></>) : (
-        <>
-          <button type="button" onClick={() => onEdit(person)}
-            className={`${ACTION_BTN} border-gray-300 hover:bg-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100`}>
-            編輯
-          </button>
-          <button type="button" onClick={() => onToggleActive(person)}
-            className={`${ACTION_BTN} opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 ${
-              inactive ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
-                       : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'}`}>
-            {inactive ? '啟用' : '停用'}
-          </button>
-        </>
-      )}
+      {/* 動作：佔位不變，滑過或聚焦才顯示。super_admin 名冊列仍可編輯（可能是後端要求的 linkedEngineer），
+          但停用／啟用一律走 super_admin 帳號自己的流程，這裡不提供。 */}
+      {(person.memberships.length > 0 || !isSuperAdmin) ? (
+        <button type="button" onClick={() => onEdit(person)}
+          className={`${ACTION_BTN} border-gray-300 hover:bg-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100`}>
+          編輯
+        </button>
+      ) : <span />}
+      {!isSuperAdmin ? (
+        <button type="button" onClick={() => onToggleActive(person)}
+          className={`${ACTION_BTN} opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 ${
+            inactive ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                     : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'}`}>
+          {inactive ? '啟用' : '停用'}
+        </button>
+      ) : <span />}
     </div>
   )
 }

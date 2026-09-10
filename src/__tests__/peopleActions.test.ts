@@ -2,7 +2,7 @@
 // 列上的「停用」= 名冊全停 + 帳號停用，走兩個 API。第二步失敗時第一步已經
 // 生效，回傳值要把這件事講清楚，不回滾也不拋出。
 import { describe, it, expect, vi } from 'vitest'
-import { deactivatePerson, activatePerson, membershipTargets, type PeopleDeps } from '../lib/peopleActions'
+import { deactivatePerson, activatePerson, membershipTargets, referencedUnits, type PeopleDeps } from '../lib/peopleActions'
 import type { Person, SafeUser } from '../lib/peopleRows'
 
 const account: SafeUser = {
@@ -131,5 +131,30 @@ describe('activatePerson', () => {
     d.enableUser = vi.fn().mockRejectedValue(new Error('500'))
     const r = await activatePerson(person({ memberships: [], rosterActive: false, account: { ...account, isActive: false } }), d)
     expect(r).toEqual({ ok: false, message: '帳號啟用失敗：500' })
+  })
+})
+
+describe('referencedUnits', () => {
+  it('回傳仍被引用的單位與筆數', () => {
+    const schedules = [
+      { testUnit: 'SIT-HW', testEngineer: 'Ericct_Hsieh' },
+      { testUnit: 'SIT-HW', testEngineer: 'Ericct_Hsieh' },
+      { testUnit: 'SIT-HW', testEngineer: 'Ericct_Hsieh' },
+    ]
+    expect(referencedUnits(person(), ['SIT-HW'], schedules)).toEqual([{ unitValue: 'SIT-HW', count: 3 }])
+  })
+
+  it('不在 removedUnitValues 裡的單位不列入', () => {
+    const schedules = [{ testUnit: 'SIT-SW', testEngineer: 'Ericct_Hsieh' }]
+    expect(referencedUnits(person(), ['SIT-HW'], schedules)).toEqual([])
+  })
+
+  it('忽略其他工程師的排程', () => {
+    const schedules = [{ testUnit: 'SIT-HW', testEngineer: 'Rock_Cai' }]
+    expect(referencedUnits(person(), ['SIT-HW'], schedules)).toEqual([])
+  })
+
+  it('沒有任何引用時回傳空陣列', () => {
+    expect(referencedUnits(person(), ['SIT-HW', 'SIT-SW'], [])).toEqual([])
   })
 })
