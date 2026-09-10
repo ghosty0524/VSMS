@@ -1,0 +1,302 @@
+// src/components/settings/PersonFormModal.tsx
+//
+// 一個人一份表單：上半是名冊（姓名 label、顏色、單位歸屬、名冊啟用），下半是
+// 帳號（建立或編輯）。置中視窗，不再在列內展開推擠。人員段與帳號段分別呼叫
+// 既有 API，沒有交易；任一段失敗把訊息顯示在那一段。
+import { useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
+import { api } from '../../lib/api'
+import { useOptionsStore } from '../../store/optionsStore'
+import { resolveEngineerColor } from '../../lib/colors'
+import { roleLabel, type Person } from '../../lib/peopleRows'
+import type { OptionsMap } from '../../types'
+import { membershipTargets } from '../../lib/peopleActions'
+import { useEscapeKey } from '../shared/useEscapeKey'
+import { SegmentedControl } from '../shared/SegmentedControl'
+import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
+
+type NewRole = 'user' | 'admin'
+const INPUT = 'w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+const msgOf = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+interface Props {
+  person: Person | null
+  mode: 'edit' | 'create-account'
+  onClose: () => void
+  onSaved: () => Promise<void>
+}
+
+export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
+  const isOpen = person !== null
+  useEscapeKey(isOpen, onClose)
+  const { options, patchEngineers, setPersonUnits } = useOptionsStore()
+  const activeUnits = options.testUnits.filter(u => u.isActive)
+  const allUnitLabels = activeUnits.map(u => u.label)
+
+  // ── 人員段 ──
+  const [label, setLabel] = useState('')
+  const [color, setColor] = useState('#94a3b8')
+  const [unitIds, setUnitIds] = useState<string[]>([])
+  const [rosterActive, setRosterActive] = useState(true)
+  const [rosterError, setRosterError] = useState('')
+
+  // ── 帳號段 ──
+  const [newRole, setNewRole] = useState<NewRole>('user')
+  const [password, setPassword] = useState('')
+  const [allowedUnits, setAllowedUnits] = useState<string[]>([])
+  const [canLinkVtms, setCanLinkVtms] = useState(false)
+  const [canViewVtmsProgress, setCanViewVtmsProgress] = useState(false)
+  const [accountActive, setAccountActive] = useState(true)
+  const [accountError, setAccountError] = useState('')
+
+  const [submitting, setSubmitting] = useState(false)
+  const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; run: () => Promise<void> } | null>(null)
+
+  // 换人（或 options 帶回最新顏色）時重置整份表單。用 render 期間比對＋setState
+  // 而非 useEffect：這是 React 官方認可的「依 prop 調整 state」寫法，
+  // react-hooks/set-state-in-effect 只抓 effect 內的 setState，這裡不觸發。
+  const [syncedWith, setSyncedWith] = useState<{ person: Person | null; options: OptionsMap } | null>(null)
+  if (!syncedWith || syncedWith.person !== person || syncedWith.options !== options) {
+    setSyncedWith({ person, options })
+    if (person) {
+      const first = person.memberships[0]
+      setLabel(person.label)
+      setColor(first ? (first.engineer.color ?? resolveEngineerColor(person.name, first.unitValue, options)) : '#94a3b8')
+      setUnitIds(person.memberships.map(m => m.unitId))
+      setRosterActive(person.rosterActive)
+      setRosterError('')
+      const a = person.account
+      setNewRole('user')
+      setPassword('')
+      setAllowedUnits(a?.allowedUnits ?? person.memberships.map(m => m.unitLabel))
+      setCanLinkVtms(a?.canLinkVtms ?? false)
+      setCanViewVtmsProgress(a?.canViewVtmsProgress ?? false)
+      setAccountActive(a?.isActive ?? true)
+      setAccountError('')
+    }
+  }
+
+  if (!person) return null
+  const hasRoster = person.memberships.length > 0
+  const account = person.account
+
+  const saveRoster = async (): Promise<boolean> => {
+    if (!hasRoster) return true
+    setRosterError('')
+    try {
+      const patch: { label?: string; color?: string; isActive?: boolean } = {}
+      if (label.trim() && label.trim() !== person.label) patch.label = label.trim()
+      const first = person.memberships[0]
+      const base = first.engineer.color ?? resolveEngineerColor(person.name, first.unitValue, options)
+      if (color.toLowerCase() !== base.toLowerCase()) patch.color = color
+      if (rosterActive !== person.rosterActive) patch.isActive = rosterActive
+      if (Object.keys(patch).length > 0) await patchEngineers(membershipTargets(person), patch)
+      await setPersonUnits(person.name, unitIds)
+      return true
+    } catch (e) {
+      setRosterError(msgOf(e))
+      return false
+    }
+  }
+
+  const saveAccount = async (): Promise<boolean> => {
+    setAccountError('')
+    try {
+      if (!account) {
+        if (mode !== 'create-account' && !password) return true   // 編輯模式下沒填密碼 = 不建帳號
+        if (password.length < 8) { setAccountError('密碼長度至少需要 8 個字元'); return false }
+        await api.createUser({
+          username: person.name,
+          password,
+          role: newRole,
+          allowedUnits: newRole === 'admin' ? allowedUnits : [],
+          linkedEngineer: newRole === 'user' ? person.name : '',
+        })
+        return true
+      }
+      if (password && password.length < 8) { setAccountError('新密碼長度至少需要 8 個字元'); return false }
+      await api.updateUser(account.id, {
+        password: password || undefined,
+        allowedUnits: account.role === 'admin' ? allowedUnits : [],
+        linkedEngineer: account.role === 'user' ? person.name : undefined,
+        canLinkVtms, canViewVtmsProgress,
+        ...(accountActive !== account.isActive ? { isActive: accountActive } : {}),
+      })
+      return true
+    } catch (e) {
+      setAccountError(msgOf(e))
+      return false
+    }
+  }
+
+  const handleSave = async () => {
+    setSubmitting(true)
+    try {
+      const a = await saveRoster()
+      const b = await saveAccount()
+      if (a && b) { await onSaved(); onClose() }
+      else await onSaved()   // 部分成功也要刷新畫面，錯誤留在對應段
+    } finally { setSubmitting(false) }
+  }
+
+  const removeFromRoster = () => setConfirm({
+    title: '刪除人員',
+    message: `將 ${person.label} 從所有單位的名冊移除。有排程引用的單位會被後端擋下並保留。帳號不受影響。`,
+    confirmLabel: '刪除人員',
+    run: async () => {
+      try { await setPersonUnits(person.name, []); await onSaved(); onClose() }
+      catch (e) { setRosterError(msgOf(e)) }
+    },
+  })
+
+  const deleteAccountPermanently = () => account && setConfirm({
+    title: '永久刪除帳號',
+    message: `即將永久刪除帳號 ${account.username}。此操作無法復原。名冊列不受影響。`,
+    confirmLabel: '永久刪除',
+    run: async () => {
+      try { await api.deleteUserPermanent(account.id); await onSaved(); onClose() }
+      catch (e) { setAccountError(msgOf(e)) }
+    },
+  })
+
+  const toggleIn = (list: string[], v: string) => list.includes(v) ? list.filter(x => x !== v) : [...list, v]
+  const section = (title: string, children: React.ReactNode) => (
+    <div>
+      <h3 className="text-xs font-semibold text-gray-500 tracking-wide mb-2">{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  )
+  const showAllowedUnits = account ? account.role === 'admin' : newRole === 'admin'
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold">{person.label}</h2>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl" aria-label="關閉">✕</button>
+        </div>
+
+        <div className="p-4 space-y-5">
+          {hasRoster && section('名冊', <>
+            <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">顯示名稱（識別碼 {person.name} 不變）</label>
+                <input type="text" value={label} onChange={e => setLabel(e.target.value)} className={INPUT} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">顏色</label>
+                <input type="color" value={color} onChange={e => setColor(e.target.value)}
+                  className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">所屬單位</label>
+              <div className="flex flex-wrap gap-2">
+                {activeUnits.map(u => (
+                  <label key={u.id} className={`text-xs px-2 py-1 rounded border cursor-pointer ${unitIds.includes(u.id) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600'}`}>
+                    <input type="checkbox" className="sr-only" checked={unitIds.includes(u.id)} onChange={() => setUnitIds(l => toggleIn(l, u.id))} />
+                    {u.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={rosterActive} onChange={e => setRosterActive(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+              名冊啟用（可被排程指派）
+            </label>
+            {rosterError && <p className="text-xs text-red-600">{rosterError}</p>}
+          </>)}
+
+          {section(account ? '帳號' : '建立帳號', <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">帳號</label>
+                <p className="text-sm px-2 py-1.5 bg-gray-50 border border-gray-200 rounded">{person.name}</p>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">角色</label>
+                {account ? (
+                  <p className="text-sm px-2 py-1.5 bg-gray-50 border border-gray-200 rounded">{roleLabel(account.role)}</p>
+                ) : (
+                  <SegmentedControl<NewRole>
+                    options={[{ value: 'user', label: '測試人員' }, { value: 'admin', label: '部級主管' }]}
+                    value={newRole} onChange={setNewRole} size="md" ariaLabel="角色" />
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">{account ? '新密碼（留空表示不修改）' : '密碼（至少 8 個字元）'}</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} className={INPUT} autoComplete="new-password" />
+            </div>
+            {showAllowedUnits && (
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">管轄單位<span className="ml-1 text-gray-400">（不選 = 全部）</span></label>
+                <div className="flex flex-wrap gap-2">
+                  {allUnitLabels.map(u => (
+                    <label key={u} className={`text-xs px-2 py-1 rounded border cursor-pointer ${allowedUnits.includes(u) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600'}`}>
+                      <input type="checkbox" className="sr-only" checked={allowedUnits.includes(u)} onChange={() => setAllowedUnits(l => toggleIn(l, u))} />
+                      {u}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {account && (
+              <>
+                <div className="space-y-1">
+                  <p className="text-xs text-gray-600">VTMS 整合權限</p>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={canLinkVtms} onChange={e => setCanLinkVtms(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                    可連結排程至 VTMS 測試計畫
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={canViewVtmsProgress} onChange={e => setCanViewVtmsProgress(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                    可檢視 VTMS 測試進度統計
+                  </label>
+                </div>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={accountActive} onChange={e => setAccountActive(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                  帳號啟用（可登入）
+                </label>
+              </>
+            )}
+            {accountError && <p className="text-xs text-red-600">{accountError}</p>}
+          </>)}
+
+          {(hasRoster || (account && !account.isActive)) && (
+            <div className="border-t pt-3 flex flex-wrap gap-2">
+              {hasRoster && (
+                <button type="button" onClick={removeFromRoster} className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
+                  從名冊刪除此人
+                </button>
+              )}
+              {account && !account.isActive && (
+                <button type="button" onClick={deleteAccountPermanently} className="flex items-center gap-1 text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">
+                  <AlertTriangle size={12} />永久刪除帳號
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 p-4 border-t">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
+          <button type="button" onClick={handleSave} disabled={submitting}
+            className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300">
+            {submitting ? '儲存中…' : '儲存'}
+          </button>
+        </div>
+      </div>
+
+      <DeleteConfirmDialog
+        isOpen={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message ?? ''}
+        confirmLabel={confirm?.confirmLabel}
+        danger
+        onConfirm={() => { const c = confirm; setConfirm(null); void c?.run() }}
+        onCancel={() => setConfirm(null)}
+      />
+    </div>
+  )
+}
