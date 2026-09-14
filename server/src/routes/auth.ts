@@ -152,7 +152,7 @@ router.post('/login', async (req, res) => {
 
   // First run: create Super Admin
   if (userCount === 0) {
-    if (!password || password.length < 8) {
+    if (typeof password !== 'string' || password.length < 8) {
       res.status(400).json({ ok: false, message: '密碼至少需要 8 個字元' })
       return
     }
@@ -204,6 +204,16 @@ router.post('/login', async (req, res) => {
   }
 
   // Normal login
+  // req.body 的型別註記只是編譯期斷言，擋不住缺欄位或送錯型別的請求。
+  // 沒有這道檢查，undefined 會一路帶進 verifyPassword，在 bcrypt.compare 裡
+  // 拋出 "Illegal arguments: undefined, string"。那個例外落在這條路由的
+  // try/catch 之外，一路衝到全域錯誤處理器，回傳 500 並把內部錯誤訊息洩漏
+  // 給呼叫端，同時跳過 recordLoginFailure 而完全不受登入鎖定管制。
+  if (typeof password !== 'string' || password === '') {
+    res.status(400).json({ ok: false, message: '請輸入密碼' })
+    return
+  }
+
   const loginUsername = username?.trim() || 'admin'
 
   const rateKey = loginKey(req.ip, loginUsername)
@@ -439,6 +449,12 @@ router.post('/change-password', requireAuth, async (req, res) => {
     newPassword: string
   }
 
+  // 與 /api/login 同一個形狀：oldPassword 缺欄位或非字串會在 bcrypt 裡炸成 500。
+  if (typeof oldPassword !== 'string' || oldPassword === '') {
+    res.status(400).json({ ok: false, message: '請輸入舊密碼' })
+    return
+  }
+
   const dbUser = await prisma.user.findUnique({ where: { username: req.session.username } })
   if (!dbUser) {
     res.status(404).json({ ok: false, message: 'User not found' })
@@ -448,7 +464,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
     res.status(401).json({ ok: false, message: '舊密碼錯誤' })
     return
   }
-  if (!newPassword || newPassword.length < 8) {
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
     res.status(400).json({ ok: false, message: '新密碼至少需要 8 個字元' })
     return
   }
