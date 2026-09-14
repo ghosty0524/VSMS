@@ -1,7 +1,7 @@
 import { isRestDay } from './restDays'
 import { computeStatus } from './status'
 import type { ScheduleStatus } from './status'
-import type { Schedule, RestDaysConfig, CategoryOption } from '../types'
+import type { Schedule, RestDaysConfig, CategoryOption, WorkloadEngineer, WorkloadLevel } from '../types'
 
 export type TimeScale = 'month' | 'quarter' | 'year'
 
@@ -98,4 +98,82 @@ export function splitByStatsMode(
     if (mode === 'counted') stats.push(s)
   }
   return { stats, workload }
+}
+
+// ── 負載分布（資料來自 GET /api/analytics/workload）──────────
+
+// 門檻與 server/src/lib/workload.ts 的 classifyLevel 相同；前端無法從 server/
+// 匯入，兩份要手動同步。只用於「單位」維度的平均值分級，人員的 level 一律用後端回傳值。
+export function classifyLevel(rate: number): WorkloadLevel {
+  if (rate > 100) return '超載'
+  if (rate >= 90) return '滿載'
+  if (rate >= 70) return '中等'
+  return '偏低'
+}
+
+export const LEVEL_ORDER: WorkloadLevel[] = ['超載', '滿載', '中等', '偏低']
+export const LEVEL_COLORS: Record<WorkloadLevel, string> = {
+  超載: '#dc2626',
+  滿載: '#f59e0b',
+  中等: '#3b82f6',
+  偏低: '#9ca3af',
+}
+
+const mm = (m: number) => String(m).padStart(2, '0')
+
+// 期間鍵（periodKey 的輸出）→ API 的 from/to（YYYY-MM）
+export function periodRange(key: string, scale: TimeScale): { from: string; to: string } {
+  if (scale === 'year') return { from: `${key}-01`, to: `${key}-12` }
+  if (scale === 'quarter') {
+    const [y, q] = key.split(' Q')
+    const first = (Number(q) - 1) * 3 + 1
+    return { from: `${y}-${mm(first)}`, to: `${y}-${mm(first + 2)}` }
+  }
+  const [y, m] = key.split('/')
+  return { from: `${y}-${m}`, to: `${y}-${m}` }
+}
+
+// 期間下拉的選項：每筆排程起迄之間逐月產生期間鍵，加上今天所在期間
+export function periodKeysOfSchedules(
+  schedules: ReadonlyArray<Pick<Schedule, 'startDate' | 'endDate'>>,
+  scale: TimeScale,
+  today: Date,
+): string[] {
+  const keys = new Set<string>([periodKey(today, scale)])
+  for (const s of schedules) {
+    const start = parseYmd(s.startDate)
+    const end = parseYmd(s.endDate)
+    for (const d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
+      keys.add(periodKey(d, scale))
+    }
+  }
+  return [...keys].sort()
+}
+
+export interface UnitWorkload {
+  name: string
+  rate: number
+  level: WorkloadLevel
+  headcount: number
+  scheduleCount: number
+}
+
+// 單位負載率＝testUnits 含該單位的人員負載率平均；一人多單位在每個單位各算一次
+export function aggregateByUnit(engineers: WorkloadEngineer[]): UnitWorkload[] {
+  const acc = new Map<string, { rates: number[]; scheduleCount: number }>()
+  for (const e of engineers) {
+    const units = e.testUnits.length > 0 ? e.testUnits : ['未分配']
+    for (const u of units) {
+      const a = acc.get(u) ?? { rates: [], scheduleCount: 0 }
+      a.rates.push(e.rate)
+      a.scheduleCount += e.scheduleCount
+      acc.set(u, a)
+    }
+  }
+  return [...acc.entries()]
+    .map(([name, a]) => {
+      const rate = Math.round((a.rates.reduce((x, y) => x + y, 0) / a.rates.length) * 10) / 10
+      return { name, rate, level: classifyLevel(rate), headcount: a.rates.length, scheduleCount: a.scheduleCount }
+    })
+    .sort((a, b) => b.rate - a.rate || a.name.localeCompare(b.name))
 }

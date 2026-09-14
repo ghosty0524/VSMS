@@ -252,3 +252,25 @@ export interface NotifyRunResult {
   /** true 表示這次呼叫時已經有另一次執行在進行中，本次沒有真的跑。 */
   alreadyRunning: boolean
 }
+// ── 負載分析（GET /api/analytics/workload）──────────────────
+export type WorkloadLevel = '超載' | '滿載' | '中等' | '偏低'
+
+export interface WorkloadEngineer {
+  testEngineer: string
+  testUnits: string[]
+  scheduleCount: number
+  baseScore: number
+  rate: number // %
+  level: WorkloadLevel
+  unscheduledDays: number
+  partialDays: number
+  cappedDays: number
+}
+
+export interface WorkloadResponse {
+  from: string // YYYY-MM
+  to: string   // YYYY-MM
+  workdays: number
+  notes: string[]
+  engineers: WorkloadEngineer[]
+}

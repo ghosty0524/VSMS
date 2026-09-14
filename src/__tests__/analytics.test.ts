@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   periodKey, parseYmd, isOverdue, statusCounts, dueCompletionRate,
   allocateTimeResource, daysBetweenYmd, splitByStatsMode,
+  classifyLevel, periodRange, periodKeysOfSchedules, aggregateByUnit,
 } from '../lib/analytics'
-import type { Schedule, RestDaysConfig, CategoryOption } from '../types'
+import type { Schedule, RestDaysConfig, CategoryOption, WorkloadEngineer } from '../types'
 
 function makeSchedule(over: Partial<Schedule>): Schedule {
   return {
@@ -159,5 +160,87 @@ describe('splitByStatsMode', () => {
     const r = splitByStatsMode([makeSchedule({ category: 'X' })], badCategories)
     expect(r.stats.map(s => s.category)).toEqual(['X'])
     expect(r.workload.map(s => s.category)).toEqual(['X'])
+  })
+})
+
+describe('classifyLevel（前端副本，門檻與 server/src/lib/workload.ts 相同）', () => {
+  it('>100 超載、90-100 滿載、70-89 中等、<70 偏低', () => {
+    expect(classifyLevel(100.1)).toBe('超載')
+    expect(classifyLevel(100)).toBe('滿載')
+    expect(classifyLevel(90)).toBe('滿載')
+    expect(classifyLevel(89.9)).toBe('中等')
+    expect(classifyLevel(70)).toBe('中等')
+    expect(classifyLevel(69.9)).toBe('偏低')
+  })
+})
+
+describe('periodRange', () => {
+  it('月', () => {
+    expect(periodRange('2026/07', 'month')).toEqual({ from: '2026-07', to: '2026-07' })
+  })
+  it('季', () => {
+    expect(periodRange('2026 Q1', 'quarter')).toEqual({ from: '2026-01', to: '2026-03' })
+    expect(periodRange('2026 Q4', 'quarter')).toEqual({ from: '2026-10', to: '2026-12' })
+  })
+  it('年', () => {
+    expect(periodRange('2026', 'year')).toEqual({ from: '2026-01', to: '2026-12' })
+  })
+})
+
+describe('periodKeysOfSchedules', () => {
+  const today = new Date(2026, 8, 14)
+  it('涵蓋每筆排程起迄之間的所有期間，加上今天所在期間，排序去重', () => {
+    const keys = periodKeysOfSchedules(
+      [
+        { startDate: '2026/06/22', endDate: '2026/08/03' },
+        { startDate: '2026/11/02', endDate: '2026/11/06' },
+      ],
+      'month', today,
+    )
+    expect(keys).toEqual(['2026/06', '2026/07', '2026/08', '2026/09', '2026/11'])
+  })
+  it('季尺度', () => {
+    expect(periodKeysOfSchedules([{ startDate: '2026/03/30', endDate: '2026/04/02' }], 'quarter', today))
+      .toEqual(['2026 Q1', '2026 Q2', '2026 Q3'])
+  })
+  it('沒有排程時只有今天', () => {
+    expect(periodKeysOfSchedules([], 'year', today)).toEqual(['2026'])
+  })
+})
+
+describe('aggregateByUnit', () => {
+  const eng = (over: Partial<WorkloadEngineer>): WorkloadEngineer => ({
+    testEngineer: 'X', testUnits: ['RA'], scheduleCount: 1, baseScore: 10, rate: 50, level: '偏低',
+    unscheduledDays: 0, partialDays: 0, cappedDays: 0, ...over,
+  })
+  it('單位負載率＝testUnits 含該單位的人員平均，人數與筆數加總', () => {
+    const units = aggregateByUnit([
+      eng({ testEngineer: 'A', rate: 100, scheduleCount: 2 }),
+      eng({ testEngineer: 'B', rate: 80, scheduleCount: 3 }),
+      eng({ testEngineer: 'C', testUnits: ['RB'], rate: 30 }),
+    ])
+    expect(units).toEqual([
+      { name: 'RA', rate: 90, level: '滿載', headcount: 2, scheduleCount: 5 },
+      { name: 'RB', rate: 30, level: '偏低', headcount: 1, scheduleCount: 1 },
+    ])
+  })
+  it('一人多單位在每個單位各算一次；平均取一位小數', () => {
+    const units = aggregateByUnit([
+      eng({ testEngineer: 'A', testUnits: ['RA', 'RB'], rate: 33.3 }),
+      eng({ testEngineer: 'B', testUnits: ['RB'], rate: 50 }),
+    ])
+    expect(units.find(u => u.name === 'RA')).toEqual({ name: 'RA', rate: 33.3, level: '偏低', headcount: 1, scheduleCount: 1 })
+    expect(units.find(u => u.name === 'RB')?.rate).toBe(41.7)
+  })
+  it('沒有單位的人歸「未分配」', () => {
+    expect(aggregateByUnit([eng({ testUnits: [] })])[0].name).toBe('未分配')
+  })
+  it('依負載率降冪，同分依名稱', () => {
+    const names = aggregateByUnit([
+      eng({ testEngineer: 'A', testUnits: ['Z'], rate: 50 }),
+      eng({ testEngineer: 'B', testUnits: ['M'], rate: 50 }),
+      eng({ testEngineer: 'C', testUnits: ['K'], rate: 90 }),
+    ]).map(u => u.name)
+    expect(names).toEqual(['K', 'M', 'Z'])
   })
 })

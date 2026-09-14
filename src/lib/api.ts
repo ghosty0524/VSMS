@@ -1,6 +1,7 @@
 import type {
   Schedule, OptionsMap, Option, User, AuditLog, VtmsProgress, VtmsProjectCheck,
   NotifyConfig, NotifyRule, NotifyLog, NotifyPreview, NotifyRunResult, FallbackRecipient,
+  WorkloadResponse,
 } from '../types'
 
 export class ApiError extends Error {
@@ -74,6 +75,18 @@ export const api = {
     req<{ ok: boolean; role: string; username: string; displayName: string; allowedUnits?: string[]; linkedEngineer?: string; canLinkVtms?: boolean; canViewVtmsProgress?: boolean; sessionTimeoutMin?: number }>('GET', '/me'),
   changePassword: (oldPassword: string, newPassword: string) =>
     req<{ ok: boolean }>('POST', '/change-password', { oldPassword, newPassword }),
+
+  // ── Analytics ─────────────────────────────────────────
+  getWorkload: (params: {
+    from: string; to: string
+    categories?: string[]; testUnits?: string[]; testEngineers?: string[]
+  }) => {
+    const q = new URLSearchParams({ from: params.from, to: params.to })
+    if (params.categories?.length) q.set('categories', params.categories.join(','))
+    if (params.testUnits?.length) q.set('testUnits', params.testUnits.join(','))
+    if (params.testEngineers?.length) q.set('testEngineers', params.testEngineers.join(','))
+    return req<WorkloadResponse>('GET', `/analytics/workload?${q.toString()}`)
+  },
 
   // ── Schedules ─────────────────────────────────────────
   getSchedules: () =>
