@@ -1,7 +1,6 @@
-import { isRestDay } from './restDays'
 import { computeStatus } from './status'
 import type { ScheduleStatus } from './status'
-import type { Schedule, RestDaysConfig, CategoryOption, WorkloadEngineer, WorkloadLevel } from '../types'
+import type { Schedule, CategoryOption, WorkloadEngineer, WorkloadLevel } from '../types'
 
 export type TimeScale = 'month' | 'quarter' | 'year'
 
@@ -41,28 +40,6 @@ export function dueCompletionRate(schedules: Schedule[], today: string): DueComp
   const due = schedules.filter(s => !s.isCancelled && s.endDate < today)
   const completed = due.filter(s => s.isCompleted).length
   return { due: due.length, completed, rate: due.length > 0 ? (completed / due.length) * 100 : null }
-}
-
-// 依重疊工作天比例把 timeResource 分攤到各期間；區間內工作天為 0 時整筆歸起始期間
-export function allocateTimeResource(
-  s: Schedule, scale: TimeScale, rest: RestDaysConfig,
-): Record<string, number> {
-  const start = parseYmd(s.startDate)
-  const end = parseYmd(s.endDate)
-  const perPeriod: Record<string, number> = {}
-  let total = 0
-  for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    if (isRestDay(d, rest)) continue
-    const key = periodKey(d, scale)
-    perPeriod[key] = (perPeriod[key] ?? 0) + 1
-    total++
-  }
-  if (total === 0) return { [periodKey(start, scale)]: s.timeResource }
-  const out: Record<string, number> = {}
-  for (const [key, days] of Object.entries(perPeriod)) {
-    out[key] = (s.timeResource * days) / total
-  }
-  return out
 }
 
 export function daysBetweenYmd(a: string, b: string): number {

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   periodKey, parseYmd, isOverdue, statusCounts, dueCompletionRate,
-  allocateTimeResource, daysBetweenYmd, splitByStatsMode,
+  daysBetweenYmd, splitByStatsMode,
   classifyLevel, periodRange, periodKeysOfSchedules, aggregateByUnit,
 } from '../lib/analytics'
-import type { Schedule, RestDaysConfig, CategoryOption, WorkloadEngineer } from '../types'
+import type { Schedule, CategoryOption, WorkloadEngineer } from '../types'
 
 function makeSchedule(over: Partial<Schedule>): Schedule {
   return {
@@ -17,8 +17,6 @@ function makeSchedule(over: Partial<Schedule>): Schedule {
     ...over,
   }
 }
-const noRest: RestDaysConfig = { weekends: false, specificDates: [] }
-const weekendRest: RestDaysConfig = { weekends: true, specificDates: [] }
 
 describe('periodKey', () => {
   it('formats month/quarter/year', () => {
@@ -69,37 +67,6 @@ describe('statusCounts', () => {
     expect(counts.Cancelled).toBe(1)
     expect(counts.Completed).toBe(1)
     expect(counts.Delayed).toBe(1)
-  })
-})
-
-describe('allocateTimeResource', () => {
-  it('splits by working-day overlap across months (no rest days)', () => {
-    // 2026/06/22–2026/07/03 共 12 天：6 月 9 天、7 月 3 天，timeResource 10
-    const alloc = allocateTimeResource(makeSchedule({}), 'month', noRest)
-    expect(alloc['2026/06']).toBeCloseTo(10 * 9 / 12, 5)
-    expect(alloc['2026/07']).toBeCloseTo(10 * 3 / 12, 5)
-  })
-  it('skips weekends when weekends rest is on', () => {
-    // 2026/06/22(一)–2026/06/26(五) 全為工作天 → 全數歸 6 月
-    const alloc = allocateTimeResource(
-      makeSchedule({ startDate: '2026/06/22', endDate: '2026/06/26', timeResource: 5 }),
-      'month', weekendRest,
-    )
-    expect(alloc['2026/06']).toBeCloseTo(5, 5)
-    expect(Object.keys(alloc)).toHaveLength(1)
-  })
-  it('falls back to start period when span has zero working days', () => {
-    // 2026/06/27(六)–2026/06/28(日) 全為休息日
-    const alloc = allocateTimeResource(
-      makeSchedule({ startDate: '2026/06/27', endDate: '2026/06/28', timeResource: 3 }),
-      'month', weekendRest,
-    )
-    expect(alloc).toEqual({ '2026/06': 3 })
-  })
-  it('allocations sum to timeResource', () => {
-    const alloc = allocateTimeResource(makeSchedule({}), 'quarter', weekendRest)
-    const sum = Object.values(alloc).reduce((a, b) => a + b, 0)
-    expect(sum).toBeCloseTo(10, 5)
   })
 })
 

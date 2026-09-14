@@ -70,7 +70,7 @@ const AnalyticsPage: React.FC = () => {
     [categoryFilterOptions, categoryConfigured]
   )
 
-  // 圖表用的類別清單（colorOf 配色 / TrendSection / LoadSection）維持只取啟用中類別，
+  // 圖表用的類別清單（colorOf 配色 / TrendSection）維持只取啟用中類別，
   // 與篩選下拉的選項清單分開計算，避免停用類別的配色/圖表分組跟著意外改變。
   const categoryOptions = useMemo(
     () => options.categories.filter(c => c.isActive).map(c => c.label).sort(),
@@ -129,8 +129,9 @@ const AnalyticsPage: React.FC = () => {
     return true
   }), [schedules, filter])
 
-  // 依類別的 statsMode 分流：統計類元件吃 stats，負載元件吃 workload
-  const { stats: statsSchedules, workload: workloadSchedules } = useMemo(
+  // 依類別的 statsMode 分流：統計類元件吃 stats；負載分布改由後端
+  // /api/analytics/workload 自行套 statsMode，這裡不再需要 workload 那份
+  const { stats: statsSchedules } = useMemo(
     () => splitByStatsMode(filtered, options.categories),
     [filtered, options.categories],
   )
@@ -184,7 +185,7 @@ const AnalyticsPage: React.FC = () => {
         </section>
 
         <section className="bg-white rounded-xl border shadow-sm p-5">
-          <LoadSection schedules={workloadSchedules} categories={categoryOptions} colorOf={colorOf} />
+          <LoadSection filter={filter} schedules={filtered} />
         </section>
 
         <section className="bg-white rounded-xl border shadow-sm p-5 space-y-4">
