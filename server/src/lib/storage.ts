@@ -18,13 +18,21 @@ export async function appendAudit(
   })
 }
 
-// Retention purge runs on a schedule instead of on every write
-const AUDIT_RETENTION_DAYS = 180
+// 清除排程獨立於每次寫入；保留門檻用「曆月」而非固定天數，
+// 對外說「保留兩個月」時才與實際行為一致（9/14 清掉 7/14 以前）。
+export const AUDIT_RETENTION_MONTHS = 2
+
+export function auditRetentionCutoff(now: Date): Date {
+  const cutoff = new Date(now)
+  const targetMonth = cutoff.getMonth() - AUDIT_RETENTION_MONTHS
+  cutoff.setMonth(targetMonth)
+  // 4/30 往前兩個月沒有 2/30，setMonth 會溢位到 3/2；退回目標月最後一天
+  if (cutoff.getMonth() !== ((targetMonth % 12) + 12) % 12) cutoff.setDate(0)
+  return cutoff
+}
 
 export async function purgeOldAuditLogs(): Promise<void> {
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - AUDIT_RETENTION_DAYS)
-  await prisma.auditLog.deleteMany({ where: { timestamp: { lt: cutoff } } })
+  await prisma.auditLog.deleteMany({ where: { timestamp: { lt: auditRetentionCutoff(new Date()) } } })
 }
 
 export function scheduleAuditCleaner(): void {
