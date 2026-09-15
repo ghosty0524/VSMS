@@ -67,6 +67,13 @@ if (!sessionSecret) {
 }
 const SESSION_TIMEOUT_MIN = Number(process.env.SESSION_TIMEOUT_MIN ?? 30)
 app.use(session({
+  // 一定要指定名稱，不能用 express-session 預設的 connect.sid。cookie 的識別是
+  // （名稱、網域、路徑）—— **port 不在其中**。VTMS 跑在同一台的 localhost:4000
+  // 且同樣用 express-session，兩邊若都叫 connect.sid，登入其中一個就會蓋掉另一個
+  // 的 cookie；被蓋掉的那邊下一個請求送出的是對方的 session id，store 不認得，
+  // 使用者看到的是「Session 已過期」，與真的逾時完全無法分辨，而且是雙向的。
+  // （實際回報過的缺陷：登入 VTMS 後在新視窗登入 VSMS，VTMS 那邊就被踢出。）
+  name: 'vsms.sid',
   secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
