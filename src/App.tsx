@@ -16,6 +16,7 @@ import AuditPage from './components/audit/AuditPage'
 
 export function App() {
   const { isLoggedIn, isChecking, checkAuth, role } = useAuthStore()
+  const authProvider = useAuthStore(s => s.authProvider)
   const {
     view, setView,
     showAddModal, setShowAddModal,
@@ -36,7 +37,11 @@ export function App() {
 
   if (isChecking) return <LoadingScreen text="連線中…" />
 
-  if (!isLoggedIn) return <LoginPage />
+  if (!isLoggedIn) {
+    // 單一登入模式：未登入一律回入口頁登入。
+    if (authProvider === 'vauth') { window.location.replace('/'); return <LoadingScreen text="導向入口頁…" /> }
+    return <LoginPage />
+  }
 
   return (
     <ProtectedLayout>
