@@ -74,6 +74,8 @@ export const api = {
     req<{ ok: boolean }>('POST', '/logout'),
   me: () =>
     req<{ ok: boolean; role: string; username: string; displayName: string; allowedUnits?: string[]; linkedEngineer?: string; canLinkVtms?: boolean; canViewVtmsProgress?: boolean; sessionTimeoutMin?: number }>('GET', '/me'),
+  config: () =>
+    req<{ authProvider: 'local' | 'vauth' }>('GET', '/config'),
   changePassword: (oldPassword: string, newPassword: string) =>
     req<{ ok: boolean }>('POST', '/change-password', { oldPassword, newPassword }),
 

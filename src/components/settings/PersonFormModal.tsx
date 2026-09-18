@@ -10,6 +10,7 @@ import { useOptionsStore } from '../../store/optionsStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { resolveEngineerColor } from '../../lib/colors'
 import { roleLabel, type Person } from '../../lib/peopleRows'
+import { useAuthStore } from '../../store/authStore'
 import { membershipTargets, referencedUnits } from '../../lib/peopleActions'
 import { groupUnitLabelsByDepartment, deptCheckState, toggleDepartment, toggleUnit } from '../../lib/allowedUnitsExpand'
 import { useEscapeKey } from '../shared/useEscapeKey'
@@ -48,6 +49,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
   /** 既有帳號的角色（admin ↔ user 可切換；super_admin 唯讀，不經這個 state） */
   const [editRole, setEditRole] = useState<NewRole>('user')
   const [password, setPassword] = useState('')
+  const authProvider = useAuthStore(s => s.authProvider)
   const [allowedUnits, setAllowedUnits] = useState<string[]>([])
   const [canLinkVtms, setCanLinkVtms] = useState(false)
   const [canViewVtmsProgress, setCanViewVtmsProgress] = useState(false)
@@ -281,10 +283,14 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
                     <input type="text" value={label} onChange={e => setLabel(e.target.value)} className={INPUT} />
                   </div>
                 )}
+                {authProvider === 'vauth' ? (
+                  <p className="text-xs text-gray-400">帳號與密碼請至<a href="/" className="text-blue-600 underline">入口頁的帳號管理</a>；此處只指派角色與管轄單位。</p>
+                ) : (
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">{account ? '新密碼（留空表示不修改）' : '密碼（至少 8 個字元）'}</label>
                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className={INPUT} autoComplete="new-password" />
                 </div>
+                )}
                 {showAllowedUnits && (
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">管轄單位<span className="ml-1 text-gray-400">（不選 = 全部）</span></label>

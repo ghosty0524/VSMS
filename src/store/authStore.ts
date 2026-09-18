@@ -28,6 +28,7 @@ interface AuthState {
   loginError: string
   loginWarning: string
   accounts: Account[]
+  authProvider: 'local' | 'vauth'
   checkAuth: () => Promise<void>
   login: (username: string, password: string, force?: boolean) => Promise<void>
   guestLogin: () => Promise<void>
@@ -52,11 +53,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   loginError: '',
   loginWarning: '',
   accounts: [],
+  authProvider: 'local' as 'local' | 'vauth',
 
   checkAuth: async () => {
     try {
       const res = await api.me()
+      const cfg = await api.config().catch(() => ({ authProvider: 'local' as const }))
       set({
+        authProvider: cfg.authProvider,
         isLoggedIn: true,
         isChecking: false,
         role: res.role as Role,

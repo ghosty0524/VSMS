@@ -383,6 +383,9 @@ router.post('/logout', requireAuth, async (req, res) => {
 })
 
 // ── GET /api/me ────────────────────────────────────────────
+// 前端據此在 vauth 模式隱藏本地帳號/密碼管理（改由入口頁統一管）。公開、免登入。
+router.get('/config', (_req, res) => { res.json({ authProvider: process.env.AUTH_PROVIDER === 'vauth' ? 'vauth' : 'local' }) })
+
 router.get('/me', requireAuth, async (req, res) => {
   if (req.session.sessionId) touchSession(req.session.sessionId)
 
