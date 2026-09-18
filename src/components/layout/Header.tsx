@@ -113,6 +113,16 @@ export function Header({ currentView, onNavigate, role }: Props) {
               G
             </span>
           )}
+          <a
+            href="/"
+            title="回到入口頁選擇其他系統"
+            className="flex items-center gap-1 px-2.5 py-1.5 text-sm
+                       text-slate-400 hover:text-white hover:bg-slate-700
+                       rounded-md transition-colors"
+          >
+            <span className="hidden sm:block">回入口頁</span>
+            <span className="sm:hidden">入口</span>
+          </a>
           <button
             type="button"
             onClick={logout}

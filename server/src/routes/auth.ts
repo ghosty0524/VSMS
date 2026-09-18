@@ -1,5 +1,5 @@
 // server/src/routes/auth.ts
-import { Router } from 'express'
+import { Router, type Request } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../lib/db.js'
 import { appendAudit } from '../lib/storage.js'
@@ -96,6 +96,30 @@ interface SessionInfo {
 }
 
 const activeSessions = new Map<string, SessionInfo>()
+
+/**
+ * 建立一個登入 session：踢掉同帳號既有 session（單一 session）、發 sid、寫 session 與
+ * activeSessions / tokenStore、更新 lastLoginAt、記稽核。/api/login 與 SSO 認領共用。
+ */
+export async function establishSession(
+  req: Request,
+  dbUser: { id: string; username: string; displayName: string; role: string },
+): Promise<string> {
+  for (const [existingSid, info] of activeSessions.entries()) {
+    if (info.username === dbUser.username) { activeSessions.delete(existingSid); tokenStore.delete(existingSid) }
+  }
+  const sid = uuidv4()
+  await regenerateSession(req)
+  req.session.sessionId = sid
+  req.session.username = dbUser.username
+  req.session.role = dbUser.role as 'super_admin' | 'admin' | 'user'
+  activeSessions.set(sid, { sessionId: sid, username: dbUser.username, loginAt: new Date(), lastActiveAt: new Date() })
+  tokenStore.set(sid, { username: dbUser.username, role: dbUser.role })
+  await prisma.user.update({ where: { id: dbUser.id }, data: { lastLoginAt: new Date() } })
+  await appendAudit(dbUser.username, dbUser.displayName, 'LOGIN', 'system')
+  await new Promise<void>((resolve, reject) => req.session.save(err => (err ? reject(err) : resolve())))
+  return sid
+}
 
 function cleanExpiredSessions(): void {
   const now = new Date()
@@ -272,30 +296,7 @@ router.post('/login', async (req, res) => {
     tokenStore.delete(existingEntry[0]) // kicked session's header token must die too
   }
 
-  const sid = uuidv4()
-  await regenerateSession(req)
-  req.session.sessionId = sid
-  req.session.username = dbUser.username
-  req.session.role = dbUser.role as 'super_admin' | 'admin' | 'user'
-
-  activeSessions.set(sid, {
-    sessionId: sid,
-    username: dbUser.username,
-    loginAt: new Date(),
-    lastActiveAt: new Date(),
-  })
-  tokenStore.set(sid, { username: dbUser.username, role: dbUser.role })
-
-  await prisma.user.update({
-    where: { id: dbUser.id },
-    data: { lastLoginAt: new Date() },
-  })
-
-  await appendAudit(dbUser.username, dbUser.displayName, 'LOGIN', 'system')
-
-  await new Promise<void>((resolve, reject) =>
-    req.session.save(err => (err ? reject(err) : resolve()))
-  )
+  const sid = await establishSession(req, dbUser)
   res.json({
     ok: true,
     sessionId: sid,

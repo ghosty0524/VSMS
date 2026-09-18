@@ -12,6 +12,7 @@ import { runDailyNotify } from './lib/notifyRunner.js'
 import { prismaNotifyStore } from './lib/notifyStore.js'
 import { getMailer, isMailerConfigured } from './lib/mailer.js'
 import { guestReadOnly } from './middleware/guestReadOnly.js'
+import { ssoAdopt } from './middleware/ssoAdopt.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { canonicalRedirect } from './middleware/canonicalRedirect.js'
 import authRouter from './routes/auth.js'
@@ -106,6 +107,8 @@ app.use(session({
 
 // ── API Routes ─────────────────────────────────────────
 // Deny-by-default: guests can only issue GET (plus /logout) across all /api routes
+// 單一登入認領：帶 vportal_sso 進來就換本地 session（AUTH_PROVIDER=vauth 才作用）。
+app.use('/api', ssoAdopt)
 app.use('/api', guestReadOnly)
 app.use('/api', authRouter)
 app.use('/api/schedules', schedulesRouter)
