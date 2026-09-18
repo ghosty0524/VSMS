@@ -1,9 +1,14 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // 部署在路徑前綴底下時由 .env.production 的 BASE_PATH 指定（例如 /vsms/），
+  // 只有 vite build 會載入它，dev server 與 vitest 的 base 仍是 '/'。
+  const envVars = loadEnv(mode, process.cwd(), '')
+  return {
+  base: envVars.BASE_PATH?.trim() || '/',
   plugins: [react(), tailwindcss(), viteSingleFile()],
   server: {
     proxy: {
@@ -30,4 +35,5 @@ export default defineConfig({
       },
     },
   },
+}
 })

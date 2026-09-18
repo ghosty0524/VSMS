@@ -1,3 +1,4 @@
+import { withBase } from '../../lib/basePath';
 import { useState, useEffect } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -97,7 +98,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
     const token = sessionStorage.getItem('vsms-session-token')
     const headers: Record<string, string> = {}
     if (token) headers['X-Vsms-Session'] = token
-    fetch('/api/schedules/vtms-plans', { credentials: 'include', headers })
+    fetch(withBase('/api/schedules/vtms-plans'), { credentials: 'include', headers })
       .then(r => r.ok ? r.json() : [])
       .then(setVtmsPlans)
       .catch(() => {})

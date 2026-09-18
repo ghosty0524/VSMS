@@ -1,3 +1,4 @@
+import { withBase } from '../../lib/basePath';
 // src/components/shared/useStaleBuildNotice.ts
 // 判斷「這個分頁載入的前端版本」是否已經舊了：啟動時記錄一次 /api/build 回傳的
 // build 值，之後在視窗取得焦點、以及每隔一段時間輪詢當作 backstop；一旦偵測到
@@ -18,7 +19,7 @@ interface BuildResponse {
 
 async function fetchBuildVersion(): Promise<number | null> {
   try {
-    const res = await fetch('/api/build')
+    const res = await fetch(withBase('/api/build'))
     if (!res.ok) return null
     const data = (await res.json()) as BuildResponse
     return typeof data.build === 'number' ? data.build : null

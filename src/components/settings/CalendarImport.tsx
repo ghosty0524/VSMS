@@ -1,3 +1,4 @@
+import { withBase } from '../../lib/basePath';
 import React, { useState, useRef } from 'react'
 import { UploadCloud, FileSpreadsheet, CheckCircle2, XCircle } from 'lucide-react'
 import { useOptionsStore } from '../../store/optionsStore'
@@ -43,7 +44,7 @@ export default function CalendarImport() {
       // 1. 上傳至 server 解析
       const fd = new FormData()
       fd.append('file', file)
-      const resp = await fetch('/api/calendar/import-government', {
+      const resp = await fetch(withBase('/api/calendar/import-government'), {
         method: 'POST',
         body: fd,
       })
@@ -56,7 +57,7 @@ export default function CalendarImport() {
 
       // 2. 取得完整清單（sample 只有 12 筆，需再打一次 GET 取全部）
       const year: number = json.year
-      const getResp = await fetch(`/api/calendar/non-weekend-holidays?year=${year}`)
+      const getResp = await fetch(withBase(`/api/calendar/non-weekend-holidays?year=${year}`))
       const getData = await getResp.json()
       const holidays: string[] = getData.nonWeekendHolidays ?? []
 

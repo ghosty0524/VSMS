@@ -1,3 +1,4 @@
+import { withBase } from './basePath';
 import type {
   Schedule, OptionsMap, Option, User, AuditLog, VtmsProgress, VtmsProjectCheck,
   NotifyConfig, NotifyRule, NotifyLog, NotifyPreview, NotifyRunResult, FallbackRecipient,
@@ -31,7 +32,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   if (token) headers['X-Vsms-Session'] = token
 
   lastApiActivityAt = Date.now()
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(withBase(`/api${path}`), {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
