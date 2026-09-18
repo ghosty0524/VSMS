@@ -23,6 +23,8 @@ import calendarRouter from './routes/calendar.js'
 import integrationRouter from './routes/integration.js'
 import notifyRouter from './routes/notify.js'
 import { buildVersionRouter } from './routes/build.js'
+import { healthRouter } from './routes/health.js'
+import { getBuildVersion } from './lib/buildVersion.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -48,6 +50,20 @@ const distPath = [
 // 輪詢本身會不斷延長 session，讓閒置逾時（idle timeout）形同虛設。
 // 不要為了跟其他 /api 路由「排整齊」把它搬到 session 之後。
 app.use(buildVersionRouter(distPath))
+
+// 統一格式的健康檢查（整合計畫第 10 章）。同樣必須掛在 session 之前，理由同上。
+// package.json 與 distPath 一樣依執行位置深度不同，用同一套候選法找。
+const pkgJsonPath = [
+  path.join(__dirname, '../../package.json'),    // tsx: server/src → 專案根
+  path.join(__dirname, '../../../package.json'), // node: server/dist/src → 專案根
+].find(p => fs.existsSync(p))
+const pkgVersion = pkgJsonPath ? (JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8')) as { version: string }).version : '0.0.0'
+app.use(healthRouter({
+  service: 'vsms',
+  version: pkgVersion,
+  deployedAt: () => { const ms = getBuildVersion(distPath); return ms ? new Date(ms).toISOString() : null },
+  checkDb: async () => { await prisma.$queryRaw`SELECT 1` },
+}))
 
 // HTTPS when both cert and key are configured, plain HTTP otherwise (tests, local dev).
 // Shares the same mkcert certificate as VTMS — see HTTPS_CERT_FILE in .env.
