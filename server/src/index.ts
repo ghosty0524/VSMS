@@ -13,6 +13,7 @@ import { prismaNotifyStore } from './lib/notifyStore.js'
 import { getMailer, isMailerConfigured } from './lib/mailer.js'
 import { guestReadOnly } from './middleware/guestReadOnly.js'
 import { errorHandler } from './middleware/errorHandler.js'
+import { canonicalRedirect } from './middleware/canonicalRedirect.js'
 import authRouter from './routes/auth.js'
 import schedulesRouter from './routes/schedules.js'
 import optionsRouter from './routes/options.js'
@@ -30,6 +31,10 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 export const app = express()
+// 正式流量經反向代理（F:\vportal，同一台機器）進來。只信任 loopback 的 X-Forwarded-*，
+// 登入限流與稽核用的 req.ip 才會是真正的使用者位址，而不是 127.0.0.1；直接從 LAN
+// 打 3001 的請求不受影響（它們不經過 loopback，header 會被忽略）。
+app.set('trust proxy', 'loopback')
 
 // gzip 所有可壓縮回應（排程 JSON 與 2.6MB singlefile SPA 傳輸量可降七成以上）
 app.use(compression())
@@ -115,6 +120,8 @@ app.use('/api/integration', integrationRouter)
 // ── Static (serve SPA in production) ──────────────────
 // distPath 已在檔案上方（session middleware 之前）解析過，這裡直接重用。
 if (distPath) {
+  // 直接打舊網址開頁面的人帶去正式網址；API 與代理轉進來的請求都放行（見中介層說明）。
+  app.use(canonicalRedirect(process.env.PUBLIC_BASE_URL))
   app.use(express.static(distPath))
   app.get('/{*splat}', (req, res, next) => {
     // Unknown API routes must return JSON 404, not the SPA shell
