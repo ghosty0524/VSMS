@@ -19,7 +19,10 @@ export async function ssoAdopt(req: Request, _res: Response, next: NextFunction)
   if (!ssoUser) return next()
 
   // 帳號生命週期歸 vauth（設計 C）：本地沒有就補一列預設角色 user 的成員資料。
-  let dbUser = await prisma.user.findUnique({ where: { id: ssoUser.id } })
+  // 身分鍵是帳號名稱：既有 VSMS 帳號的 id 與 vauth 不同（各自產生），只用 id 找會找不到、
+  // 再新建就撞 users_username_key 而 500。先比對帳號名稱，新建時才沿用 vauth 的 id。
+  let dbUser = await prisma.user.findUnique({ where: { username: ssoUser.username } })
+  if (!dbUser) dbUser = await prisma.user.findUnique({ where: { id: ssoUser.id } })
   if (!dbUser) {
     dbUser = await prisma.user.create({
       data: {

@@ -143,6 +143,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   logout: () => {
     // 登出審計由後端 /api/logout 寫入
     api.logout().catch(console.error)
+    // 單一登入模式：系統內登出＝整個平台登出（撤銷入口頁的 SSO），同源、盡力而為。
+    if (get().authProvider === 'vauth') {
+      fetch('/auth/session/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
+    }
     sessionStorage.removeItem('vsms-session-token')
     useUIStore.getState().setView('main')
     set({
