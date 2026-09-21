@@ -218,10 +218,15 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
         <div className="p-4 space-y-5">
           {hasRoster && section('名冊', <>
             <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+              {/* 單一登入模式下名稱與帳號綁定（顯示名稱＝帳號名），不再提供改名；名冊 label 維持等於識別碼。 */}
+              {authProvider !== 'vauth' ? (
               <div>
                 <label className="block text-xs text-gray-600 mb-1">顯示名稱（識別碼 {person.name} 不變）</label>
                 <input type="text" value={label} onChange={e => setLabel(e.target.value)} className={INPUT} />
               </div>
+              ) : (
+              <div className="text-sm text-gray-700 self-center">{person.name}</div>
+              )}
               <div>
                 <label className="block text-xs text-gray-600 mb-1">顏色</label>
                 <input type="color" value={color} onChange={e => setColor(e.target.value)}
@@ -277,7 +282,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
               <p className="text-xs text-gray-400">系統管理員帳號的密碼、管轄單位與啟用狀態請在其他地方管理，這裡唯讀。</p>
             ) : (
               <>
-                {!hasRoster && account && (
+                {!hasRoster && account && authProvider !== 'vauth' && (
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">顯示名稱</label>
                     <input type="text" value={label} onChange={e => setLabel(e.target.value)} className={INPUT} />

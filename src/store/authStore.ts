@@ -147,7 +147,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     api.logout().catch(console.error)
     // 單一登入模式：系統內登出＝整個平台登出（撤銷入口頁的 SSO），同源、盡力而為。
     if (get().authProvider === 'vauth') {
-      fetch('/auth/session/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
+      // 先結束 VTMS 的本地 session 再撤銷 SSO：VTMS 的 session 不會因 SSO 撤銷而失效，
+      // 不打它的登出，改網址到 /vtms/ 仍是登入狀態。與入口頁的登出做法一致。
+      fetch('/vtms/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
+        .then(() => fetch('/auth/session/logout', { method: 'POST', credentials: 'same-origin' }))
+        .catch(() => undefined)
     }
     sessionStorage.removeItem('vsms-session-token')
     useUIStore.getState().setView('main')
