@@ -17,9 +17,21 @@ const post = (body: unknown, query = '', key: string | null = KEY) => {
   const r = request(app()).post('/api/internal/org-sync' + query)
   return (key ? r.set('X-Api-Key', key) : r).send(body as object)
 }
-beforeEach(() => { vi.clearAllMocks(); syncSpy.mockResolvedValue({ ok: true, version: 1, dryRun: false, plan: {}, applied: {} }) })
+beforeEach(() => {
+  vi.clearAllMocks()
+  // 這個端點只在單一登入模式存在；每筆測試預設 vauth，local 的情境單獨一筆。
+  process.env.AUTH_PROVIDER = 'vauth'
+  syncSpy.mockResolvedValue({ ok: true, version: 1, dryRun: false, plan: {}, applied: {} })
+})
 
 describe('POST /api/internal/org-sync', () => {
+  it('AUTH_PROVIDER=local → 404，端點不存在（不會碰到組織同步）', async () => {
+    process.env.AUTH_PROVIDER = 'local'
+    const res = await post(fixtureSnapshot())
+    expect(res.status).toBe(404)
+    expect(res.body).toMatchObject({ ok: false, code: 'NOT_FOUND' })
+    expect(syncSpy).not.toHaveBeenCalled()
+  })
   it('沒有 key → 401', async () => { expect((await post(fixtureSnapshot(), '', null)).status).toBe(401); expect(syncSpy).not.toHaveBeenCalled() })
   it('units 空 → 400', async () => { expect((await post({ ...fixtureSnapshot(), units: [] })).status).toBe(400) })
   it('正常 → 200 並以 dryRun=false 呼叫', async () => {

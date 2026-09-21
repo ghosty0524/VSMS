@@ -28,55 +28,81 @@ export async function loadVsmsOrgCurrent(db: Db = prisma): Promise<VsmsOrgCurren
   }
 }
 
-export async function applyVsmsOrgPlan(plan: VsmsOrgPlan): Promise<NonNullable<SyncResult['applied']>> {
-  await prisma.$transaction(async tx => {
-    // 單位：新的接在最後（sortOrder），color 不動。
-    const maxUnit = await tx.testUnit.aggregate({ _max: { sortOrder: true } })
-    let nextUnit = (maxUnit._max.sortOrder ?? -1) + 1
-    for (const u of plan.units.create) {
-      await tx.testUnit.create({ data: { id: uuidv4(), value: u.value, label: u.value, department: u.department, isActive: u.isActive, sortOrder: nextUnit++ } })
-    }
-    for (const u of plan.units.update) await tx.testUnit.update({ where: { id: u.id }, data: u.changes })
+/**
+ * 把計畫寫進資料庫。★ 交易由呼叫端開（doSync），因為現況的讀取（loadVsmsOrgCurrent）
+ * 必須和寫入落在同一筆交易裡：分開讀的話，兩次讀取之間任何寫入都會讓計畫過期，
+ * 例如剛被 org-sync 建好的名冊列會被當成不存在而重建。
+ */
+export async function applyVsmsOrgPlan(tx: Db, plan: VsmsOrgPlan): Promise<NonNullable<SyncResult['applied']>> {
+  // 單位：新的接在最後（sortOrder），color 不動。
+  const maxUnit = await tx.testUnit.aggregate({ _max: { sortOrder: true } })
+  let nextUnit = (maxUnit._max.sortOrder ?? -1) + 1
+  for (const u of plan.units.create) {
+    await tx.testUnit.create({ data: { id: uuidv4(), value: u.value, label: u.value, department: u.department, isActive: u.isActive, sortOrder: nextUnit++ } })
+  }
+  for (const u of plan.units.update) await tx.testUnit.update({ where: { id: u.id }, data: u.changes })
 
-    // 名冊：value → testUnitId 要含剛建的單位，所以重查一次。
-    const units = await tx.testUnit.findMany({ select: { id: true, value: true } })
-    const unitId = new Map(units.map(u => [u.value, u.id]))
-    const perUnitNext = new Map<string, number>()
-    for (const e of plan.engineers.create) {
-      const testUnitId = unitId.get(e.unitValue)
-      if (!testUnitId) throw new Error(`[orgSync] unit ${e.unitValue} missing after create`)
-      if (!perUnitNext.has(testUnitId)) {
-        const m = await tx.engineer.aggregate({ _max: { sortOrder: true }, where: { testUnitId } })
-        perUnitNext.set(testUnitId, (m._max.sortOrder ?? -1) + 1)
-      }
-      const sortOrder = perUnitNext.get(testUnitId)!
-      perUnitNext.set(testUnitId, sortOrder + 1)
-      await tx.engineer.create({ data: { id: uuidv4(), value: e.value, label: e.value, isActive: e.isActive, sortOrder, color: null, testUnitId } })
+  // 名冊：value → testUnitId 要含剛建的單位，所以重查一次。
+  const units = await tx.testUnit.findMany({ select: { id: true, value: true } })
+  const unitId = new Map(units.map(u => [u.value, u.id]))
+  const perUnitNext = new Map<string, number>()
+  for (const e of plan.engineers.create) {
+    const testUnitId = unitId.get(e.unitValue)
+    if (!testUnitId) throw new Error(`[orgSync] unit ${e.unitValue} missing after create`)
+    if (!perUnitNext.has(testUnitId)) {
+      const m = await tx.engineer.aggregate({ _max: { sortOrder: true }, where: { testUnitId } })
+      perUnitNext.set(testUnitId, (m._max.sortOrder ?? -1) + 1)
     }
-    for (const e of plan.engineers.update) await tx.engineer.update({ where: { id: e.id }, data: e.changes })
+    const sortOrder = perUnitNext.get(testUnitId)!
+    perUnitNext.set(testUnitId, sortOrder + 1)
+    await tx.engineer.create({ data: { id: uuidv4(), value: e.value, label: e.value, isActive: e.isActive, sortOrder, color: null, testUnitId } })
+  }
+  for (const e of plan.engineers.update) await tx.engineer.update({ where: { id: e.id }, data: e.changes })
 
-    // 帳號：新建 passwordHash '!'（登入走 vauth），id 沿用 vauth。
-    for (const u of plan.users.create) {
-      await tx.user.create({ data: { id: u.id, username: u.username, displayName: u.username, passwordHash: '!', role: u.role, isActive: u.isActive, allowedUnits: u.allowedUnits, linkedEngineer: u.linkedEngineer } })
-    }
-    for (const u of plan.users.update) await tx.user.update({ where: { id: u.id }, data: u.changes })
-  })
-  const applied = {
+  // 帳號：新建 passwordHash '!'（登入走 vauth），id 沿用 vauth。
+  for (const u of plan.users.create) {
+    await tx.user.create({ data: { id: u.id, username: u.username, displayName: u.username, passwordHash: '!', role: u.role, isActive: u.isActive, allowedUnits: u.allowedUnits, linkedEngineer: u.linkedEngineer } })
+  }
+  for (const u of plan.users.update) await tx.user.update({ where: { id: u.id }, data: u.changes })
+
+  return {
     units: { created: plan.units.create.length, updated: plan.units.update.length },
     engineers: { created: plan.engineers.create.length, updated: plan.engineers.update.length },
     users: { created: plan.users.create.length, updated: plan.users.update.length },
   }
-  const total = Object.values(applied).reduce((n, x) => n + x.created + x.updated, 0)
-  if (total > 0) await appendAudit('system', 'vauth org sync', 'ORG_SYNC', 'org', [`units +${applied.units.created} ~${applied.units.updated}`, `engineers +${applied.engineers.created} ~${applied.engineers.updated}`, `users +${applied.users.created} ~${applied.users.updated}`])
-  return applied
 }
 
-export async function syncVsmsOrg(snapshot: OrgSnapshot, opts: { dryRun: boolean }): Promise<SyncResult> {
-  const plan = deriveVsmsOrg(snapshot, await loadVsmsOrgCurrent())
-  if (!opts.dryRun && snapshot.version < orgSyncState.lastAppliedVersion) return { ok: true, version: snapshot.version, dryRun: false, ignored: true, plan }
-  if (opts.dryRun) return { ok: true, version: snapshot.version, dryRun: true, plan }
-  const applied = await applyVsmsOrgPlan(plan)
+async function doSync(snapshot: OrgSnapshot, opts: { dryRun: boolean }): Promise<SyncResult> {
+  // dryRun 不寫入，所以讀在交易外即可。
+  if (opts.dryRun) return { ok: true, version: snapshot.version, dryRun: true, plan: deriveVsmsOrg(snapshot, await loadVsmsOrgCurrent()) }
+  if (snapshot.version < orgSyncState.lastAppliedVersion) {
+    return { ok: true, version: snapshot.version, dryRun: false, ignored: true, plan: deriveVsmsOrg(snapshot, await loadVsmsOrgCurrent()) }
+  }
+
+  // ★ 讀現況、算計畫、寫入必須在同一筆交易內：否則計畫是對一份過期快照算的。
+  let plan!: VsmsOrgPlan
+  const applied = await prisma.$transaction(async tx => {
+    plan = deriveVsmsOrg(snapshot, await loadVsmsOrgCurrent(tx))
+    return applyVsmsOrgPlan(tx, plan)
+  })
+
+  // 稽核寫在交易外：appendAudit 用的是 prisma 本體（另一條連線），放進交易內會
+  // 在同一筆交易還沒 commit 時對同一個連線池要另一條連線。
+  const total = Object.values(applied).reduce((n, x) => n + x.created + x.updated, 0)
+  if (total > 0) await appendAudit('system', 'vauth org sync', 'ORG_SYNC', 'org', [`units +${applied.units.created} ~${applied.units.updated}`, `engineers +${applied.engineers.created} ~${applied.engineers.updated}`, `users +${applied.users.created} ~${applied.users.updated}`])
+
   orgSyncState.lastAppliedVersion = snapshot.version
   console.log(`[orgSync] applied snapshot v${snapshot.version}: units +${applied.units.created} ~${applied.units.updated}, engineers +${applied.engineers.created} ~${applied.engineers.updated}, users +${applied.users.created} ~${applied.users.updated}, skipped ${plan.skipped.length}`)
   return { ok: true, version: snapshot.version, dryRun: false, plan, applied }
+}
+
+// ★ 行程內序列化：啟動時的 pull 與 vauth 推播可能同時到，兩邊各自讀到「還沒有任何
+// 單位」的現況就會把整份名冊建兩次（26 列變 52 列）。交易本身擋不住——兩筆交易讀
+// 的都是各自開始前的快照。失敗不能卡住後續同步，所以接上 queue 的是 run.catch。
+let queue: Promise<unknown> = Promise.resolve()
+
+export function syncVsmsOrg(snapshot: OrgSnapshot, opts: { dryRun: boolean }): Promise<SyncResult> {
+  const run = queue.then(() => doSync(snapshot, opts))
+  queue = run.catch(() => undefined)
+  return run
 }

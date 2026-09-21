@@ -48,6 +48,19 @@ describe('syncVsmsOrg', () => {
     expect(state.testUnit).toEqual([])
     expect(orgSyncState.lastAppliedVersion).toBe(0)
   })
+  it('同時兩個請求：序列化執行，不會各自讀到空庫而重複建立', async () => {
+    // 未序列化時兩次呼叫都在對方寫入前讀到空庫，26 列名冊會被建成 52 列。
+    const [a, b] = await Promise.all([
+      syncVsmsOrg(fixtureSnapshot(1), { dryRun: false }),
+      syncVsmsOrg(fixtureSnapshot(1), { dryRun: false }),
+    ])
+    expect(state.engineer).toHaveLength(26)
+    expect(state.testUnit).toHaveLength(4)
+    expect(state.user).toHaveLength(25)
+    expect(b.applied).toEqual({ units: { created: 0, updated: 0 }, engineers: { created: 0, updated: 0 }, users: { created: 0, updated: 0 } })
+    expect(a.applied?.engineers.created).toBe(26)
+  })
+
   it('舊版本忽略', async () => {
     await syncVsmsOrg(fixtureSnapshot(5), { dryRun: false })
     const r = await syncVsmsOrg(fixtureSnapshot(4), { dryRun: false })

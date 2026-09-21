@@ -25,6 +25,9 @@ export interface VsmsOrgPlan {
   skipped: { username: string; reason: 'UNKNOWN_UNIT' | 'LOCAL_SUPER_ADMIN' }[];
 }
 
+/** User.displayName / username 的欄位長度（prisma schema：VarChar(50)）。 */
+const MAX_USERNAME_LEN = 50
+
 export function validateSnapshot(body: unknown): string | null {
   const s = body as Partial<OrgSnapshot> | null
   if (!s || typeof s !== 'object') return 'snapshot must be an object'
@@ -32,11 +35,20 @@ export function validateSnapshot(body: unknown): string | null {
   if (!Array.isArray(s.units) || s.units.length === 0) return 'units must be a non-empty array'
   if (!Array.isArray(s.people) || s.people.length === 0) return 'people must be a non-empty array'
   for (const u of s.units as unknown[]) {
-    if (!u || typeof u !== 'object' || typeof (u as OrgUnitSnap).code !== 'string' || !(u as OrgUnitSnap).code) return 'unit.code required'
+    const x = u as OrgUnitSnap
+    if (!u || typeof u !== 'object' || typeof x.code !== 'string' || !x.code) return 'unit.code required'
+    // 少了這些欄位不會出錯，只會以 undefined 一路寫進 DB（isActive／sortOrder 變 null）。
+    if (typeof x.isActive !== 'boolean') return 'unit.isActive must be a boolean'
+    if (!Number.isInteger(x.sortOrder)) return 'unit.sortOrder must be an integer'
   }
   for (const p of s.people as unknown[]) {
     const x = p as OrgPersonSnap
     if (!p || typeof p !== 'object' || typeof x.username !== 'string' || !x.username || typeof x.unitCode !== 'string') return 'person.username/unitCode required'
+    // id 是 users.id（沿用 vauth 的識別碼），缺了就會建出 id undefined 的帳號。
+    if (typeof x.id !== 'string' || !x.id) return 'person.id required'
+    if (typeof x.isUnitLead !== 'boolean' || typeof x.isActive !== 'boolean') return 'person.isUnitLead/isActive must be booleans'
+    // User.displayName 是 VarChar(50)，超過長度會在 users.create 時整批失敗。
+    if (x.username.length > MAX_USERNAME_LEN) return `person.username must be at most ${MAX_USERNAME_LEN} characters`
   }
   return null
 }

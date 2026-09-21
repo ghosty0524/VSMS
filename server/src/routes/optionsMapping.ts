@@ -43,7 +43,7 @@ import type { EngineerOption, TestUnitOption } from '../types.js'
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
 
 /** 只接受 #RRGGBB；其餘一律視為未自訂，避免把垃圾值寫進資料庫 */
-function normalizeColor(value: unknown): string | null {
+export function normalizeColor(value: unknown): string | null {
   return typeof value === 'string' && HEX_COLOR.test(value) ? value : null
 }
 

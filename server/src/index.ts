@@ -106,7 +106,9 @@ app.use(session({
   cookie: { httpOnly: true, sameSite: 'lax', secure: httpsEnabled, maxAge: SESSION_TIMEOUT_MIN * 60 * 1000 },
 }))
 
-// 機器端點：不走 session、ssoAdopt、guestReadOnly。
+// 機器端點（vauth 推送組織快照）：掛在 ssoAdopt、guestReadOnly 之前，兩者都不會套用。
+// 位置在 session middleware 之後——對帶 API key 的機器請求無害（沒有 cookie 就不會
+// 建 session），要的是略過那兩道以使用者身分為前提的中介層。
 app.use('/api/internal', internalRouter)
 
 // ── API Routes ─────────────────────────────────────────

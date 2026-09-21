@@ -1,12 +1,17 @@
 // src/components/settings/TestUnitManager.tsx
 import { useState } from 'react'
 import { useOptionsStore } from '../../store/optionsStore'
+import { useAuthStore } from '../../store/authStore'
 import { resolveUnitColor } from '../../lib/colors'
 import { ApiError } from '../../lib/api'
 import { formatUnitDeleteError } from '../../lib/optionsErrors'
 
 export function TestUnitManager() {
   const { options, addTestUnit, updateTestUnit, toggleTestUnit, deleteTestUnit, setTestUnitColor, setTestUnitDepartment } = useOptionsStore()
+  // 單一登入模式：單位清單是 vauth 組織快照的投影，新增／刪除／停用／改名在後端
+  // 都會被忽略（PUT /api/options 只套用顏色、label 與排序），按了會是無聲的空操作，
+  // 所以直接不給。顏色仍是本地設定，保留。
+  const orgManaged = useAuthStore(s => s.authProvider) === 'vauth'
   const [newValue, setNewValue] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
@@ -146,14 +151,18 @@ export function TestUnitManager() {
                     }}
                     onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                   />
-                  <button type="button" onClick={() => { setEditId(u.id); setEditValue(u.label) }}
-                    className="text-xs px-2 py-1 border rounded hover:bg-gray-50">編輯</button>
-                  <button type="button" onClick={() => toggleTestUnit(u.id, !u.isActive)}
-                    className={`text-xs px-2 py-1 rounded ${u.isActive ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                    {u.isActive ? "停用" : "啟用"}
-                  </button>
-                  <button type="button" onClick={() => { clearDeleteError(u.id); setDeletingId(u.id) }}
-                    className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">刪除</button>
+                  {!orgManaged && (
+                    <>
+                      <button type="button" onClick={() => { setEditId(u.id); setEditValue(u.label) }}
+                        className="text-xs px-2 py-1 border rounded hover:bg-gray-50">編輯</button>
+                      <button type="button" onClick={() => toggleTestUnit(u.id, !u.isActive)}
+                        className={`text-xs px-2 py-1 rounded ${u.isActive ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                        {u.isActive ? "停用" : "啟用"}
+                      </button>
+                      <button type="button" onClick={() => { clearDeleteError(u.id); setDeletingId(u.id) }}
+                        className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">刪除</button>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -166,13 +175,15 @@ export function TestUnitManager() {
           </div>
         ))}
       </div>
-      <div className="flex gap-2">
-        <input className="border rounded px-2 py-1 text-sm flex-1" placeholder="新增測試單位"
-          value={newValue} onChange={e => setNewValue(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleAdd()} />
-        <button type="button" onClick={handleAdd}
-          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">新增</button>
-      </div>
+      {!orgManaged && (
+        <div className="flex gap-2">
+          <input className="border rounded px-2 py-1 text-sm flex-1" placeholder="新增測試單位"
+            value={newValue} onChange={e => setNewValue(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleAdd()} />
+          <button type="button" onClick={handleAdd}
+            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">新增</button>
+        </div>
+      )}
     </div>
   )
 }

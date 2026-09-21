@@ -26,6 +26,17 @@ export function leafSetFor(unitCode: string, units: OrgUnitSnap[]): string[] | n
   return kids.filter(k => k.isActive).sort(byOrder).map(k => k.code)
 }
 
+/**
+ * 部主管的管轄單位。★ 不可以重用 leafSetFor：它只收「啟用」的課，一個部底下的課
+ * 全部停用時會回 []，而 VSMS 的 allowedUnits: [] 代表「所有單位」（見 routes/
+ * schedules.ts 的 canAccessUnit），部主管會因此被悄悄放大成全域權限。這裡改收
+ * 全部子單位（含停用，依 sortOrder），沒有子單位就是部本身；永遠不會是空陣列。
+ */
+function leadScopeFor(unit: OrgUnitSnap, units: OrgUnitSnap[]): string[] {
+  const kids = units.filter(u => u.parentCode === unit.code).sort(byOrder)
+  return kids.length ? kids.map(k => k.code) : [unit.code]
+}
+
 export function deriveVsmsOrg(snapshot: OrgSnapshot, current: VsmsOrgCurrent): VsmsOrgPlan {
   const plan: VsmsOrgPlan = { units: { create: [], update: [] }, engineers: { create: [], update: [] }, users: { create: [], update: [] }, skipped: [] }
 
@@ -70,7 +81,7 @@ export function deriveVsmsOrg(snapshot: OrgSnapshot, current: VsmsOrgCurrent): V
 
     const deptLead = p.isUnitLead && unit.parentCode === null
     const want = deptLead
-      ? { role: 'admin' as const, allowedUnits: leaves, linkedEngineer: '' }
+      ? { role: 'admin' as const, allowedUnits: leadScopeFor(unit, snapshot.units), linkedEngineer: '' }
       : { role: 'user' as const, allowedUnits: [] as string[], linkedEngineer: p.username }
     if (!cur) { plan.users.create.push({ id: p.id, username: p.username, ...want, isActive: p.isActive }); continue }
     const changes: VsmsOrgPlan['users']['update'][number]['changes'] = {}

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { deriveVsmsOrg, leafSetFor, leafUnitsOf } from '../lib/orgSync/derive.js'
 import { FIXTURE_PEOPLE, FIXTURE_UNITS, fixtureSnapshot } from '../lib/orgSync/fixture.js'
 import { validateSnapshot } from '../lib/orgSync/types.js'
-import type { VsmsOrgCurrent } from '../lib/orgSync/types.js'
+import type { OrgSnapshot, VsmsOrgCurrent } from '../lib/orgSync/types.js'
 
 // 正式庫 2026-09-21 現況（test_units、engineers、users）。
 function currentFromFixture(): VsmsOrgCurrent {
@@ -60,6 +60,32 @@ describe('validateSnapshot', () => {
     expect(validateSnapshot({ ...fixtureSnapshot(), people: [null] })).toMatch(/person/)
     expect(validateSnapshot({ ...fixtureSnapshot(), people: [{ username: 'x' }] })).toMatch(/person/)
   })
+
+  // 缺了這些欄位不會被擋下來，就會以 undefined 的樣子一路寫進 DB（isActive 變 null、
+  // sortOrder 變 null），或是在 users.create 撞上 displayName VarChar(50) 而整批失敗。
+  const unit = (over: Record<string, unknown>) =>
+    ({ ...fixtureSnapshot(), units: [{ code: 'X', parentCode: null, isActive: true, sortOrder: 1, ...over }] })
+  const person = (over: Record<string, unknown>) =>
+    ({ ...fixtureSnapshot(), people: [{ id: 'i', username: 'u', unitCode: 'SI', isUnitLead: false, isActive: true, ...over }] })
+
+  it('unit 少了 isActive／sortOrder 不是整數 → 錯誤訊息', () => {
+    expect(validateSnapshot(unit({ isActive: undefined }))).toMatch(/unit/)
+    expect(validateSnapshot(unit({ isActive: 'yes' }))).toMatch(/unit/)
+    expect(validateSnapshot(unit({ sortOrder: undefined }))).toMatch(/unit/)
+    expect(validateSnapshot(unit({ sortOrder: 1.5 }))).toMatch(/unit/)
+  })
+
+  it('person 少了 id／isUnitLead／isActive → 錯誤訊息', () => {
+    expect(validateSnapshot(person({ id: undefined }))).toMatch(/person/)
+    expect(validateSnapshot(person({ id: '' }))).toMatch(/person/)
+    expect(validateSnapshot(person({ isUnitLead: undefined }))).toMatch(/person/)
+    expect(validateSnapshot(person({ isActive: 'yes' }))).toMatch(/person/)
+  })
+
+  it('username 超過 50 字（User.displayName 是 VarChar(50)）→ 錯誤訊息', () => {
+    expect(validateSnapshot(person({ username: 'a'.repeat(51) }))).toMatch(/person/)
+    expect(validateSnapshot(person({ username: 'a'.repeat(50) }))).toBeNull()
+  })
 })
 
 describe('deriveVsmsOrg', () => {
@@ -111,6 +137,34 @@ describe('deriveVsmsOrg', () => {
     expect(plan.skipped).toEqual([{ username: 'admin', reason: 'LOCAL_SUPER_ADMIN' }, { username: 'Ghost', reason: 'UNKNOWN_UNIT' }])
     expect(plan.engineers.create).toEqual([])
     expect(plan.engineers.update.some(e => e.value === 'admin')).toBe(false)
+  })
+
+  it('部主管的 allowedUnits 永遠不是空陣列（[] 在 VSMS 代表「全部單位」）', () => {
+    // 部 X 底下兩個課都停用：leafSetFor 回 []，若直接當 allowedUnits 就等於放行全部單位。
+    const snap: OrgSnapshot = {
+      version: 1, generatedAt: '2026-09-21T00:00:00.000Z',
+      units: [
+        { code: 'X', parentCode: null, isActive: true, sortOrder: 1 },
+        { code: 'X-A', parentCode: 'X', isActive: false, sortOrder: 1 },
+        { code: 'X-B', parentCode: 'X', isActive: false, sortOrder: 2 },
+      ],
+      people: [{ id: 'id-P', username: 'P', isActive: true, unitCode: 'X', isUnitLead: true }],
+    }
+    const plan = deriveVsmsOrg(snap, { units: [], engineers: [], users: [] })
+    expect(plan.users.create).toHaveLength(1)
+    expect(plan.users.create[0]).toMatchObject({ role: 'admin', allowedUnits: ['X-A', 'X-B'] })
+    // 名冊列仍只看啟用的課（leafSetFor），停用的課不補列。
+    expect(plan.engineers.create).toEqual([])
+  })
+
+  it('沒有課的部，部主管的 allowedUnits 是部本身', () => {
+    const snap: OrgSnapshot = {
+      version: 1, generatedAt: '2026-09-21T00:00:00.000Z',
+      units: [{ code: 'X', parentCode: null, isActive: true, sortOrder: 1 }],
+      people: [{ id: 'id-P', username: 'P', isActive: true, unitCode: 'X', isUnitLead: true }],
+    }
+    const plan = deriveVsmsOrg(snap, { units: [], engineers: [], users: [] })
+    expect(plan.users.create[0]).toMatchObject({ role: 'admin', allowedUnits: ['X'] })
   })
 
   it('新增一個課 → 建 test_unit；停用單位 → update isActive', () => {

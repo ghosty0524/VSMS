@@ -8,6 +8,7 @@ import type { OptionsMap } from '../types.js'
 import {
   toCategoryResponse, toCategoryCreateData,
   toTestUnitResponse, toTestUnitCreateData, toEngineerCreateData,
+  normalizeColor,
 } from './optionsMapping.js'
 import { findMissingReferencedEngineers, formatEngineerInUseMessage, type MissingEngineer } from '../lib/engineerInUse.js'
 
@@ -22,8 +23,8 @@ class EngineerInUseError extends Error {
   }
 }
 
-// GET /api/options
-router.get('/', async (_req, res) => {
+/** GET /api/options 的回應；vauth 分支的 PUT 也用它回吐「資料庫實際長什麼樣」。 */
+async function readOptions(): Promise<OptionsMap> {
   const [categories, testUnits, restDays, devices] = await Promise.all([
     prisma.category.findMany({ orderBy: { sortOrder: 'asc' } }),
     prisma.testUnit.findMany({
@@ -34,7 +35,7 @@ router.get('/', async (_req, res) => {
     prisma.device.findMany({ orderBy: { sortOrder: 'asc' } }),
   ])
 
-  const result: OptionsMap = {
+  return {
     categories: categories.map(toCategoryResponse),
     testUnits: testUnits.map(toTestUnitResponse),
     restDays: {
@@ -45,15 +46,84 @@ router.get('/', async (_req, res) => {
       id, value, label, isActive, sortOrder,
     })),
   }
+}
 
-  res.json(result)
+// GET /api/options
+router.get('/', async (_req, res) => {
+  res.json(await readOptions())
 })
 
-// PUT /api/options — full atomic replacement
+/**
+ * ★ 單一登入模式（AUTH_PROVIDER=vauth）：單位與名冊是 vauth 組織快照的投影，
+ * 只有 org-sync 能新增、刪除或改 isActive／department。PUT 的全刪重建在這裡會
+ * 直接造成資料遺失——前端手上的 options 可能是同步發生前抓的，存一次顏色就會把
+ * org-sync 剛建的列刪掉、把 isActive 退回舊值，而且完全沒有錯誤訊息。
+ *
+ * 因此 vauth 下只 patch 前端唯一還握有權責的欄位（color／label／sortOrder），
+ * 而且只 patch 對得上的列：body 有而 DB 沒有的一律忽略（不建），DB 有而 body
+ * 沒有的原樣留著（不刪）。categories 與 restDaysConfig 不屬於組織模型，照舊。
+ */
+async function putOptionsVauth(body: OptionsMap): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    // categories：與 local 相同的全刪重建
+    await tx.category.deleteMany()
+    if (body.categories.length > 0) {
+      await tx.category.createMany({ data: body.categories.map(toCategoryCreateData) })
+    }
+
+    // 以 value 對應（不是 id）：org-sync 建列時會產生新的 uuid，前端快照裡的 id
+    // 可能對不上，但 value 是 vauth 的單位代碼／帳號名，兩邊一定一致。
+    const units = await tx.testUnit.findMany({ select: { id: true, value: true } })
+    const unitIdByValue = new Map(units.map(u => [u.value, u.id]))
+    const engineers = await tx.engineer.findMany({ select: { id: true, value: true, testUnitId: true } })
+    // 巢狀 Map（不是字串拼接的複合鍵）：value 是使用者名稱，任何分隔字元都可能
+    // 出現在裡面，拼字串就有撞鍵的風險。
+    const engineerIdByUnit = new Map<string, Map<string, string>>()
+    for (const e of engineers) {
+      if (!engineerIdByUnit.has(e.testUnitId)) engineerIdByUnit.set(e.testUnitId, new Map())
+      engineerIdByUnit.get(e.testUnitId)!.set(e.value, e.id)
+    }
+
+    for (const unit of body.testUnits) {
+      const unitId = unitIdByValue.get(unit.value)
+      if (!unitId) continue
+      await tx.testUnit.update({
+        where: { id: unitId },
+        data: { color: normalizeColor(unit.color), label: unit.label, sortOrder: unit.sortOrder },
+      })
+      for (const engineer of unit.engineers) {
+        const engineerId = engineerIdByUnit.get(unitId)?.get(engineer.value)
+        if (!engineerId) continue
+        await tx.engineer.update({
+          where: { id: engineerId },
+          data: { color: normalizeColor(engineer.color), label: engineer.label, sortOrder: engineer.sortOrder },
+        })
+      }
+    }
+
+    await tx.restDaysConfig.upsert({
+      where: { id: 1 },
+      create: { id: 1, weekends: body.restDays.weekends, specificDates: body.restDays.specificDates },
+      update: { weekends: body.restDays.weekends, specificDates: body.restDays.specificDates },
+    })
+  })
+}
+
+// PUT /api/options — full atomic replacement（vauth 下改為只 patch 顏色／label／排序）
 router.put('/', async (req, res) => {
   const username = req.session.username ?? 'unknown'
   const body = req.body as OptionsMap
   const bodyEngineerValues = body.testUnits.flatMap(u => u.engineers.map(e => e.value))
+
+  if (process.env.AUTH_PROVIDER === 'vauth') {
+    await putOptionsVauth(body)
+    const dbUser = await prisma.user.findUnique({ where: { username } })
+    await appendAudit(username, dbUser?.displayName ?? username, 'UPDATE_SETTINGS', 'options', [])
+    // 回吐重新讀出的資料庫狀態，不是 body：前端送來的是過期快照，原樣回吐會讓
+    // 使用者看到「已套用」的假象，直到下次重新整理才發現不是那樣。
+    res.json(await readOptions())
+    return
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
