@@ -8,6 +8,7 @@ import {
   LayoutList, BarChart2, Settings, ClipboardList, LogOut,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
+import { NotificationBell } from './NotificationBell'
 import type { Role, View } from '../../types'
 
 interface Props {
@@ -80,6 +81,7 @@ export function Header({ currentView, onNavigate, role }: Props) {
 
         {/* 使用者資訊 + 登出 */}
         <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+          {authProvider === 'vauth' && role !== 'guest' && <NotificationBell />}
           <span className="text-sm text-slate-200 font-medium hidden sm:block">
             {displayName}
           </span>

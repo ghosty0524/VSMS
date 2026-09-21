@@ -9,6 +9,7 @@ import type { Schedule } from '../types.js'
 import { listTestPlans, getTestPlanProgress, listProjects } from '../lib/vtmsClient.js'
 import { matchPdn } from '../lib/pdnMatch.js'
 import { completedAtPatch } from '../lib/completedAt.js'
+import { notifyScheduleAssigned } from '../lib/scheduleNotify.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -111,6 +112,7 @@ router.post('/', validateSchedule, async (req, res) => {
   })
 
   await appendAudit(username, displayName, 'CREATE_SCHEDULE', schedule.id, [])
+  void notifyScheduleAssigned({ schedule })
   res.status(201).json(toSchedule(schedule))
 })
 
@@ -321,6 +323,7 @@ router.put('/:id', validateSchedule, async (req, res) => {
         testEngineer: engineer, updatedBy: username, updatedAt: new Date(),
       },
     })
+    void notifyScheduleAssigned({ schedule: updated, previous: { testEngineer: existing.testEngineer, startDate: existing.startDate, endDate: existing.endDate } })
     const userFlagFields = ['userFlag', 'userFlagNote']
     const isFlagOnly = changedFields.length > 0 && changedFields.every(f => userFlagFields.includes(f))
     if (isFlagOnly) {
@@ -365,6 +368,7 @@ router.put('/:id', validateSchedule, async (req, res) => {
       updatedBy: username, updatedAt: new Date(),
     },
   })
+  void notifyScheduleAssigned({ schedule: updated, previous: { testEngineer: existing.testEngineer, startDate: existing.startDate, endDate: existing.endDate } })
   const flagFields = ['adminFlag', 'adminFlagNote', 'userFlag', 'userFlagNote']
   const isFlagOnly = changedFields.length > 0 && changedFields.every(f => flagFields.includes(f))
   if (isFlagOnly) {

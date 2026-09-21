@@ -286,3 +286,17 @@ export interface WorkloadResponse {
   notes: string[]
   engineers: WorkloadEngineer[]
 }
+
+// 平台收件匣（/notify/inbox）回傳的通知列。與 VTMS src/types.ts 的 NotificationRow 手動同步。
+export interface NotificationRow {
+  id: string
+  deliveryId?: string
+  /** 來源系統標籤，同一個收件匣現在會混著 VTMS／VSMS／平台的通知。 */
+  source: 'vtms' | 'vsms' | 'portal'
+  severity: string
+  title: string
+  body: string
+  linkUrl: string
+  createdAt: string
+  readAt?: string | null
+}
