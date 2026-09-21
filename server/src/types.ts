@@ -114,3 +114,4 @@ export type AuditAction =
   | 'DISABLE_USER'
   | 'UPDATE_SETTINGS'
   | 'FLAG_SCHEDULE'
+  | 'ORG_SYNC'

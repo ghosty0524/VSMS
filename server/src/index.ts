@@ -24,6 +24,7 @@ import analyticsRouter from './routes/analytics.js'
 import calendarRouter from './routes/calendar.js'
 import integrationRouter from './routes/integration.js'
 import notifyRouter from './routes/notify.js'
+import internalRouter from './routes/internal.js'
 import { buildVersionRouter } from './routes/build.js'
 import { healthRouter } from './routes/health.js'
 import { getBuildVersion } from './lib/buildVersion.js'
@@ -104,6 +105,9 @@ app.use(session({
   // which would silently break login if HTTPS were ever turned off.
   cookie: { httpOnly: true, sameSite: 'lax', secure: httpsEnabled, maxAge: SESSION_TIMEOUT_MIN * 60 * 1000 },
 }))
+
+// 機器端點：不走 session、ssoAdopt、guestReadOnly。
+app.use('/api/internal', internalRouter)
 
 // ── API Routes ─────────────────────────────────────────
 // Deny-by-default: guests can only issue GET (plus /logout) across all /api routes

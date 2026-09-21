@@ -25,6 +25,7 @@ const ACTION_LABELS: Record<string, string> = {
   UPDATE_USER:      '更新帳號',
   DISABLE_USER:     '停用帳號',
   UPDATE_SETTINGS:  '變更設定',
+  ORG_SYNC:         '組織同步',
 };
 
 const ACTION_TYPES = ['全部', ...Object.keys(ACTION_LABELS)];
