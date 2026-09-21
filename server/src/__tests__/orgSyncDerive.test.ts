@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { deriveVsmsOrg, leafSetFor } from '../lib/orgSync/derive.js'
+import { deriveVsmsOrg, leafSetFor, leafUnitsOf } from '../lib/orgSync/derive.js'
 import { FIXTURE_PEOPLE, FIXTURE_UNITS, fixtureSnapshot } from '../lib/orgSync/fixture.js'
+import { validateSnapshot } from '../lib/orgSync/types.js'
 import type { VsmsOrgCurrent } from '../lib/orgSync/types.js'
 
 // 正式庫 2026-09-21 現況（test_units、engineers、users）。
@@ -32,6 +33,32 @@ describe('leafSetFor', () => {
     expect(leafSetFor('SIT-HW', FIXTURE_UNITS)).toEqual(['SIT-HW'])
     expect(leafSetFor('SIT', FIXTURE_UNITS)).toEqual(['SIT-HW', 'SIT-SW'])
     expect(leafSetFor('RA', FIXTURE_UNITS)).toEqual(['RA'])
+  })
+
+  it('部下的課全部停用 → 空集合，不會退回部本身（與 leafUnitsOf 一致，避免指到不存在的葉單位）', () => {
+    const units = [
+      { code: 'X', parentCode: null, isActive: true, sortOrder: 1 },
+      { code: 'X-A', parentCode: 'X', isActive: false, sortOrder: 1 },
+    ]
+    expect(leafSetFor('X', units)).toEqual([])
+    expect(leafUnitsOf(units).map(u => u.code)).toEqual(['X-A'])
+  })
+})
+
+describe('validateSnapshot', () => {
+  it('接受正常快照', () => { expect(validateSnapshot(fixtureSnapshot())).toBeNull() })
+  it('拒收非物件、version 非正整數、空 units、空 people', () => {
+    expect(validateSnapshot(null)).toMatch(/object/)
+    expect(validateSnapshot({ ...fixtureSnapshot(), version: 0 })).toMatch(/version/)
+    expect(validateSnapshot({ ...fixtureSnapshot(), version: 1.5 })).toMatch(/version/)
+    expect(validateSnapshot({ ...fixtureSnapshot(), units: [] })).toMatch(/units/)
+    expect(validateSnapshot({ ...fixtureSnapshot(), people: [] })).toMatch(/people/)
+  })
+  it('陣列元素是 null 或缺欄位時回錯誤訊息而不是丟例外', () => {
+    expect(validateSnapshot({ ...fixtureSnapshot(), units: [null] })).toMatch(/unit\.code/)
+    expect(validateSnapshot({ ...fixtureSnapshot(), units: [{ parentCode: null }] })).toMatch(/unit\.code/)
+    expect(validateSnapshot({ ...fixtureSnapshot(), people: [null] })).toMatch(/person/)
+    expect(validateSnapshot({ ...fixtureSnapshot(), people: [{ username: 'x' }] })).toMatch(/person/)
   })
 })
 
@@ -82,6 +109,8 @@ describe('deriveVsmsOrg', () => {
     expect(plan.users.update).toEqual([{ id: 'id-Ericct_Hsieh', username: 'Ericct_Hsieh', changes: { isActive: false } }])
     expect(plan.engineers.update.map(e => e.unitValue).sort()).toEqual(['SIT-HW', 'SIT-SW'])
     expect(plan.skipped).toEqual([{ username: 'admin', reason: 'LOCAL_SUPER_ADMIN' }, { username: 'Ghost', reason: 'UNKNOWN_UNIT' }])
+    expect(plan.engineers.create).toEqual([])
+    expect(plan.engineers.update.some(e => e.value === 'admin')).toBe(false)
   })
 
   it('新增一個課 → 建 test_unit；停用單位 → update isActive', () => {

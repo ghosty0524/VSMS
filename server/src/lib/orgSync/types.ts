@@ -31,7 +31,12 @@ export function validateSnapshot(body: unknown): string | null {
   if (!Number.isInteger(s.version) || (s.version as number) < 1) return 'version must be a positive integer'
   if (!Array.isArray(s.units) || s.units.length === 0) return 'units must be a non-empty array'
   if (!Array.isArray(s.people) || s.people.length === 0) return 'people must be a non-empty array'
-  for (const u of s.units) if (typeof u.code !== 'string' || !u.code) return 'unit.code required'
-  for (const p of s.people) if (typeof p.username !== 'string' || !p.username || typeof p.unitCode !== 'string') return 'person.username/unitCode required'
+  for (const u of s.units as unknown[]) {
+    if (!u || typeof u !== 'object' || typeof (u as OrgUnitSnap).code !== 'string' || !(u as OrgUnitSnap).code) return 'unit.code required'
+  }
+  for (const p of s.people as unknown[]) {
+    const x = p as OrgPersonSnap
+    if (!p || typeof p !== 'object' || typeof x.username !== 'string' || !x.username || typeof x.unitCode !== 'string') return 'person.username/unitCode required'
+  }
   return null
 }

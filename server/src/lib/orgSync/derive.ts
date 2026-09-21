@@ -21,8 +21,9 @@ export function leafSetFor(unitCode: string, units: OrgUnitSnap[]): string[] | n
   const unit = units.find(u => u.code === unitCode)
   if (!unit) return null
   if (unit.parentCode !== null) return [unit.code]
-  const kids = units.filter(u => u.parentCode === unit.code && u.isActive).sort(byOrder)
-  return kids.length === 0 ? [unit.code] : kids.map(k => k.code)
+  const kids = units.filter(u => u.parentCode === unit.code)
+  if (kids.length === 0) return [unit.code]
+  return kids.filter(k => k.isActive).sort(byOrder).map(k => k.code)
 }
 
 export function deriveVsmsOrg(snapshot: OrgSnapshot, current: VsmsOrgCurrent): VsmsOrgPlan {
@@ -53,6 +54,8 @@ export function deriveVsmsOrg(snapshot: OrgSnapshot, current: VsmsOrgCurrent): V
     if (!leaves) { plan.skipped.push({ username: p.username, reason: 'UNKNOWN_UNIT' }); continue }
     const unit = snapshot.units.find(u => u.code === p.unitCode)!
     const key = p.username.toLowerCase()
+    const cur = userByName.get(key)
+    if (cur?.role === 'super_admin') { plan.skipped.push({ username: p.username, reason: 'LOCAL_SUPER_ADMIN' }); continue }
 
     const rows = engineersByPerson.get(key) ?? []
     for (const leaf of leaves) {
@@ -69,9 +72,7 @@ export function deriveVsmsOrg(snapshot: OrgSnapshot, current: VsmsOrgCurrent): V
     const want = deptLead
       ? { role: 'admin' as const, allowedUnits: leaves, linkedEngineer: '' }
       : { role: 'user' as const, allowedUnits: [] as string[], linkedEngineer: p.username }
-    const cur = userByName.get(key)
     if (!cur) { plan.users.create.push({ id: p.id, username: p.username, ...want, isActive: p.isActive }); continue }
-    if (cur.role === 'super_admin') { plan.skipped.push({ username: p.username, reason: 'LOCAL_SUPER_ADMIN' }); continue }
     const changes: VsmsOrgPlan['users']['update'][number]['changes'] = {}
     if (cur.role !== want.role) changes.role = want.role
     if (!sameSet(cur.allowedUnits, want.allowedUnits)) changes.allowedUnits = want.allowedUnits
