@@ -38,12 +38,16 @@ export function App() {
   if (isChecking) return <LoadingScreen text="連線中…" />
 
   if (!isLoggedIn) {
-    // 單一登入模式：入口頁的「以訪客身分瀏覽 VSMS」帶 ?guest=1 進來，直接以訪客登入；
-    // 其餘情況 LoginPage 會依 authProvider 只顯示「前往入口頁登入」與訪客兩個選項。
-    if (authProvider === 'vauth' && new URLSearchParams(window.location.search).get('guest') === '1') {
-      window.history.replaceState(null, '', window.location.pathname)
-      void guestLogin()
-      return <LoadingScreen text="以訪客身分進入…" />
+    if (authProvider === 'vauth') {
+      // 單一登入模式：入口頁的「以訪客身分瀏覽 VSMS」帶 ?guest=1 進來，直接以訪客登入；
+      // 其餘一律導回入口頁登入（與 VTMS 一致，2026-09-21 起不再顯示本地的兩選項頁）。
+      if (new URLSearchParams(window.location.search).get('guest') === '1') {
+        window.history.replaceState(null, '', window.location.pathname)
+        void guestLogin()
+        return <LoadingScreen text="以訪客身分進入…" />
+      }
+      window.location.replace('/')
+      return <LoadingScreen text="導向入口頁…" />
     }
     return <LoginPage />
   }

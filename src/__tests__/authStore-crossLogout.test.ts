@@ -23,8 +23,11 @@ const calledPaths = () => fetchMock.mock.calls.map(c => String((c as unknown[])[
 describe('authStore.logout 單一登出', () => {
   it('vauth 模式：結束 VTMS 的本地 session，再撤銷 SSO', async () => {
     useAuthStore.setState({ authProvider: 'vauth' })
-    useAuthStore.getState().logout()
-    await vi.waitFor(() => expect(calledPaths()).toContain('/auth/session/logout'))
+    // 登出要等三個請求都完成才把 isLoggedIn 設為 false：App 一看到未登入就會導回入口頁，
+    // 導頁會中斷還在飛的請求，SSO 撤銷沒送出去的話入口頁仍是登入狀態。
+    const p = useAuthStore.getState().logout()
+    expect(useAuthStore.getState().isLoggedIn).toBe(true)
+    await p
     const paths = calledPaths()
     expect(paths).toContain('/vtms/api/logout')
     expect(paths.indexOf('/vtms/api/logout')).toBeLessThan(paths.indexOf('/auth/session/logout'))
@@ -37,8 +40,7 @@ describe('authStore.logout 單一登出', () => {
   })
 
   it('local 模式：不碰 VTMS 也不碰 SSO', async () => {
-    useAuthStore.getState().logout()
-    await new Promise(r => setTimeout(r, 0))
+    await useAuthStore.getState().logout()
     expect(calledPaths()).toEqual([])
     expect(useAuthStore.getState().isLoggedIn).toBe(false)
   })

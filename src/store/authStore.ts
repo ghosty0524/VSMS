@@ -32,7 +32,7 @@ interface AuthState {
   checkAuth: () => Promise<void>
   login: (username: string, password: string, force?: boolean) => Promise<void>
   guestLogin: () => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   clearErrors: () => void
   fetchAccounts: () => Promise<void>
   updateAccount: (id: string, updates: Partial<Account & { password: string }>) => Promise<void>
@@ -142,16 +142,17 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
     // 登出審計由後端 /api/logout 寫入
-    api.logout().catch(console.error)
+    await api.logout().catch(console.error)
     // 單一登入模式：系統內登出＝整個平台登出（撤銷入口頁的 SSO），同源、盡力而為。
+    // 三個請求都要等完才把 isLoggedIn 設為 false：App 一看到未登入就會導回入口頁，
+    // 導頁會中斷還在飛的請求，SSO 撤銷沒送出去的話入口頁仍是登入狀態。
     if (get().authProvider === 'vauth') {
       // 先結束 VTMS 的本地 session 再撤銷 SSO：VTMS 的 session 不會因 SSO 撤銷而失效，
       // 不打它的登出，改網址到 /vtms/ 仍是登入狀態。與入口頁的登出做法一致。
-      fetch('/vtms/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
-        .then(() => fetch('/auth/session/logout', { method: 'POST', credentials: 'same-origin' }))
-        .catch(() => undefined)
+      await fetch('/vtms/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
+      await fetch('/auth/session/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
     }
     sessionStorage.removeItem('vsms-session-token')
     useUIStore.getState().setView('main')
