@@ -175,18 +175,16 @@ describe('runDailyNotify', () => {
     expect(result.failed).toBe(1)
   })
 
-  it('routes to a linked engineer account: {username} goes into cc (there is already a to-recipient) and channels include inapp', async () => {
+  it('routes to a linked engineer account: {username} goes into recipients (cc is mail-only on the platform) and channels include inapp', async () => {
     const { store, upserts } = makeStore({ accountsByEngineer: { Darius_Chang: 'darius.chang' } })
     const { deliverer, sent } = makeDeliverer()
     await runDailyNotify(store, deliverer, NOW)
     expect(sent).toHaveLength(1)
     expect(sent[0].channels).toContain('inapp')
-    // 平台以 username 辨識人，不是本機 id；測試人員的站內通知走 cc，不動
-    // to（原本要寄給的需求人員不變）。
-    expect(sent[0].recipients).toEqual([{ email: 'Amy_Chen@example.com' }])
-    expect(sent[0].cc).toEqual(
-      expect.arrayContaining([{ username: 'darius.chang' }]),
-    )
+    // 平台以 username 辨識人，不是本機 id；cc 在平台只寄信不寫收件匣，
+    // 所以測試人員要放進 recipients 才有站內通知；需求人員仍在 recipients。
+    expect(sent[0].recipients).toEqual([{ email: 'Amy_Chen@example.com' }, { username: 'darius.chang' }])
+    expect(sent[0].cc).toEqual([{ email: 'Darius_Chang@example.com' }])
     expect(upserts[0].status).toBe('accepted')
   })
 

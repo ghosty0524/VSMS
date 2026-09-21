@@ -285,19 +285,13 @@ async function runOnce(
       const recipients: Recipient[] = to.map(email => ({ email }))
       const ccList: Recipient[] = cc.map(email => ({ email }))
       const channels: Array<'inapp' | 'email'> = engineerAccount ? ['email', 'inapp'] : ['email']
-      const engineerRecipient: Recipient | null = engineerAccount ? { username: engineerAccount.username } : null
-      // 測試人員的站內通知走副本（cc），不是主收件人（to）——他不是這封信
-      // 原本要寄給的人，只是額外收到通知。只有在完全沒有其他收件人時才退
-      // 而求其次放進 to（維持至少有一位收件人的不變式）。目前流程裡 to 一
-      // 定非空（上面 to.length === 0 已經先擋下），所以現況只會走 cc 這條
-      // 分支——保留 to 分支是讓這段邏輯本身正確，不依賴呼叫端剛好維持的
-      // 不變式。
-      const finalRecipients = recipients.length > 0
-        ? recipients
-        : engineerRecipient ? [engineerRecipient] : recipients
-      const finalCc = recipients.length > 0 && engineerRecipient
-        ? [...ccList, engineerRecipient]
-        : ccList
+      // 平台的 cc 只寄信、不寫收件匣，所以測試人員的 {username} 必須放進
+      // recipients 才會有站內通知；他的 email 副本仍在 ccList（平台會把 To 裡
+      // 已有的人從 cc 扣掉，不會重複寄）。
+      const finalRecipients: Recipient[] = engineerAccount
+        ? [...recipients, { username: engineerAccount.username }]
+        : recipients
+      const finalCc: Recipient[] = ccList
       // key 帶 (scheduleId, sendDate)：與本地的唯一鍵同一組維度，讓平台端
       // 也能認出「這是同一封信」——本地 upsertLog 失敗、下次重跑重新呼叫
       // deliver() 時，平台會回 deduped 而不是真的寄出第二封。
