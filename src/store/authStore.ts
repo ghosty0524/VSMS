@@ -56,11 +56,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   authProvider: 'local' as 'local' | 'vauth',
 
   checkAuth: async () => {
+    // config 是公開端點，先讀再驗 session：放在 me() 之後的話，未登入會直接跳進 catch，
+    // authProvider 停在 'local'，畫面就退回本地帳密登入頁而不是入口頁流程。
+    const cfg = await api.config().catch(() => ({ authProvider: 'local' as const }))
+    set({ authProvider: cfg.authProvider })
     try {
       const res = await api.me()
-      const cfg = await api.config().catch(() => ({ authProvider: 'local' as const }))
       set({
-        authProvider: cfg.authProvider,
         isLoggedIn: true,
         isChecking: false,
         role: res.role as Role,

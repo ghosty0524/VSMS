@@ -31,6 +31,7 @@ const NAV_TABS: {
 
 export function Header({ currentView, onNavigate, role }: Props) {
   const { logout, displayName } = useAuthStore()
+  const authProvider = useAuthStore(s => s.authProvider)
 
   const visibleTabs = NAV_TABS.filter(tab => {
     if (tab.superAdminOnly && role !== 'super_admin') return false
@@ -112,6 +113,18 @@ export function Header({ currentView, onNavigate, role }: Props) {
                              bg-amber-100 text-amber-800 rounded-md leading-tight">
               G
             </span>
+          )}
+          {authProvider === 'vauth' && role !== 'guest' && (
+            <a
+              href="/#change-password"
+              title="密碼由入口頁統一管理"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-sm
+                         text-slate-400 hover:text-white hover:bg-slate-700
+                         rounded-md transition-colors"
+            >
+              <span className="hidden sm:block">修改密碼</span>
+              <span className="sm:hidden">密碼</span>
+            </a>
           )}
           <a
             href="/"

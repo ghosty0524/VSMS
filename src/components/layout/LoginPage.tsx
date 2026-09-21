@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/authStore'
 
 export function LoginPage() {
   const { login, guestLogin, loginError, loginWarning, clearErrors, isChecking } = useAuthStore()
+  const authProvider = useAuthStore(s => s.authProvider)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -79,8 +80,35 @@ export function LoginPage() {
           </div>
         )}
 
+        {/* 單一登入模式：帳密在入口頁，這裡只留「前往入口頁登入」與訪客 */}
+        {authProvider === 'vauth' && (
+          <div className="space-y-4">
+            <a href="/"
+              className="block w-full py-2.5 text-center bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              前往入口頁登入
+            </a>
+            <div className="flex items-center gap-3 pt-1">
+              <div className="flex-1 border-t border-gray-200" />
+              <span className="text-xs text-gray-400">或</span>
+              <div className="flex-1 border-t border-gray-200" />
+            </div>
+            {loginError && <p className="text-red-500 text-xs">{loginError}</p>}
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              disabled={submitting}
+              className="w-full py-2.5 text-sm font-medium rounded-lg border border-gray-300
+                text-gray-600 hover:bg-gray-50 hover:border-gray-400
+                disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {submitting ? '進入中…' : '以訪客身分瀏覽（唯讀）'}
+            </button>
+          </div>
+        )}
+
         {/* Login form */}
-        {!loginWarning && (
+        {authProvider !== 'vauth' && !loginWarning && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">帳號</label>

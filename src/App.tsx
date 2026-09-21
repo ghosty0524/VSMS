@@ -15,7 +15,7 @@ import AnalyticsPage from './components/analytics/AnalyticsPage'
 import AuditPage from './components/audit/AuditPage'
 
 export function App() {
-  const { isLoggedIn, isChecking, checkAuth, role } = useAuthStore()
+  const { isLoggedIn, isChecking, checkAuth, role, guestLogin } = useAuthStore()
   const authProvider = useAuthStore(s => s.authProvider)
   const {
     view, setView,
@@ -38,8 +38,13 @@ export function App() {
   if (isChecking) return <LoadingScreen text="連線中…" />
 
   if (!isLoggedIn) {
-    // 單一登入模式：未登入一律回入口頁登入。
-    if (authProvider === 'vauth') { window.location.replace('/'); return <LoadingScreen text="導向入口頁…" /> }
+    // 單一登入模式：入口頁的「以訪客身分瀏覽 VSMS」帶 ?guest=1 進來，直接以訪客登入；
+    // 其餘情況 LoginPage 會依 authProvider 只顯示「前往入口頁登入」與訪客兩個選項。
+    if (authProvider === 'vauth' && new URLSearchParams(window.location.search).get('guest') === '1') {
+      window.history.replaceState(null, '', window.location.pathname)
+      void guestLogin()
+      return <LoadingScreen text="以訪客身分進入…" />
+    }
     return <LoginPage />
   }
 
