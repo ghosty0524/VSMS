@@ -183,6 +183,8 @@ const PORT = process.env.PORT ?? 3001
 await prisma.$connect()
 await initDb()
 scheduleAuditCleaner()
+const { pullOrgSnapshotAtStartup } = await import('./lib/orgSync/pull.js')
+await pullOrgSnapshotAtStartup()
 if (httpsEnabled) {
   let cert: Buffer, key: Buffer
   try {
