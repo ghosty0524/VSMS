@@ -128,7 +128,7 @@ export function NotifyManager() {
 
       {!config.smtpConfigured && (
         <p className="text-sm rounded px-3 py-2 bg-amber-50 text-amber-800">
-          SMTP 尚未設定。請在伺服器的 .env 設定 SMTP_HOST 與 SMTP_FROM 後重啟服務。
+          尚未連接通知平台。請在伺服器的 .env 設定 NOTIFY_URL 與 VAUTH_SERVICE_KEY 後重啟服務；SMTP 由平台統一設定。
         </p>
       )}
 

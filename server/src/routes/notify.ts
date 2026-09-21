@@ -16,6 +16,12 @@ import { platformDeliverer, fetchDeliveryStatuses } from '../lib/notifyClient.js
 const router = Router()
 router.use(requireAdmin)
 
+// 是否已連接通知平台。統一用 trim 過的值判斷，避免 .env 裡多打一個空白
+// 就讓某條路由以為沒設定、另一條卻以為設定好了。
+function notifyConfigured(): boolean {
+  return !!process.env.NOTIFY_URL?.trim()
+}
+
 type TemplateFields = {
   subjectTemplate: string | null
   introTemplate: string | null
@@ -57,7 +63,7 @@ router.get('/config', async (_req, res) => {
     leadDays: row?.leadDays ?? 3,
     catchUpDays: row?.catchUpDays ?? 3,
     mailDomain: row?.mailDomain ?? '',
-    smtpConfigured: !!process.env.NOTIFY_URL,
+    smtpConfigured: notifyConfigured(),
     fallbackRecipients: fallback.map(r => ({ id: r.id, name: r.name, note: r.note, isActive: r.isActive })),
     templateVars: TEMPLATE_VARS,
   })
@@ -390,7 +396,7 @@ router.get('/logs', async (req, res) => {
 
 // POST /api/notify/run — 立即檢查並補寄
 router.post('/run', async (req, res) => {
-  if (!process.env.NOTIFY_URL) {
+  if (!notifyConfigured()) {
     res.status(400).json({ ok: false, message: 'NOTIFY_URL 未設定' })
     return
   }
@@ -410,11 +416,11 @@ router.post('/test', async (req, res) => {
     res.status(422).json({ ok: false, errors: { to: '收件地址不可空白' } })
     return
   }
-  const notifyUrl = process.env.NOTIFY_URL?.trim()
-  if (!notifyUrl) {
+  if (!notifyConfigured()) {
     res.status(400).json({ ok: false, message: 'NOTIFY_URL 未設定' })
     return
   }
+  const notifyUrl = process.env.NOTIFY_URL?.trim() as string
   try {
     const platformRes = await fetch(`${notifyUrl}/notify/admin/test-mail`, {
       method: 'POST',

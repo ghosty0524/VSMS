@@ -49,19 +49,18 @@ npm start
 > 正式站必須走 HTTPS：VTMS 對同一台主機送出 HSTS，而 HSTS 以主機為範圍、不分連接埠，
 > 瀏覽器只要開過 VTMS，之後連 `http://<host>:3001` 都會被改寫成 https 而連不上。
 
-### 排程預告通知（SMTP）
+### 排程預告通知
+
+寄信已移到平台（vauth）：SMTP 設定與寄送邏輯都在那邊，VSMS 只保留範本、
+預覽與寄信規則，改呼叫 `NOTIFY_URL` 的投遞 API。
 
 ```
-SMTP_HOST=
-SMTP_PORT=25
-SMTP_SECURE=false
-SMTP_FROM=
-SMTP_USER=        # 選填，留空即匿名轉發
-SMTP_PASS=        # 選填
+NOTIFY_URL=http://127.0.0.1:4100
+VAUTH_SERVICE_KEY=
 ```
 
-`SMTP_HOST` 或 `SMTP_FROM` 未設定時，通知功能會停用並在啟動時印出警告，
-不會影響系統其他功能。
+`NOTIFY_URL` 未設定時，通知功能會停用並在啟動時印出警告，不影響系統其他
+功能。`VAUTH_SERVICE_KEY` 與單一登入共用同一把金鑰。
 
 ### 3. 首次登入
 
