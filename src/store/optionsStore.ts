@@ -39,8 +39,15 @@ interface OptionsState {
   deleteDevice: (id: string) => Promise<void>
 }
 
-async function persistOptions(options: OptionsMap): Promise<void> {
-  await api.updateOptions(options)
+/**
+ * 送出 PUT，並用伺服器回應覆蓋樂觀更新的 next（AUTH_PROVIDER=vauth 下伺服器會忽略身分類
+ * 欄位、回傳資料庫目前的最新狀態，畫面若仍套用 next 會顯示過期值）。
+ * 回應不是合法的 options map（沒有 testUnits 陣列）時，退回原本樂觀更新的 next。
+ */
+async function persistOptions(options: OptionsMap): Promise<OptionsMap> {
+  const res = await api.updateOptions(options)
+  if (res && Array.isArray(res.testUnits)) return res
+  return options
 }
 
 export const useOptionsStore = create<OptionsState>()((set, get) => ({
@@ -53,8 +60,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
 
   setRestDays: async (config) => {
     const next = { ...get().options, restDays: config }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   addCategory: async (value) => {
@@ -64,8 +70,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       statsMode: 'counted',
     }
     const next = { ...get().options, categories: [...cats, newCat] }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   updateCategory: async (id, label) => {
@@ -73,8 +78,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       categories: get().options.categories.map((c) => c.id === id ? { ...c, label, value: label } : c),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   toggleCategory: async (id, isActive) => {
@@ -82,8 +86,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       categories: get().options.categories.map((c) => c.id === id ? { ...c, isActive } : c),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   deleteCategory: async (id) => {
@@ -91,8 +94,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       categories: get().options.categories.filter((c) => c.id !== id),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   setCategoryStatsMode: async (id, statsMode) => {
@@ -100,16 +102,14 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       categories: get().options.categories.map((c) => c.id === id ? { ...c, statsMode } : c),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   addTestUnit: async (value) => {
     const units = get().options.testUnits
     const newUnit: TestUnitOption = { id: uuidv4(), value, label: value, isActive: true, sortOrder: units.length, engineers: [] }
     const next = { ...get().options, testUnits: [...units, newUnit] }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   updateTestUnit: async (id, label) => {
@@ -117,8 +117,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       testUnits: get().options.testUnits.map((u) => u.id === id ? { ...u, label, value: label } : u),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   toggleTestUnit: async (id, isActive) => {
@@ -126,8 +125,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       testUnits: get().options.testUnits.map((u) => u.id === id ? { ...u, isActive } : u),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   deleteTestUnit: async (id) => {
@@ -135,8 +133,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       testUnits: get().options.testUnits.filter((u) => u.id !== id),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   addEngineer: async (unitId, name) => {
@@ -148,8 +145,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
         return { ...u, engineers: [...u.engineers, eng] }
       }),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   updateEngineer: async (unitId, engId, name) => {
@@ -161,8 +157,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
         return { ...u, engineers: u.engineers.map((e) => e.id === engId ? { ...e, label: name } : e) }
       }),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   toggleEngineer: async (unitId, engId, isActive) => {
@@ -173,8 +168,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
         return { ...u, engineers: u.engineers.map((e) => e.id === engId ? { ...e, isActive } : e) }
       }),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   removeEngineer: async (unitId, engId) => {
@@ -185,8 +179,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
         return { ...u, engineers: u.engineers.filter((e) => e.id !== engId) }
       }),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   setTestUnitColor: async (id, color) => {
@@ -194,8 +187,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       testUnits: get().options.testUnits.map((u) => u.id === id ? { ...u, color } : u),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   setTestUnitDepartment: async (id, department) => {
@@ -203,8 +195,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
       ...get().options,
       testUnits: get().options.testUnits.map((u) => u.id === id ? { ...u, department } : u),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   setEngineerColor: async (unitId, engId, color) => {
@@ -215,8 +206,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
         return { ...u, engineers: u.engineers.map((e) => e.id === engId ? { ...e, color } : e) }
       }),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   patchEngineers: async (targets, patch) => {
@@ -228,8 +218,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
         engineers: u.engineers.map((e) => wanted.has(`${u.id}/${e.id}`) ? { ...e, ...patch } : e),
       })),
     }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   setPersonUnits: async (name, unitIds) => {
@@ -255,8 +244,7 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
     })
     if (!changed) return
     const next = { ...get().options, testUnits }
-    await persistOptions(next)
-    set({ options: next })
+    set({ options: await persistOptions(next) })
   },
 
   addDevice: async (value) => {

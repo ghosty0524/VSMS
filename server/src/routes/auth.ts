@@ -141,6 +141,18 @@ function touchSession(sessionId: string): void {
   if (info) info.lastActiveAt = new Date()
 }
 
+/**
+ * 結束這個請求身上的本地 session：從 activeSessions / tokenStore 移除。
+ * 只清記憶體狀態，不動 req.session 本身（是否 destroy() 交給呼叫端決定）。
+ * /api/logout 與 ssoRecheck（偵測到 SSO session 已撤銷）共用。
+ */
+export function endLocalSession(req: Request): void {
+  if (req.session.sessionId) {
+    activeSessions.delete(req.session.sessionId)
+    tokenStore.delete(req.session.sessionId)
+  }
+}
+
 // Helper: map Prisma User → app User type
 function toUser(u: {
   id: string; username: string; displayName: string; passwordHash: string;
@@ -375,10 +387,7 @@ router.post('/logout', requireAuth, async (req, res) => {
     await appendAudit(username, dbUser?.displayName ?? username, 'LOGOUT', 'system')
   }
 
-  if (req.session.sessionId) {
-    activeSessions.delete(req.session.sessionId)
-    tokenStore.delete(req.session.sessionId)
-  }
+  endLocalSession(req)
   req.session.destroy(() => res.json({ ok: true }))
 })
 

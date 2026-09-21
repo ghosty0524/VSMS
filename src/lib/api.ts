@@ -41,6 +41,14 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { message?: string; errors?: Record<string, string>; code?: string }
     const fieldErrors = res.status === 422 && data.errors && typeof data.errors === 'object' ? data.errors : undefined
+    if (res.status === 401 && data.code === 'SSO_REVOKED') {
+      // 入口頁撤銷了 SSO session（帳號停用／登出），伺服器已經結束本地 session。
+      // 反應跟 checkAuth() 抓到 401 一樣：isLoggedIn 一變 false，App 在 vauth 模式下
+      // 的既有邏輯就會把畫面導回入口頁——這裡不用另外寫一段導頁邏輯。
+      // 動態 import 避免與 authStore（頂層就 import 這支 api.ts）互相靜態 import 成環。
+      const { useAuthStore } = await import('../store/authStore')
+      useAuthStore.setState({ isLoggedIn: false, isChecking: false })
+    }
     throw new ApiError(res.status, data.message ?? `HTTP ${res.status}`, fieldErrors, data.code)
   }
   return res.json() as Promise<T>
