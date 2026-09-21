@@ -11,6 +11,7 @@ import { api } from '../../lib/api'
 import { toast } from '../../store/toastStore'
 import { useOptionsStore } from '../../store/optionsStore'
 import { useUIStore } from '../../store/uiStore'
+import { useAuthStore } from '../../store/authStore'
 import { buildPeopleModel, UNASSIGNED_LABEL, type Person, type SafeUser, type PersonGroup, type PeopleModel } from '../../lib/peopleRows'
 import { deactivatePerson, activatePerson, membershipTargets } from '../../lib/peopleActions'
 import { groupByDepartment, type DeptGroup, type SectionGroup } from '../../lib/orgGroups'
@@ -34,6 +35,7 @@ function findPerson(model: PeopleModel, name: string): Person | null {
 export function PeopleManager() {
   const { options, patchEngineers, addEngineer } = useOptionsStore()
   const { peopleInactiveOpen, setPeopleInactiveOpen } = useUIStore()
+  const authProvider = useAuthStore(s => s.authProvider)
   const [users, setUsers] = useState<SafeUser[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState<{ name: string; mode: 'edit' | 'create-account' } | null>(null)
@@ -118,7 +120,7 @@ export function PeopleManager() {
       <div className="overflow-x-auto">
         <div className="space-y-0.5">{rows(g.people, variant)}</div>
       </div>
-      {variant === 'active' && g.unitId && (
+      {variant === 'active' && authProvider !== 'vauth' && g.unitId && (
         <div className="flex gap-2 mt-2">
           <input className="border rounded px-2 py-1 text-xs flex-1" placeholder="新增人員姓名（等於未來的帳號名稱）"
             value={newNames[g.unitId] ?? ''}
@@ -136,7 +138,7 @@ export function PeopleManager() {
     <div key={s.unitId} className="mt-3">
       <p className="text-xs font-medium text-gray-500 mb-1">{s.unitLabel}<span className="ml-2 text-gray-400">{s.people.length} 人</span></p>
       <div className="overflow-x-auto"><div className="space-y-0.5">{rows(s.people, variant)}</div></div>
-      {variant === 'active' && (
+      {variant === 'active' && authProvider !== 'vauth' && (
         <div className="flex gap-2 mt-2">
           <input className="border rounded px-2 py-1 text-xs flex-1" placeholder="新增人員姓名（等於未來的帳號名稱）"
             value={newNames[s.unitId] ?? ''}
@@ -175,7 +177,11 @@ export function PeopleManager() {
   return (
     <div>
       <h3 className="font-semibold text-gray-700 mb-1">人員</h3>
-      <p className="text-xs text-gray-400 mb-3">一個名字就是一個人：名冊名稱等於登入帳號。滑過一列會出現「編輯」與「停用」。</p>
+      <p className="text-xs text-gray-400 mb-3">
+        {authProvider === 'vauth'
+          ? '名冊、角色與單位由入口頁的組織設定管理；這裡只能改顏色。'
+          : '一個名字就是一個人：名冊名稱等於登入帳號。滑過一列會出現「編輯」與「停用」。'}
+      </p>
 
       {header}
       <div className="space-y-4">

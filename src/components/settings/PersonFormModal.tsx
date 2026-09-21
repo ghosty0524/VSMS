@@ -145,6 +145,12 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
         })
         return true
       }
+      if (authProvider === 'vauth') {
+        // 單一登入模式下角色、管轄單位、對應人員、啟用狀態由入口頁的組織設定管理，
+        // 後端會對這些欄位回 409 ORG_MANAGED；這裡只送 VTMS 連結權限。
+        await api.updateUser(account.id, { canLinkVtms, canViewVtmsProgress })
+        return true
+      }
       if (password && password.length < 8) { setAccountError('新密碼長度至少需要 8 個字元'); return false }
       const displayNamePatch = hasRoster
         ? (label.trim() && label.trim() !== person.label ? { displayName: label.trim() } : {})
@@ -233,6 +239,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
                   className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5" />
               </div>
             </div>
+            {authProvider !== 'vauth' ? (
             <div>
               <label className="block text-xs text-gray-600 mb-1">所屬單位</label>
               <div className="flex flex-wrap gap-2">
@@ -244,10 +251,18 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
                 ))}
               </div>
             </div>
+            ) : (
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">單位</label>
+              <p className="text-sm text-gray-700">{person.memberships.map(m => m.unitLabel).join('、')}</p>
+            </div>
+            )}
+            {authProvider !== 'vauth' && (
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={rosterActive} onChange={e => setRosterActive(e.target.checked)} className="w-4 h-4 accent-blue-600" />
               名冊啟用（可被排程指派）
             </label>
+            )}
             {rosterError && <p className="text-xs text-red-600">{rosterError}</p>}
           </>)}
 
@@ -259,7 +274,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">角色</label>
-                {account && isSuperAdminAccount ? (
+                {account && (isSuperAdminAccount || authProvider === 'vauth') ? (
                   <p className="text-sm px-2 py-1.5 bg-gray-50 border border-gray-200 rounded">{roleLabel(account.role)}</p>
                 ) : account ? (
                   <SegmentedControl<NewRole>
@@ -289,14 +304,14 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
                   </div>
                 )}
                 {authProvider === 'vauth' ? (
-                  <p className="text-xs text-gray-400">帳號與密碼請至<a href="/" className="text-blue-600 underline">入口頁的帳號管理</a>；此處只指派角色與管轄單位。</p>
+                  <p className="text-xs text-gray-400">帳號、密碼、角色與單位由入口頁的組織設定管理；這裡只能改顏色與 VTMS 連結權限。<a href="/" className="text-blue-600 underline ml-1">前往入口頁</a></p>
                 ) : (
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">{account ? '新密碼（留空表示不修改）' : '密碼（至少 8 個字元）'}</label>
                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className={INPUT} autoComplete="new-password" />
                 </div>
                 )}
-                {showAllowedUnits && (
+                {showAllowedUnits && authProvider !== 'vauth' && (
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">管轄單位<span className="ml-1 text-gray-400">（不選 = 全部）</span></label>
                     <div className="space-y-1.5">
@@ -335,10 +350,12 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
                         可檢視 VTMS 測試進度統計
                       </label>
                     </div>
+                    {authProvider !== 'vauth' && (
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
                       <input type="checkbox" checked={accountActive} onChange={e => setAccountActive(e.target.checked)} className="w-4 h-4 accent-blue-600" />
                       帳號啟用（可登入）
                     </label>
+                    )}
                   </>
                 )}
               </>
@@ -346,7 +363,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
             {accountError && <p className="text-xs text-red-600">{accountError}</p>}
           </>)}
 
-          {(hasRoster || (account && !account.isActive && !isSuperAdminAccount)) && (
+          {authProvider !== 'vauth' && (hasRoster || (account && !account.isActive && !isSuperAdminAccount)) && (
             <div className="border-t pt-3 flex flex-wrap gap-2">
               {hasRoster && (
                 <button type="button" onClick={removeFromRoster} className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">

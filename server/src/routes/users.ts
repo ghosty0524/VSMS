@@ -93,6 +93,14 @@ router.put('/:id', async (req, res) => {
     return
   }
 
+  if (process.env.AUTH_PROVIDER === 'vauth') {
+    const b = (req.body ?? {}) as Record<string, unknown>
+    if (['role', 'allowedUnits', 'linkedEngineer', 'isActive'].some(k => k in b)) {
+      res.status(409).json({ ok: false, code: 'ORG_MANAGED', message: '角色、管轄單位與啟用狀態在單一登入模式下由入口頁的組織設定管理' })
+      return
+    }
+  }
+
   const { displayName, password, isActive, allowedUnits, linkedEngineer, canLinkVtms, canViewVtmsProgress, role } = req.body as {
     displayName?: string
     password?: string
