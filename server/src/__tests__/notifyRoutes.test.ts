@@ -7,6 +7,16 @@ import { DEFAULT_NOTIFY_RULE_ID } from '../lib/storage.js'
 import { addDays, computeSendDate, daysBetween } from '../lib/notifyDate.js'
 import { todayTaipei } from '../lib/today.js'
 
+// notify.ts 現在寄信改打平台，路由測試不能真的打網路——mock 掉 client 層，
+// 只驗證路由怎麼組請求/怎麼合併回應，deliver 本身的行為由 notifyClient.test.ts
+// 涵蓋。
+const fetchDeliveryStatusesMock = vi.fn(async () => new Map<string, { status: string; lastError: string | null; sentAt: string | null }>())
+const deliverMock = vi.fn(async () => ({ id: 'd-mock', deduped: false, dropped: false }))
+vi.mock('../lib/notifyClient.js', () => ({
+  fetchDeliveryStatuses: (...args: unknown[]) => fetchDeliveryStatusesMock(...(args as [])),
+  platformDeliverer: { deliver: (...args: unknown[]) => deliverMock(...(args as [])) },
+}))
+
 describe('templateFieldErrors', () => {
   it('returns no errors when every template is valid', () => {
     expect(templateFieldErrors({
@@ -141,6 +151,7 @@ interface FakeLog {
   sentAt: Date | null
   createdAt: Date
   updatedAt: Date
+  deliveryId: string | null
 }
 
 interface FakeState {
@@ -239,6 +250,11 @@ function makeFakePrisma(state: FakeState) {
     },
     user: {
       findUnique: async () => ({ username: 'admin', displayName: 'Admin' }),
+      // POST /api/notify/run 會經 runDailyNotify → prismaNotifyStore 呼叫
+      // 這兩支；測試不關心通知內容，回空／null 即可，重點是不能因為方法
+      // 不存在而丟 TypeError、把整條路由拖進 500。
+      findMany: async () => [],
+      findFirst: async () => null,
     },
     auditLog: {
       create: async () => undefined,
@@ -271,6 +287,10 @@ async function buildAdminApp() {
 
 beforeEach(() => {
   vi.resetModules()
+  fetchDeliveryStatusesMock.mockReset()
+  fetchDeliveryStatusesMock.mockResolvedValue(new Map())
+  deliverMock.mockReset()
+  deliverMock.mockResolvedValue({ id: 'd-mock', deduped: false, dropped: false })
 })
 
 describe('DELETE /api/notify/rules/:id — 預設規則保護', () => {
@@ -445,7 +465,7 @@ describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
   const log = (o: Partial<FakeLog> & { id: string; sendDate: string; updatedAt: Date }): FakeLog => ({
     scheduleId: 'sched-1', status: 'sent', recipients: 'a@example.com',
     errorMessage: null, attempts: 1, messageId: null, smtpResponse: null,
-    sentAt: null, createdAt: o.updatedAt, ...o,
+    sentAt: null, createdAt: o.updatedAt, deliveryId: null, ...o,
   })
 
   it('依 updatedAt 排序，補寄的舊 sendDate 記錄排在最前面', async () => {
@@ -501,6 +521,146 @@ describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
 
     expect(res.body.logs[0].projectName).toBe('')
     expect(res.body.logs[0].testUnit).toBe('')
+  })
+
+  it('有 deliveryId 的列會去平台換回目前狀態，合併成 platformStatus／platformError／platformSentAt', async () => {
+    const state = makeDefaultState()
+    state.logs = [log({ id: 'l1', sendDate: '2026/08/25', updatedAt: new Date('2026-08-27T00:00:00Z'), status: 'accepted', deliveryId: 'd1' })]
+    currentPrisma = makeFakePrisma(state)
+    fetchDeliveryStatusesMock.mockResolvedValue(new Map([
+      ['d1', { status: 'sent', lastError: null, sentAt: '2026-08-27T00:05:00.000Z' }],
+    ]))
+    const app = await buildAdminApp()
+
+    const res = await request(app).get('/api/notify/logs')
+
+    expect(fetchDeliveryStatusesMock).toHaveBeenCalledWith(['d1'])
+    expect(res.body.logs[0]).toMatchObject({
+      platformStatus: 'sent', platformError: null, platformSentAt: '2026-08-27T00:05:00.000Z',
+    })
+  })
+
+  it('沒有 deliveryId 的列（舊資料或 dropped）platformStatus 一律為 null，不去查平台', async () => {
+    const state = makeDefaultState()
+    state.logs = [log({ id: 'l1', sendDate: '2026/08/25', updatedAt: new Date('2026-08-27T00:00:00Z'), status: 'error', deliveryId: null })]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).get('/api/notify/logs')
+
+    expect(fetchDeliveryStatusesMock).toHaveBeenCalledWith([])
+    expect(res.body.logs[0]).toMatchObject({ platformStatus: null, platformError: null, platformSentAt: null })
+  })
+})
+
+describe('POST /api/notify/run', () => {
+  it('NOTIFY_URL 未設定時回 400，不呼叫 runDailyNotify', async () => {
+    const prevUrl = process.env.NOTIFY_URL
+    delete process.env.NOTIFY_URL
+    try {
+      const state = makeDefaultState()
+      currentPrisma = makeFakePrisma(state)
+      const app = await buildAdminApp()
+
+      const res = await request(app).post('/api/notify/run')
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toContain('NOTIFY_URL')
+      expect(deliverMock).not.toHaveBeenCalled()
+    } finally {
+      if (prevUrl === undefined) delete process.env.NOTIFY_URL
+      else process.env.NOTIFY_URL = prevUrl
+    }
+  })
+
+  it('NOTIFY_URL 已設定時執行 runDailyNotify 並回傳結果', async () => {
+    const prevUrl = process.env.NOTIFY_URL
+    process.env.NOTIFY_URL = 'http://127.0.0.1:4100'
+    try {
+      const state = makeDefaultState()
+      currentPrisma = makeFakePrisma(state)
+      const app = await buildAdminApp()
+
+      const res = await request(app).post('/api/notify/run')
+
+      expect(res.status).toBe(200)
+      expect(res.body.ok).toBe(true)
+      expect(res.body).toHaveProperty('checked')
+    } finally {
+      if (prevUrl === undefined) delete process.env.NOTIFY_URL
+      else process.env.NOTIFY_URL = prevUrl
+    }
+  })
+})
+
+describe('POST /api/notify/test — 改打平台 test-mail', () => {
+  it('NOTIFY_URL 未設定時回 400，不打網路', async () => {
+    const prevUrl = process.env.NOTIFY_URL
+    delete process.env.NOTIFY_URL
+    const fetchSpy = vi.spyOn(global, 'fetch')
+    try {
+      const state = makeDefaultState()
+      currentPrisma = makeFakePrisma(state)
+      const app = await buildAdminApp()
+
+      const res = await request(app).post('/api/notify/test').send({ to: 'a@example.com' })
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toContain('NOTIFY_URL')
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      fetchSpy.mockRestore()
+      if (prevUrl === undefined) delete process.env.NOTIFY_URL
+      else process.env.NOTIFY_URL = prevUrl
+    }
+  })
+
+  it('平台回 503（SMTP 未設定）時回 400，訊息說平台尚未設定', async () => {
+    const prevUrl = process.env.NOTIFY_URL
+    process.env.NOTIFY_URL = 'http://127.0.0.1:4100'
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      new globalThis.Response(JSON.stringify({ error: { code: 'SMTP_UNSET', message: 'x' } }), { status: 503 }),
+    )
+    try {
+      const state = makeDefaultState()
+      currentPrisma = makeFakePrisma(state)
+      const app = await buildAdminApp()
+
+      const res = await request(app).post('/api/notify/test').send({ to: 'a@example.com' })
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toContain('平台尚未設定')
+    } finally {
+      fetchSpy.mockRestore()
+      if (prevUrl === undefined) delete process.env.NOTIFY_URL
+      else process.env.NOTIFY_URL = prevUrl
+    }
+  })
+
+  it('平台成功時代理呼叫 POST /notify/admin/test-mail 並回 200，寫入稽核', async () => {
+    const prevUrl = process.env.NOTIFY_URL
+    process.env.NOTIFY_URL = 'http://127.0.0.1:4100'
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      new globalThis.Response(JSON.stringify({ ok: true, messageId: 'm1', response: '250 ok' }), { status: 200 }),
+    )
+    try {
+      const state = makeDefaultState()
+      currentPrisma = makeFakePrisma(state)
+      const app = await buildAdminApp()
+
+      const res = await request(app).post('/api/notify/test').send({ to: 'a@example.com' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.ok).toBe(true)
+      const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit]
+      expect(url).toBe('http://127.0.0.1:4100/notify/admin/test-mail')
+      expect(init.method).toBe('POST')
+      expect(JSON.parse(init.body as string)).toEqual({ to: 'a@example.com' })
+    } finally {
+      fetchSpy.mockRestore()
+      if (prevUrl === undefined) delete process.env.NOTIFY_URL
+      else process.env.NOTIFY_URL = prevUrl
+    }
   })
 })
 

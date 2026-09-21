@@ -85,6 +85,17 @@ describe('NotifyLogTable', () => {
   })
 })
 
+describe('NotifyLogTable — 平台寄送狀態', () => {
+  it('platformStatus 有值時優先顯示平台狀態，而非本地 status 的文字', async () => {
+    notifyLogs.mockResolvedValue({ logs: [log({ status: 'accepted', platformStatus: 'sent' })] })
+    render(<NotifyLogTable />)
+
+    expect(await screen.findByText('已寄出')).toBeInTheDocument()
+    // 本地狀態「已交平台」不該同時顯示出來，這一格只顯示平台狀態。
+    expect(screen.queryByText('已交平台')).not.toBeInTheDocument()
+  })
+})
+
 describe('NotifyLogTable — 新前端搭舊後端的過渡期', () => {
   it('後端還沒回 updatedAt 時退回 createdAt，不顯示 undefined', async () => {
     const stale = log()

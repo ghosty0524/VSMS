@@ -206,16 +206,27 @@ export interface NotifyLog {
   id: string
   scheduleId: string
   sendDate: string
-  status: 'sent' | 'failed' | 'failed_permanent'
+  /**
+   * 'sent'／'failed'／'failed_permanent' 是平台寄送層上線前的舊值，保留
+   * 相容舊列；'accepted'／'dedup'／'error' 是現在本地會寫入的狀態，代表
+   * 「有沒有成功交給平台」，不代表信真的寄出了——那要看 platformStatus。
+   */
+  status: 'sent' | 'failed' | 'failed_permanent' | 'accepted' | 'dedup' | 'error'
   recipients: string
   errorMessage: string | null
   attempts: number
-  /** 寄件伺服器回傳的訊息 ID。 */
+  /** 寄件伺服器回傳的訊息 ID；平台寄送層上線後固定為 null。 */
   messageId: string | null
-  /** SMTP 原始回應；M365 的 InternalId 在裡面，是 message trace 的查詢鍵。 */
+  /** SMTP 原始回應；平台寄送層上線後固定為 null。 */
   smtpResponse: string | null
   sentAt: string | null
   createdAt: string
+  /** 平台目前的寄送狀態（由 GET /notify/deliveries 合併回來）；平台連不上或這筆還沒有 deliveryId 時為 null。 */
+  platformStatus?: 'queued' | 'sent' | 'failed' | 'failed_permanent' | string | null
+  /** 平台記錄的最後一次錯誤訊息。 */
+  platformError?: string | null
+  /** 平台記錄的實際寄出時間。 */
+  platformSentAt?: string | null
   /**
    * 最後一次處理這筆通知的時間；記錄頁的排序依據，也是畫面上顯示的那一欄。
    * 標為選填是因為 dist 由磁碟即時服務、後端要重啟才生效，兩者之間必然有一段

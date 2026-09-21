@@ -6,7 +6,7 @@ import { resolveRule } from './notifyRule.js'
 import type { NotifyRuleRow } from './notifyRule.js'
 import { buildTemplateVars, buildMailBody } from './notifyMailBody.js'
 import type { ScheduleForMail } from './notifyMailBody.js'
-import type { Mailer } from './mailer.js'
+import type { Deliverer, Recipient } from './notifyClient.js'
 import { escapeHtml } from './notifyTemplate.js'
 
 export interface NotifyConfigRow {
@@ -36,10 +36,12 @@ export interface LogUpsert {
   errorMessage: string | null
   attempts: number
   sentAt: Date | null
-  /** 寄件伺服器回傳的訊息 ID；失敗時為 null。 */
+  /** 寄件伺服器回傳的訊息 ID；平台寄送層上線後固定為 null，保留欄位相容舊列。 */
   messageId: string | null
-  /** SMTP 的原始回應字串。M365 的 InternalId 在裡面，是 message trace 的查詢鍵。 */
+  /** SMTP 的原始回應字串；平台寄送層上線後固定為 null，保留欄位相容舊列。 */
   smtpResponse: string | null
+  /** 平台 POST /notify/deliveries 回傳的 delivery id；未寄出（dropped）時為 null。 */
+  deliveryId: string | null
 }
 
 export interface NotifyStore {
@@ -56,6 +58,8 @@ export interface NotifyStore {
   findCandidates(today: string): Promise<CandidateSchedule[]>
   findLogs(scheduleIds: string[]): Promise<NotificationLogRow[]>
   upsertLog(entry: LogUpsert): Promise<void>
+  /** testEngineer 對應到的 VSMS 帳號（users.linkedEngineer === value），找不到回 null。 */
+  loadAccountByEngineer(value: string): Promise<{ id: string } | null>
 }
 
 /**
@@ -91,8 +95,6 @@ export interface RunResult {
   alreadyRunning: boolean
 }
 
-export const MAX_ATTEMPTS = 3
-
 // 每次呼叫都要拿到全新的物件與全新的 errors 陣列 —— 用共用常數物件再展開
 // （{ ...SHARED }）只是淺拷貝，errors 這個陣列參照會被所有呼叫共用，一次
 // push 就會污染下一次呼叫的結果，跨測試甚至跨並行執行都看得到彼此的錯誤。
@@ -108,9 +110,10 @@ let inFlight: Promise<RunResult> | null = null
  * 每日執行一次，也供手動重跑 API 呼叫。
  *
  * notification_logs 的 (scheduleId, sendDate) 唯一鍵只保證不會出現重複的
- * 記錄「列」，並不保證不會重複寄信：下面的迴圈是先呼叫 mailer.send()、
- * 成功後才 upsertLog()，而 upsertLog 用的是 upsert——鍵值衝突時是更新既有
- * 那一列，不是拋錯擋下來。所以唯一鍵擋不住兩次並行執行各自寄出一封信。
+ * 記錄「列」，並不保證不會重複寄信：下面的迴圈是先呼叫 deliverer.deliver()、
+ * 才 upsertLog()，而 upsertLog 用的是 upsert——鍵值衝突時是更新既有那一列，
+ * 不是拋錯擋下來。所以唯一鍵擋不住兩次並行執行各自寄出一封信（平台端的
+ * key 冪等性是另一道防線，見下方 deliver() 呼叫處的 key）。
  *
  * 真正擋住並行執行的是這裡的模組級 mutex（inFlight）：同一個 process 內
  * 第二個呼叫會立刻拿到 alreadyRunning:true 的空結果，不會真的再跑一次。
@@ -119,13 +122,13 @@ let inFlight: Promise<RunResult> | null = null
  */
 export async function runDailyNotify(
   store: NotifyStore,
-  mailer: Mailer,
+  deliverer: Deliverer,
   now: Date = new Date(),
 ): Promise<RunResult> {
   if (inFlight) {
     return emptyResult(true)
   }
-  const run = runOnce(store, mailer, now)
+  const run = runOnce(store, deliverer, now)
   inFlight = run
   try {
     return await run
@@ -138,7 +141,7 @@ export async function runDailyNotify(
 
 async function runOnce(
   store: NotifyStore,
-  mailer: Mailer,
+  deliverer: Deliverer,
   now: Date,
 ): Promise<RunResult> {
   const result: RunResult = emptyResult(false)
@@ -211,7 +214,11 @@ async function runOnce(
       }
 
       const existing = logByKey.get(logKey(schedule.id, sendDate))
-      if (existing && (existing.status === 'sent' || existing.status === 'failed_permanent')) {
+      // 'sent' 是平台寄送層上線前寫下的舊列，保留在冪等判斷裡是為了相容；
+      // 'accepted'／'dedup' 是平台寄送層的正常完成狀態——只要 deliver() 有
+      // 回應（不論是新投遞還是被平台判定為重複），這筆就已經處理過了，不該
+      // 再打一次 deliver()。
+      if (existing && (existing.status === 'accepted' || existing.status === 'dedup' || existing.status === 'sent')) {
         result.skipped++
         continue
       }
@@ -259,51 +266,35 @@ async function runOnce(
         : ''
       const noticeHtml = notice ? `<p>${escapeHtml(notice.trim())}</p>` : ''
 
-      const attempts = (existing?.attempts ?? 0) + 1
-      let mailSent = false
+      // 測試人員若有對應到 VSMS 帳號，除了 email 副本外再加一份站內通知
+      // （inapp），讓他不必開信箱也能在系統裡看到。
+      const engineerAccount = schedule.testEngineer ? await store.loadAccountByEngineer(schedule.testEngineer) : null
+      const recipients: Recipient[] = to.map(email => ({ email }))
+      const ccList: Recipient[] = cc.map(email => ({ email }))
+      const channels: Array<'inapp' | 'email'> = engineerAccount ? ['email', 'inapp'] : ['email']
+      // key 帶 (scheduleId, sendDate)：與本地的唯一鍵同一組維度，讓平台端
+      // 也能認出「這是同一封信」——本地 upsertLog 失敗、下次重跑重新呼叫
+      // deliver() 時，平台會回 deduped 而不是真的寄出第二封。
+      const key = `schedule:${schedule.id}:${sendDate}`
       try {
-        const info = await mailer.send({
-          to,
-          cc,
-          subject: body.subject,
-          text: body.text + notice,
-          html: body.html + noticeHtml,
+        const r = await deliverer.deliver({
+          key, channels,
+          recipients: engineerAccount ? [...recipients, { userId: engineerAccount.id }] : recipients,
+          cc: ccList,
+          severity: 'info', title: body.subject, body: body.text + notice, linkUrl: `/vsms/`,
+          mail: { subject: body.subject, text: body.text + notice, html: body.html + noticeHtml },
         })
-        mailSent = true
+        // attempts 欄位保留是為了相容舊列的資料形狀，寄送本身的重試與失敗
+        // 升級現在都在平台那一側，這裡固定寫 1。
         await store.upsertLog({
-          scheduleId: schedule.id, sendDate, status: 'sent',
-          recipients: [...to, ...cc].join(', '),
-          errorMessage: null, attempts, sentAt: now,
-          messageId: info.messageId, smtpResponse: info.response,
+          scheduleId: schedule.id, sendDate, status: r.dropped ? 'error' : r.deduped ? 'dedup' : 'accepted',
+          recipients: [...to, ...cc].join(', '), errorMessage: r.dropped ? 'NOTIFY_URL 未設定' : null,
+          attempts: 1, sentAt: null, messageId: null, smtpResponse: null, deliveryId: r.id,
         })
-        result.sent++
+        if (r.dropped) result.failed++; else result.sent++
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        if (mailSent) {
-          // 信已經寄出，只是寫入通知記錄失敗 —— (scheduleId, sendDate) 唯一鍵
-          // 這道冪等性保證這次沒能落地，下次執行極可能對同一批人重複寄信。
-          // 這件事必須讓管理者立刻看見，而不是被當成一般寄信失敗吞掉。
-          result.errors.push({
-            scheduleId: schedule.id,
-            message: `信件已寄出，但寫入通知記錄失敗，下次執行可能對同一批收件人重複寄信：${message}`,
-          })
-          continue
-        }
-        // attempts 是「每次執行」累加，不是「每天」累加：手動重跑按鈕存在的
-        // 目的就是讓操作者能在同一天連續重跑（例如除錯 SMTP 設定），若攻頂
-        // 條件只看 attempts >= MAX_ATTEMPTS，三次手動重跑就會把所有到期排程
-        // 打成永久失敗、之後永遠不再重試，而操作者當下毫無徵兆。因此再加上
-        // 「寄信日已經過去」（sendDate < today）這道日期閘門：寄信日當天不論
-        // 重跑幾次都維持 'failed'，只有跨過至少一個自然日之後，攻頂才會真的
-        // 生效，此時 attempts 才確實對應「不同天各自失敗過一次」。
-        const dayHasAdvanced = sendDate < today
-        await store.upsertLog({
-          scheduleId: schedule.id, sendDate,
-          status: (attempts >= MAX_ATTEMPTS && dayHasAdvanced) ? 'failed_permanent' : 'failed',
-          recipients: [...to, ...cc].join(', '),
-          errorMessage: message, attempts, sentAt: null,
-          messageId: null, smtpResponse: null,
-        })
+        await store.upsertLog({ scheduleId: schedule.id, sendDate, status: 'error', recipients: [...to, ...cc].join(', '), errorMessage: message, attempts: 1, sentAt: null, messageId: null, smtpResponse: null, deliveryId: null })
         result.failed++
       }
     } catch (err) {

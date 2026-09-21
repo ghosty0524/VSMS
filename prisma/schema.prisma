@@ -183,6 +183,9 @@ model NotificationLog {
   // 重試是對同一列 upsert-update，createdAt 不會動。記錄頁要以「最後處理
   // 時間」排序，才不會讓今天重試成功的舊記錄永遠沉在下面看不到。
   updatedAt    DateTime  @updatedAt
+  // 平台 POST /notify/deliveries 回傳的 delivery id；GET /logs 用它去 GET
+  // /notify/deliveries?ids= 換回目前的平台寄送狀態（platformStatus 等）。
+  deliveryId   String?   @db.VarChar(36)
 
   @@unique([scheduleId, sendDate])
   @@index([sendDate])

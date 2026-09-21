@@ -6,11 +6,33 @@ const STATUS_STYLE: Record<NotifyLog['status'], string> = {
   sent: 'bg-green-50 text-green-700',
   failed: 'bg-amber-50 text-amber-700',
   failed_permanent: 'bg-red-50 text-red-700',
+  accepted: 'bg-blue-50 text-blue-700',
+  dedup: 'bg-gray-50 text-gray-600',
+  error: 'bg-red-50 text-red-700',
 }
 
 const STATUS_TEXT: Record<NotifyLog['status'], string> = {
   sent: '已寄出',
   failed: '失敗（明日重試）',
+  failed_permanent: '永久失敗',
+  accepted: '已交平台',
+  dedup: '已送過（略過）',
+  error: '交付失敗',
+}
+
+// 平台端（GET /notify/deliveries）回傳的實際寄送狀態；有值時優先顯示，
+// 因為本地 status 只代表「有沒有成功交給平台」，不代表信真的寄出了。
+const PLATFORM_STATUS_STYLE: Record<string, string> = {
+  queued: 'bg-blue-50 text-blue-700',
+  sent: 'bg-green-50 text-green-700',
+  failed: 'bg-amber-50 text-amber-700',
+  failed_permanent: 'bg-red-50 text-red-700',
+}
+
+const PLATFORM_STATUS_TEXT: Record<string, string> = {
+  queued: '排隊中',
+  sent: '已寄出',
+  failed: '失敗（重試中）',
   failed_permanent: '永久失敗',
 }
 
@@ -81,14 +103,25 @@ export function NotifyLogTable({ refreshToken = 0 }: { refreshToken?: number }) 
               </td>
               <td className="py-2 px-2 whitespace-nowrap">{l.testUnit || <span className="text-gray-400">—</span>}</td>
               <td className="py-2 px-2 whitespace-nowrap">
-                <span
-                  className={`text-xs px-1.5 py-0.5 rounded ${STATUS_STYLE[l.status]}`}
-                  title={l.status === 'failed_permanent'
-                    ? '已達重試上限，系統不會再自動重試這筆通知；如需重寄，需由工程人員手動處理。'
-                    : undefined}
-                >
-                  {STATUS_TEXT[l.status]}
-                </span>
+                {l.platformStatus ? (
+                  <span
+                    className={`text-xs px-1.5 py-0.5 rounded ${PLATFORM_STATUS_STYLE[l.platformStatus] ?? 'bg-gray-50 text-gray-600'}`}
+                    title={l.platformStatus === 'failed_permanent'
+                      ? '平台已達重試上限，不會再自動重試這筆通知。'
+                      : '平台目前記錄的實際寄送狀態'}
+                  >
+                    {PLATFORM_STATUS_TEXT[l.platformStatus] ?? l.platformStatus}
+                  </span>
+                ) : (
+                  <span
+                    className={`text-xs px-1.5 py-0.5 rounded ${STATUS_STYLE[l.status]}`}
+                    title={l.status === 'failed_permanent'
+                      ? '已達重試上限，系統不會再自動重試這筆通知；如需重寄，需由工程人員手動處理。'
+                      : undefined}
+                  >
+                    {STATUS_TEXT[l.status]}
+                  </span>
+                )}
                 {l.attempts > 1 && (
                   <span className="ml-1 text-xs text-gray-400">第 {l.attempts} 次</span>
                 )}
@@ -97,6 +130,9 @@ export function NotifyLogTable({ refreshToken = 0 }: { refreshToken?: number }) 
                 {l.recipients}
                 {l.errorMessage && (
                   <span className="block text-red-600 mt-0.5">{l.errorMessage}</span>
+                )}
+                {l.platformError && (
+                  <span className="block text-red-600 mt-0.5">{l.platformError}</span>
                 )}
                 {/* 郵件伺服器的原始回應。M365 會把 InternalId 放在這裡，IT 用它
                     在 message trace 一次就能定位到這一封，不必靠時間範圍去撈。 */}

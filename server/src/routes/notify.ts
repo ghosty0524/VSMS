@@ -11,7 +11,7 @@ import { computeSendDate, daysBetween } from '../lib/notifyDate.js'
 import { todayTaipei } from '../lib/today.js'
 import { prismaNotifyStore } from '../lib/notifyStore.js'
 import { runDailyNotify } from '../lib/notifyRunner.js'
-import { getMailer, isMailerConfigured } from '../lib/mailer.js'
+import { platformDeliverer, fetchDeliveryStatuses } from '../lib/notifyClient.js'
 
 const router = Router()
 router.use(requireAdmin)
@@ -57,7 +57,7 @@ router.get('/config', async (_req, res) => {
     leadDays: row?.leadDays ?? 3,
     catchUpDays: row?.catchUpDays ?? 3,
     mailDomain: row?.mailDomain ?? '',
-    smtpConfigured: isMailerConfigured(),
+    smtpConfigured: !!process.env.NOTIFY_URL,
     fallbackRecipients: fallback.map(r => ({ id: r.id, name: r.name, note: r.note, isActive: r.isActive })),
     templateVars: TEMPLATE_VARS,
   })
@@ -366,30 +366,40 @@ router.get('/logs', async (req, res) => {
     select: { id: true, projectName: true, testUnit: true, startDate: true },
   })
   const byId = new Map(schedules.map(s => [s.id, s]))
+  // 每列若有 deliveryId，去平台換回目前的寄送狀態；平台連不上或沒有
+  // deliveryId（尚未上線平台前的舊列、或 dropped）時 statuses 查不到，
+  // platformStatus 一律回 null，前端退回顯示本地 status。
+  const statuses = await fetchDeliveryStatuses(logs.map(l => l.deliveryId).filter((x): x is string => !!x))
   res.json({
-    logs: logs.map(l => ({
-      ...l,
-      // 查不到就回空字串，由前端決定怎麼呈現（灰字提示）。這裡若自己填一段
-      // 文字，前端的 fallback 判斷永遠不成立，會變成死碼。
-      projectName: byId.get(l.scheduleId)?.projectName ?? '',
-      testUnit: byId.get(l.scheduleId)?.testUnit ?? '',
-      startDate: byId.get(l.scheduleId)?.startDate ?? '',
-    })),
+    logs: logs.map(l => {
+      const s = l.deliveryId ? statuses.get(l.deliveryId) : undefined
+      return {
+        ...l,
+        // 查不到就回空字串，由前端決定怎麼呈現（灰字提示）。這裡若自己填一段
+        // 文字，前端的 fallback 判斷永遠不成立，會變成死碼。
+        projectName: byId.get(l.scheduleId)?.projectName ?? '',
+        testUnit: byId.get(l.scheduleId)?.testUnit ?? '',
+        startDate: byId.get(l.scheduleId)?.startDate ?? '',
+        platformStatus: s?.status ?? null,
+        platformError: s?.lastError ?? null,
+        platformSentAt: s?.sentAt ?? null,
+      }
+    }),
   })
 })
 
 // POST /api/notify/run — 立即檢查並補寄
 router.post('/run', async (req, res) => {
-  if (!isMailerConfigured()) {
-    res.status(400).json({ ok: false, message: 'SMTP 尚未設定，請先在 .env 設定 SMTP_HOST 與 SMTP_FROM' })
+  if (!process.env.NOTIFY_URL) {
+    res.status(400).json({ ok: false, message: 'NOTIFY_URL 未設定' })
     return
   }
-  const result = await runDailyNotify(prismaNotifyStore, getMailer())
+  const result = await runDailyNotify(prismaNotifyStore, platformDeliverer)
   await audit(req, `手動執行通知：寄出 ${result.sent} 封`, [])
   res.json({ ok: true, ...result })
 })
 
-// POST /api/notify/test — 寄一封測試信
+// POST /api/notify/test — 寄一封測試信（改打平台 admin test-mail）
 router.post('/test', async (req, res) => {
   const { to } = req.body as { to: unknown }
   // to 型別要先檢查再呼叫字串方法 —— 陣列、數字、物件都會讓 to?.trim() 拋出
@@ -400,17 +410,26 @@ router.post('/test', async (req, res) => {
     res.status(422).json({ ok: false, errors: { to: '收件地址不可空白' } })
     return
   }
-  if (!isMailerConfigured()) {
-    res.status(400).json({ ok: false, message: 'SMTP 尚未設定，請先在 .env 設定 SMTP_HOST 與 SMTP_FROM' })
+  const notifyUrl = process.env.NOTIFY_URL?.trim()
+  if (!notifyUrl) {
+    res.status(400).json({ ok: false, message: 'NOTIFY_URL 未設定' })
     return
   }
   try {
-    await getMailer().send({
-      to: [to.trim()], cc: [],
-      subject: '[VSMS] 通知功能測試信',
-      text: `這是一封測試信，寄出時間 ${todayTaipei()}。收到即表示 SMTP 設定正確。`,
-      html: `<p>這是一封測試信，寄出時間 ${todayTaipei()}。收到即表示 SMTP 設定正確。</p>`,
+    const platformRes = await fetch(`${notifyUrl}/notify/admin/test-mail`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Service-Key': process.env.VAUTH_SERVICE_KEY?.trim() ?? '' },
+      body: JSON.stringify({ to: to.trim() }),
     })
+    const data = await platformRes.json().catch(() => ({})) as { error?: { code?: string; message?: string } }
+    if (platformRes.status === 503) {
+      res.status(400).json({ ok: false, message: 'SMTP 在平台尚未設定' })
+      return
+    }
+    if (!platformRes.ok) {
+      res.status(502).json({ ok: false, message: `寄送失敗：${data.error?.message ?? platformRes.status}` })
+      return
+    }
     // 這條路由可以把信寄給管理者任意指定的地址，若不留紀錄就沒有人知道
     // 誰在什麼時候寄了信到哪裡去。
     await audit(req, `測試信：${to.trim()}`, [])

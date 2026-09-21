@@ -89,7 +89,15 @@ export const prismaNotifyStore: NotifyStore = {
         sentAt: entry.sentAt,
         messageId: entry.messageId,
         smtpResponse: entry.smtpResponse,
+        deliveryId: entry.deliveryId,
       },
+    })
+  },
+
+  async loadAccountByEngineer(value: string): Promise<{ id: string } | null> {
+    return prisma.user.findFirst({
+      where: { linkedEngineer: value, isActive: true },
+      select: { id: true },
     })
   },
 }
