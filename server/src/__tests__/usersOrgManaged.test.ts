@@ -16,6 +16,11 @@ vi.mock('../lib/db.js', () => ({
         canLinkVtms: false, canViewVtmsProgress: false, createdAt: new Date(), lastLoginAt: null,
         ...a.data,
       })),
+      create: vi.fn(async (a: { data: Record<string, unknown> }) => ({
+        id: 'new-id', isActive: true, allowedUnits: [], linkedEngineer: '',
+        canLinkVtms: false, canViewVtmsProgress: false, createdAt: new Date(), lastLoginAt: null,
+        ...a.data,
+      })),
     },
   },
 }))
@@ -43,5 +48,31 @@ describe('PUT /api/users/:id under vauth', () => {
     process.env.AUTH_PROVIDER = 'local'
     const res = await request(app()).put('/api/users/u1').send({ canLinkVtms: true })
     expect(res.status).toBe(200)
+  })
+})
+
+describe('DELETE /api/users/:id（停用）under vauth', () => {
+  it('vauth 模式 → 409 ORG_MANAGED，local 模式照舊', async () => {
+    const res = await request(app()).delete('/api/users/u1')
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('ORG_MANAGED')
+
+    process.env.AUTH_PROVIDER = 'local'
+    const ok = await request(app()).delete('/api/users/u1')
+    expect(ok.status).not.toBe(409)
+  })
+})
+
+describe('POST /api/users（建立帳號）under vauth', () => {
+  it('vauth 模式 → 409 ORG_MANAGED，local 模式不因此擋下', async () => {
+    const res = await request(app()).post('/api/users').send({ username: 'new_user', password: 'password1' })
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('ORG_MANAGED')
+
+    process.env.AUTH_PROVIDER = 'local'
+    const { prisma } = await import('../lib/db.js')
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(null)
+    const ok = await request(app()).post('/api/users').send({ username: 'new_user', password: 'password1' })
+    expect(ok.status).not.toBe(409)
   })
 })

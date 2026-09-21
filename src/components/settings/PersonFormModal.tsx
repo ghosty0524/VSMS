@@ -286,11 +286,11 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
                       if (v === 'admin' && allowedUnits.length === 0) setAllowedUnits(person.memberships.map(m => m.unitLabel))
                     }}
                     size="md" ariaLabel="角色" />
-                ) : (
+                ) : authProvider !== 'vauth' ? (
                   <SegmentedControl<NewRole>
                     options={[{ value: 'user', label: '測試人員' }, { value: 'admin', label: '部級主管' }]}
                     value={newRole} onChange={setNewRole} size="md" ariaLabel="角色" />
-                )}
+                ) : null}
               </div>
             </div>
             {isSuperAdminAccount ? (

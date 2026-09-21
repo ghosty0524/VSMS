@@ -39,6 +39,11 @@ router.get('/', async (_req, res) => {
 
 // POST /api/users
 router.post('/', async (req, res) => {
+  if (process.env.AUTH_PROVIDER === 'vauth') {
+    res.status(409).json({ ok: false, code: 'ORG_MANAGED', message: '帳號在單一登入模式下請至入口頁的帳號管理建立' })
+    return
+  }
+
   const { username, displayName, password, allowedUnits, role, linkedEngineer } = req.body as {
     username: string
     displayName?: string
@@ -208,6 +213,11 @@ router.put('/:id', async (req, res) => {
 
 // DELETE /api/users/:id — soft disable
 router.delete('/:id', async (req, res) => {
+  if (process.env.AUTH_PROVIDER === 'vauth') {
+    res.status(409).json({ ok: false, code: 'ORG_MANAGED', message: '帳號停用在單一登入模式下由入口頁的帳號管理' })
+    return
+  }
+
   const dbUser = await prisma.user.findUnique({ where: { id: req.params.id } })
   if (!dbUser) {
     res.status(404).json({ error: 'Not found' })

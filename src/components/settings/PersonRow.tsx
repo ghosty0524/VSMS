@@ -17,13 +17,15 @@ const ACTION_BTN = 'text-xs px-1.5 py-1 rounded border transition-colors w-full'
 interface Props {
   person: Person
   variant: 'active' | 'inactive'
+  /** vauth 模式下名冊、角色、單位、帳號啟用狀態都由入口頁管理，停用／啟用與建立帳號要隱藏 */
+  authProvider: 'local' | 'vauth'
   onEdit: (p: Person) => void
   onToggleActive: (p: Person) => void
   onColorChange: (p: Person, color: string) => void
   onCreateAccount: (p: Person) => void
 }
 
-export function PersonRow({ person, variant, onEdit, onToggleActive, onColorChange, onCreateAccount }: Props) {
+export function PersonRow({ person, variant, authProvider, onEdit, onToggleActive, onColorChange, onCreateAccount }: Props) {
   const { options } = useOptionsStore()
   const [draftColor, setDraftColor] = useState<string | null>(null)
   const first = person.memberships[0]
@@ -89,12 +91,12 @@ export function PersonRow({ person, variant, onEdit, onToggleActive, onColorChan
               <span className="text-gray-400">上次登入 {new Date(person.account.lastLoginAt).toLocaleDateString('zh-TW')}</span>
             )}
           </div>
-        ) : (
+        ) : authProvider !== 'vauth' ? (
           <button type="button" onClick={() => onCreateAccount(person)}
             className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-300 rounded text-gray-500 hover:bg-white hover:text-gray-700">
             <UserPlus size={12} />建立帳號
           </button>
-        )}
+        ) : null}
       </div>
 
       {/* 動作：佔位不變，滑過或聚焦才顯示。super_admin 名冊列仍可編輯（可能是後端要求的 linkedEngineer），
@@ -105,7 +107,7 @@ export function PersonRow({ person, variant, onEdit, onToggleActive, onColorChan
           編輯
         </button>
       ) : <span />}
-      {!isSuperAdmin ? (
+      {!isSuperAdmin && authProvider !== 'vauth' ? (
         <button type="button" onClick={() => onToggleActive(person)}
           className={`${ACTION_BTN} opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 ${
             inactive ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'

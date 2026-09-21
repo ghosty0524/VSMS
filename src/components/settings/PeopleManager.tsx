@@ -99,7 +99,7 @@ export function PeopleManager() {
   }
 
   const rows = (people: Person[], variant: 'active' | 'inactive') => people.map(p => (
-    <PersonRow key={p.name} person={p} variant={variant}
+    <PersonRow key={p.name} person={p} variant={variant} authProvider={authProvider}
       onEdit={x => setForm({ name: x.name, mode: 'edit' })}
       onToggleActive={x => handleToggleActive(x, variant === 'inactive')}
       onColorChange={handleColorChange}
