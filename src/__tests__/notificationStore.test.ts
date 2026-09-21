@@ -62,7 +62,7 @@ describe('useNotificationStore', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('failed to load'), boom)
   })
 
-  it('markRead 樂觀更新該筆為已讀並遞減 unreadCount', async () => {
+  it('markRead 等 API 呼叫成功後才把該筆標成已讀並遞減 unreadCount（不是樂觀更新）', async () => {
     useNotificationStore.setState({ items: [item()], unreadCount: 1, loaded: true })
 
     await useNotificationStore.getState().markRead('n1')

@@ -11,16 +11,10 @@ import { computeSendDate, daysBetween } from '../lib/notifyDate.js'
 import { todayTaipei } from '../lib/today.js'
 import { prismaNotifyStore } from '../lib/notifyStore.js'
 import { runDailyNotify } from '../lib/notifyRunner.js'
-import { platformDeliverer, fetchDeliveryStatuses } from '../lib/notifyClient.js'
+import { platformDeliverer, fetchDeliveryStatuses, notifyConfigured } from '../lib/notifyClient.js'
 
 const router = Router()
 router.use(requireAdmin)
-
-// 是否已連接通知平台。統一用 trim 過的值判斷，避免 .env 裡多打一個空白
-// 就讓某條路由以為沒設定、另一條卻以為設定好了。
-function notifyConfigured(): boolean {
-  return !!process.env.NOTIFY_URL?.trim()
-}
 
 type TemplateFields = {
   subjectTemplate: string | null
@@ -397,11 +391,11 @@ router.get('/logs', async (req, res) => {
 // POST /api/notify/run — 立即檢查並補寄
 router.post('/run', async (req, res) => {
   if (!notifyConfigured()) {
-    res.status(400).json({ ok: false, message: 'NOTIFY_URL 未設定' })
+    res.status(400).json({ ok: false, message: 'NOTIFY_URL 或 VAUTH_SERVICE_KEY 未設定' })
     return
   }
   const result = await runDailyNotify(prismaNotifyStore, platformDeliverer)
-  await audit(req, `手動執行通知：寄出 ${result.sent} 封`, [])
+  await audit(req, `手動執行通知：寄出 ${result.sent} 封、重複略過 ${result.deduped} 封`, [])
   res.json({ ok: true, ...result })
 })
 
@@ -417,15 +411,20 @@ router.post('/test', async (req, res) => {
     return
   }
   if (!notifyConfigured()) {
-    res.status(400).json({ ok: false, message: 'NOTIFY_URL 未設定' })
+    res.status(400).json({ ok: false, message: 'NOTIFY_URL 或 VAUTH_SERVICE_KEY 未設定' })
     return
   }
   const notifyUrl = process.env.NOTIFY_URL?.trim() as string
+  // 同 notifyClient.deliver() 的 10 秒逾時：這條路由代管理者直接打平台，
+  // 平台若掛住不回應，不能讓這個請求跟著無限期掛住。
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 10_000)
   try {
     const platformRes = await fetch(`${notifyUrl}/notify/admin/test-mail`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Service-Key': process.env.VAUTH_SERVICE_KEY?.trim() ?? '' },
       body: JSON.stringify({ to: to.trim() }),
+      signal: controller.signal,
     })
     const data = await platformRes.json().catch(() => ({})) as { error?: { code?: string; message?: string } }
     if (platformRes.status === 503) {
@@ -445,6 +444,8 @@ router.post('/test', async (req, res) => {
       ok: false,
       message: `寄送失敗：${err instanceof Error ? err.message : String(err)}`,
     })
+  } finally {
+    clearTimeout(timer)
   }
 })
 

@@ -4,9 +4,11 @@ import { deliver as platformDeliver, type DeliverInput, type DeliverResult } fro
 
 interface Sched { id: string; projectName: string; testEngineer: string; startDate: string; endDate: string; updatedAt: Date }
 interface Prev { testEngineer: string; startDate: string; endDate: string }
-interface Deps { deliver?: (i: DeliverInput) => Promise<DeliverResult>; findAccount?: (engineer: string) => Promise<{ id: string } | null> }
+interface Deps { deliver?: (i: DeliverInput) => Promise<DeliverResult>; findAccount?: (engineer: string) => Promise<{ username: string } | null> }
 
-const defaultFindAccount = async (engineer: string) => prisma.user.findFirst({ where: { linkedEngineer: engineer, isActive: true }, select: { id: true } })
+// 平台認人靠 username，不是本機 id——pre-SSO 帳號的本機 id 跟 vauth 對不上
+// （見 server/src/middleware/ssoAdopt.ts、server/src/lib/orgSync/derive.ts）。
+const defaultFindAccount = async (engineer: string) => prisma.user.findFirst({ where: { linkedEngineer: engineer, isActive: true }, select: { username: true } })
 
 export async function notifyScheduleAssigned(input: { schedule: Sched; previous?: Prev }, deps: Deps = {}): Promise<void> {
   const { schedule, previous } = input
@@ -17,7 +19,7 @@ export async function notifyScheduleAssigned(input: { schedule: Sched; previous?
     if (!account) return
     await (deps.deliver ?? platformDeliver)({
       key: `schedule_assigned:${schedule.id}:${schedule.updatedAt.toISOString()}`,
-      channels: ['inapp'], recipients: [{ userId: account.id }], severity: 'info',
+      channels: ['inapp'], recipients: [{ username: account.username }], severity: 'info',
       title: `你有一筆排程：${schedule.projectName}`, body: `${schedule.startDate} ～ ${schedule.endDate}`, linkUrl: '/vsms/',
     })
   } catch (err) {

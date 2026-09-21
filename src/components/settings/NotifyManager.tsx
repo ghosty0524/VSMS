@@ -73,7 +73,7 @@ export function NotifyManager() {
         return
       }
       const hasProblem = r.missedWindow > 0 || r.failed > 0 || r.errors.length > 0
-      let text = `檢查 ${r.checked} 筆，寄出 ${r.sent}，失敗 ${r.failed}，略過 ${r.skipped}` +
+      let text = `檢查 ${r.checked} 筆，寄出 ${r.sent}，重複略過 ${r.deduped}，失敗 ${r.failed}，略過 ${r.skipped}` +
         (r.excluded > 0 ? `，依排除規則不寄 ${r.excluded}` : '') +
         (r.missedWindow > 0
           ? `，超出補寄視窗未寄 ${r.missedWindow} 筆`

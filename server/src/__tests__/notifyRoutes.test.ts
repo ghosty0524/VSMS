@@ -15,6 +15,10 @@ const deliverMock = vi.fn(async () => ({ id: 'd-mock', deduped: false, dropped: 
 vi.mock('../lib/notifyClient.js', () => ({
   fetchDeliveryStatuses: (...args: unknown[]) => fetchDeliveryStatusesMock(...(args as [])),
   platformDeliverer: { deliver: (...args: unknown[]) => deliverMock(...(args as [])) },
+  // 真正的判斷邏輯（兩個環境變數都要設）留在 notifyClient.ts 自己的測試
+  // 檔涵蓋；這裡照抄同樣的條件，讓路由層的閘門測試不必真的匯入未 mock
+  // 的模組。
+  notifyConfigured: () => !!process.env.NOTIFY_URL?.trim() && !!process.env.VAUTH_SERVICE_KEY?.trim(),
 }))
 
 describe('templateFieldErrors', () => {
@@ -287,6 +291,11 @@ async function buildAdminApp() {
 
 beforeEach(() => {
   vi.resetModules()
+  // '../lib/db.js' 被整個 mock 掉，db.ts 裡的 'dotenv/config' 不會執行，
+  // 這個檔案的 process.env.VAUTH_SERVICE_KEY 不會被 .env 填上。notifyConfigured()
+  // 現在兩個環境變數都要看，沒有這行的話每個沒有顯式處理 VAUTH_SERVICE_KEY
+  // 的既有測試都會被誤判成「未連接平台」。
+  process.env.VAUTH_SERVICE_KEY = 'test-service-key'
   fetchDeliveryStatusesMock.mockReset()
   fetchDeliveryStatusesMock.mockResolvedValue(new Map())
   deliverMock.mockReset()
@@ -573,7 +582,7 @@ describe('POST /api/notify/run', () => {
     }
   })
 
-  it('NOTIFY_URL 已設定時執行 runDailyNotify 並回傳結果', async () => {
+  it('NOTIFY_URL 已設定時執行 runDailyNotify 並回傳結果，含 deduped', async () => {
     const prevUrl = process.env.NOTIFY_URL
     process.env.NOTIFY_URL = 'http://127.0.0.1:4100'
     try {
@@ -586,9 +595,36 @@ describe('POST /api/notify/run', () => {
       expect(res.status).toBe(200)
       expect(res.body.ok).toBe(true)
       expect(res.body).toHaveProperty('checked')
+      expect(res.body).toHaveProperty('deduped')
     } finally {
       if (prevUrl === undefined) delete process.env.NOTIFY_URL
       else process.env.NOTIFY_URL = prevUrl
+    }
+  })
+
+  // I2：閘門要同時檢查 NOTIFY_URL 與 VAUTH_SERVICE_KEY——deliver() 兩者任一
+  // 沒設都會 drop，路由如果只看 NOTIFY_URL，會出現「閘門說已連接、deliver()
+  // 卻整批 drop」的不一致。
+  it('NOTIFY_URL 已設定但 VAUTH_SERVICE_KEY 未設定時回 400，不呼叫 runDailyNotify', async () => {
+    const prevUrl = process.env.NOTIFY_URL
+    const prevKey = process.env.VAUTH_SERVICE_KEY
+    process.env.NOTIFY_URL = 'http://127.0.0.1:4100'
+    process.env.VAUTH_SERVICE_KEY = ''
+    try {
+      const state = makeDefaultState()
+      currentPrisma = makeFakePrisma(state)
+      const app = await buildAdminApp()
+
+      const res = await request(app).post('/api/notify/run')
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toContain('VAUTH_SERVICE_KEY')
+      expect(deliverMock).not.toHaveBeenCalled()
+    } finally {
+      if (prevUrl === undefined) delete process.env.NOTIFY_URL
+      else process.env.NOTIFY_URL = prevUrl
+      if (prevKey === undefined) delete process.env.VAUTH_SERVICE_KEY
+      else process.env.VAUTH_SERVICE_KEY = prevKey
     }
   })
 })
@@ -612,6 +648,31 @@ describe('POST /api/notify/test — 改打平台 test-mail', () => {
       fetchSpy.mockRestore()
       if (prevUrl === undefined) delete process.env.NOTIFY_URL
       else process.env.NOTIFY_URL = prevUrl
+    }
+  })
+
+  it('NOTIFY_URL 已設定但 VAUTH_SERVICE_KEY 未設定時回 400，不打網路', async () => {
+    const prevUrl = process.env.NOTIFY_URL
+    const prevKey = process.env.VAUTH_SERVICE_KEY
+    process.env.NOTIFY_URL = 'http://127.0.0.1:4100'
+    process.env.VAUTH_SERVICE_KEY = ''
+    const fetchSpy = vi.spyOn(global, 'fetch')
+    try {
+      const state = makeDefaultState()
+      currentPrisma = makeFakePrisma(state)
+      const app = await buildAdminApp()
+
+      const res = await request(app).post('/api/notify/test').send({ to: 'a@example.com' })
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toContain('VAUTH_SERVICE_KEY')
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      fetchSpy.mockRestore()
+      if (prevUrl === undefined) delete process.env.NOTIFY_URL
+      else process.env.NOTIFY_URL = prevUrl
+      if (prevKey === undefined) delete process.env.VAUTH_SERVICE_KEY
+      else process.env.VAUTH_SERVICE_KEY = prevKey
     }
   })
 

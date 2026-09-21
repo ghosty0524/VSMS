@@ -77,7 +77,7 @@ export function NotificationBell() {
                 }}
               >
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                  <span className="text-[10px] font-bold text-gray-400">{SOURCE_LABEL[row.source]}</span>
+                  <span className="text-[10px] font-bold text-gray-400">{SOURCE_LABEL[row.source] ?? row.source}</span>
                   {row.title}
                 </div>
                 <div className="text-xs text-gray-500 whitespace-pre-line mt-0.5">{row.body}</div>

@@ -50,9 +50,11 @@ function makeStore(overrides: Partial<{
     findCandidates: async () => overrides.candidates ?? [baseSchedule],
     findLogs: async () => overrides.logs ?? [],
     upsertLog: async (e) => { upserts.push(e) },
+    // accountsByEngineer 的值同時當作 id 與 username 用（id 加個字首避免跟
+    // username 撞在一起）——這裡只是測試替身，真正的兩者關係見 notifyStore.ts。
     loadAccountByEngineer: async (value) => {
-      const id = accountsByEngineer[value]
-      return id ? { id } : null
+      const username = accountsByEngineer[value]
+      return username ? { id: 'acct-' + username, username } : null
     },
   }
   return { store, upserts }
@@ -85,7 +87,7 @@ describe('runDailyNotify', () => {
     const result = await runDailyNotify(store, deliverer, NOW)
     expect(sent).toHaveLength(0)
     expect(result).toEqual({
-      checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, excluded: 0, errors: [],
+      checked: 0, due: 0, sent: 0, deduped: 0, failed: 0, skipped: 0, missedWindow: 0, excluded: 0, errors: [],
       alreadyRunning: false,
     })
   })
@@ -142,12 +144,26 @@ describe('runDailyNotify', () => {
     expect(result.failed).toBe(1)
   })
 
-  it('records status dedup when the platform reports a deduplicated delivery', async () => {
+  it('records status dedup when the platform reports a deduplicated delivery, and counts it under deduped rather than sent', async () => {
     const { store, upserts } = makeStore()
     const deliverer: Deliverer = { async deliver() { return { id: 'd-1', deduped: true, dropped: false } } }
     const result = await runDailyNotify(store, deliverer, NOW)
     expect(upserts[0]).toMatchObject({ status: 'dedup', deliveryId: 'd-1', attempts: 1 })
+    expect(result.sent).toBe(0)
+    expect(result.deduped).toBe(1)
+  })
+
+  it('records the platform-reported unresolved usernames as an errorMessage while keeping status accepted', async () => {
+    const { store, upserts } = makeStore()
+    const deliverer: Deliverer = {
+      async deliver() { return { id: 'd-1', deduped: false, dropped: false, mail: { queued: true, unresolved: ['ghost_user'] } } },
+    }
+    const result = await runDailyNotify(store, deliverer, NOW)
+    expect(upserts[0].status).toBe('accepted')
+    expect(upserts[0].errorMessage).toContain('未解析收件人')
+    expect(upserts[0].errorMessage).toContain('ghost_user')
     expect(result.sent).toBe(1)
+    expect(result.failed).toBe(0)
   })
 
   it('records status error and counts it as failed when the client drops the delivery (NOTIFY_URL unset)', async () => {
@@ -159,14 +175,17 @@ describe('runDailyNotify', () => {
     expect(result.failed).toBe(1)
   })
 
-  it('routes to a linked engineer account: recipients carry {userId} and channels include inapp', async () => {
-    const { store, upserts } = makeStore({ accountsByEngineer: { Darius_Chang: 'acct-1' } })
+  it('routes to a linked engineer account: {username} goes into cc (there is already a to-recipient) and channels include inapp', async () => {
+    const { store, upserts } = makeStore({ accountsByEngineer: { Darius_Chang: 'darius.chang' } })
     const { deliverer, sent } = makeDeliverer()
     await runDailyNotify(store, deliverer, NOW)
     expect(sent).toHaveLength(1)
     expect(sent[0].channels).toContain('inapp')
-    expect(sent[0].recipients).toEqual(
-      expect.arrayContaining([{ userId: 'acct-1' }]),
+    // 平台以 username 辨識人，不是本機 id；測試人員的站內通知走 cc，不動
+    // to（原本要寄給的需求人員不變）。
+    expect(sent[0].recipients).toEqual([{ email: 'Amy_Chen@example.com' }])
+    expect(sent[0].cc).toEqual(
+      expect.arrayContaining([{ username: 'darius.chang' }]),
     )
     expect(upserts[0].status).toBe('accepted')
   })

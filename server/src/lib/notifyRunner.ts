@@ -58,8 +58,14 @@ export interface NotifyStore {
   findCandidates(today: string): Promise<CandidateSchedule[]>
   findLogs(scheduleIds: string[]): Promise<NotificationLogRow[]>
   upsertLog(entry: LogUpsert): Promise<void>
-  /** testEngineer 對應到的 VSMS 帳號（users.linkedEngineer === value），找不到回 null。 */
-  loadAccountByEngineer(value: string): Promise<{ id: string } | null>
+  /**
+   * testEngineer 對應到的 VSMS 帳號（users.linkedEngineer === value），找不到回 null。
+   * 同時回傳 username：跨系統的身分鍵是 username，不是本機的 id ——
+   * pre-SSO 帳號的本機 id 與 vauth 那邊的 id 對不上，寄給平台的收件人只能
+   * 用 username（見 server/src/middleware/ssoAdopt.ts 與
+   * server/src/lib/orgSync/derive.ts 的說明）。
+   */
+  loadAccountByEngineer(value: string): Promise<{ id: string; username: string } | null>
 }
 
 /**
@@ -76,6 +82,12 @@ export interface RunResult {
   /** 候選排程中，寄信日落在「今天以內、且未早於補寄視窗起點」範圍內的筆數。 */
   due: number
   sent: number
+  /**
+   * 平台判定為重複投遞（deliver() 回應 deduped:true）的筆數，與 sent 分開
+   * 計數 —— 「寄出」跟「平台認得這是同一封、沒有真的再寄一次」是兩件事，
+   * 混在 sent 裡會讓管理者以為每天都多寄了那幾封。
+   */
+  deduped: number
   failed: number
   skipped: number
   /** 寄信日早於補寄視窗起點而被跳過的筆數 —— 見迴圈內對應註解。 */
@@ -99,7 +111,7 @@ export interface RunResult {
 // （{ ...SHARED }）只是淺拷貝，errors 這個陣列參照會被所有呼叫共用，一次
 // push 就會污染下一次呼叫的結果，跨測試甚至跨並行執行都看得到彼此的錯誤。
 function emptyResult(alreadyRunning: boolean): RunResult {
-  return { checked: 0, due: 0, sent: 0, failed: 0, skipped: 0, missedWindow: 0, excluded: 0, errors: [], alreadyRunning }
+  return { checked: 0, due: 0, sent: 0, deduped: 0, failed: 0, skipped: 0, missedWindow: 0, excluded: 0, errors: [], alreadyRunning }
 }
 
 // 模組級鎖：VSMS 是單一 pm2 process，一個 in-flight Promise 就足夠擋住同
@@ -267,11 +279,25 @@ async function runOnce(
       const noticeHtml = notice ? `<p>${escapeHtml(notice.trim())}</p>` : ''
 
       // 測試人員若有對應到 VSMS 帳號，除了 email 副本外再加一份站內通知
-      // （inapp），讓他不必開信箱也能在系統裡看到。
+      // （inapp），讓他不必開信箱也能在系統裡看到。平台認人靠 username（見
+      // loadAccountByEngineer 上方註解），不能送本機 id。
       const engineerAccount = schedule.testEngineer ? await store.loadAccountByEngineer(schedule.testEngineer) : null
       const recipients: Recipient[] = to.map(email => ({ email }))
       const ccList: Recipient[] = cc.map(email => ({ email }))
       const channels: Array<'inapp' | 'email'> = engineerAccount ? ['email', 'inapp'] : ['email']
+      const engineerRecipient: Recipient | null = engineerAccount ? { username: engineerAccount.username } : null
+      // 測試人員的站內通知走副本（cc），不是主收件人（to）——他不是這封信
+      // 原本要寄給的人，只是額外收到通知。只有在完全沒有其他收件人時才退
+      // 而求其次放進 to（維持至少有一位收件人的不變式）。目前流程裡 to 一
+      // 定非空（上面 to.length === 0 已經先擋下），所以現況只會走 cc 這條
+      // 分支——保留 to 分支是讓這段邏輯本身正確，不依賴呼叫端剛好維持的
+      // 不變式。
+      const finalRecipients = recipients.length > 0
+        ? recipients
+        : engineerRecipient ? [engineerRecipient] : recipients
+      const finalCc = recipients.length > 0 && engineerRecipient
+        ? [...ccList, engineerRecipient]
+        : ccList
       // key 帶 (scheduleId, sendDate)：與本地的唯一鍵同一組維度，讓平台端
       // 也能認出「這是同一封信」——本地 upsertLog 失敗、下次重跑重新呼叫
       // deliver() 時，平台會回 deduped 而不是真的寄出第二封。
@@ -279,19 +305,31 @@ async function runOnce(
       try {
         const r = await deliverer.deliver({
           key, channels,
-          recipients: engineerAccount ? [...recipients, { userId: engineerAccount.id }] : recipients,
-          cc: ccList,
+          recipients: finalRecipients,
+          cc: finalCc,
           severity: 'info', title: body.subject, body: body.text + notice, linkUrl: `/vsms/`,
           mail: { subject: body.subject, text: body.text + notice, html: body.html + noticeHtml },
         })
+        const status = r.dropped ? 'error' : r.deduped ? 'dedup' : 'accepted'
+        const unresolved = r.mail?.unresolved ?? []
+        // 平台解析不出某個 username 時不算整批失敗——email 副本大概率還是
+        // 寄出去了，只是那一位測試人員的站內通知沒送達。狀態維持 accepted，
+        // 把問題浮現在 errorMessage 讓管理者查得到，而不是靜默吞掉。
+        const errorMessage = r.dropped
+          ? 'NOTIFY_URL 或 VAUTH_SERVICE_KEY 未設定'
+          : status === 'accepted' && unresolved.length > 0
+            ? `未解析收件人：${unresolved.join(', ')}`
+            : null
         // attempts 欄位保留是為了相容舊列的資料形狀，寄送本身的重試與失敗
         // 升級現在都在平台那一側，這裡固定寫 1。
         await store.upsertLog({
-          scheduleId: schedule.id, sendDate, status: r.dropped ? 'error' : r.deduped ? 'dedup' : 'accepted',
-          recipients: [...to, ...cc].join(', '), errorMessage: r.dropped ? 'NOTIFY_URL 未設定' : null,
+          scheduleId: schedule.id, sendDate, status,
+          recipients: [...to, ...cc].join(', '), errorMessage,
           attempts: 1, sentAt: null, messageId: null, smtpResponse: null, deliveryId: r.id,
         })
-        if (r.dropped) result.failed++; else result.sent++
+        if (r.dropped) result.failed++
+        else if (r.deduped) result.deduped++
+        else result.sent++
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         await store.upsertLog({ scheduleId: schedule.id, sendDate, status: 'error', recipients: [...to, ...cc].join(', '), errorMessage: message, attempts: 1, sentAt: null, messageId: null, smtpResponse: null, deliveryId: null })

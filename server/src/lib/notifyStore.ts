@@ -94,10 +94,10 @@ export const prismaNotifyStore: NotifyStore = {
     })
   },
 
-  async loadAccountByEngineer(value: string): Promise<{ id: string } | null> {
+  async loadAccountByEngineer(value: string): Promise<{ id: string; username: string } | null> {
     return prisma.user.findFirst({
       where: { linkedEngineer: value, isActive: true },
-      select: { id: true },
+      select: { id: true, username: true },
     })
   },
 }

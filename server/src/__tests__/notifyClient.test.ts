@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { deliver, fetchDeliveryStatuses } from '../lib/notifyClient.js'
+import { deliver, fetchDeliveryStatuses, notifyConfigured } from '../lib/notifyClient.js'
 
 beforeEach(() => {
   process.env.NOTIFY_URL = 'http://127.0.0.1:4100'
@@ -31,6 +31,26 @@ describe('notifyClient.deliver', () => {
   it('非 2xx 丟例外並帶錯誤碼', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ error: { code: 'BAD_KEY', message: 'x' } }), { status: 400 }))
     await expect(deliver({ key: '', channels: ['inapp'], recipients: [{ userId: 'u1' }], severity: 'info', title: 't', body: 'b' }, { fetchFn: fetchFn as unknown as typeof fetch })).rejects.toThrow(/BAD_KEY/)
+  })
+  it('收件人可以是 { username }（平台以 username 解析跨系統身分）', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ id: 'd1', deduped: false }), { status: 201 }))
+    await deliver({ key: 'k', channels: ['inapp'], recipients: [{ username: 'darius.chang' }], severity: 'info', title: 't', body: 'b' }, { fetchFn: fetchFn as unknown as typeof fetch })
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit]
+    expect(JSON.parse(init.body as string).recipients).toEqual([{ username: 'darius.chang' }])
+  })
+})
+
+describe('notifyConfigured', () => {
+  it('NOTIFY_URL 與 VAUTH_SERVICE_KEY 都設定時回 true', () => {
+    expect(notifyConfigured()).toBe(true)
+  })
+  it('缺 NOTIFY_URL 時回 false', () => {
+    process.env.NOTIFY_URL = ''
+    expect(notifyConfigured()).toBe(false)
+  })
+  it('缺 VAUTH_SERVICE_KEY 時回 false', () => {
+    process.env.VAUTH_SERVICE_KEY = '  '
+    expect(notifyConfigured()).toBe(false)
   })
 })
 
@@ -67,5 +87,32 @@ describe('notifyClient.fetchDeliveryStatuses', () => {
     const fetchFn = vi.fn(async () => { throw new Error('ECONNREFUSED') })
     const r = await fetchDeliveryStatuses(['d1'], { fetchFn: fetchFn as unknown as typeof fetch })
     expect(r.size).toBe(0)
+  })
+
+  it('450 個 id 分成 3 批查詢，每批不超過 200 個，避免查詢字串過長觸發 431', async () => {
+    const ids = Array.from({ length: 450 }, (_, i) => `d${i}`)
+    const fetchFn = vi.fn(async (_url: string) => new Response(JSON.stringify({ deliveries: [] }), { status: 200 }))
+    await fetchDeliveryStatuses(ids, { fetchFn: fetchFn as unknown as typeof fetch })
+    expect(fetchFn).toHaveBeenCalledTimes(3)
+    const sizes = fetchFn.mock.calls.map(([url]) => {
+      const q = new URL(url).searchParams.get('ids') ?? ''
+      return q.split(',').filter(Boolean).length
+    })
+    expect(sizes).toEqual([200, 200, 50])
+  })
+
+  it('逾時 10 秒後中止該批請求，回空 Map 而不是永遠掛住', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchFn = vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+      }))
+      const promise = fetchDeliveryStatuses(['d1'], { fetchFn: fetchFn as unknown as typeof fetch })
+      await vi.advanceTimersByTimeAsync(10_000)
+      const r = await promise
+      expect(r.size).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

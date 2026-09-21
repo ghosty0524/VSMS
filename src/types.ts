@@ -255,6 +255,8 @@ export interface NotifyRunResult {
   checked: number
   due: number
   sent: number
+  /** 平台判定為重複投遞的筆數，與 sent 分開計數。 */
+  deduped: number
   failed: number
   skipped: number
   missedWindow: number

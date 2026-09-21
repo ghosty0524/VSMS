@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import cron from 'node-cron'
 import { runDailyNotify } from './lib/notifyRunner.js'
 import { prismaNotifyStore } from './lib/notifyStore.js'
-import { platformDeliverer } from './lib/notifyClient.js'
+import { platformDeliverer, notifyConfigured } from './lib/notifyClient.js'
 import { guestReadOnly } from './middleware/guestReadOnly.js'
 import { ssoAdopt } from './middleware/ssoAdopt.js'
 import { ssoRecheck } from './middleware/ssoRecheck.js'
@@ -152,9 +152,9 @@ app.use(errorHandler)
 // 必須在 listen 之後才啟動：本檔把 app export 給測試使用，掛在模組頂層會讓
 // 每次跑測試都起一個排程器。
 function startNotifyCron(): void {
-  if (!process.env.NOTIFY_URL?.trim()) {
-    console.warn('[notify] NOTIFY_URL 未設定 — the daily notification job will not run.')
-    console.warn('[notify] Set NOTIFY_URL in .env to enable it.')
+  if (!notifyConfigured()) {
+    console.warn('[notify] NOTIFY_URL 或 VAUTH_SERVICE_KEY 未設定 — the daily notification job will not run.')
+    console.warn('[notify] Set both NOTIFY_URL and VAUTH_SERVICE_KEY in .env to enable it.')
     return
   }
   cron.schedule('0 8 * * *', () => {

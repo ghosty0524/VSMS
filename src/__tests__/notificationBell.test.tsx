@@ -148,6 +148,18 @@ describe('NotificationBell', () => {
     expect(screen.queryByTestId('notification-badge')).not.toBeInTheDocument()
   })
 
+  it('來源不在 SOURCE_LABEL 裡時退回顯示原始值，不是 undefined', async () => {
+    listMock.mockResolvedValue({
+      items: [item({ source: 'future_system' as unknown as 'vsms' })],
+      unreadCount: 1,
+    })
+    render(<NotificationBell />)
+    await screen.findByTestId('notification-badge')
+    await userEvent.click(screen.getByRole('button', { name: '通知' }))
+
+    expect(screen.getByText('future_system')).toBeInTheDocument()
+  })
+
   it('沒有通知時顯示空狀態', async () => {
     listMock.mockResolvedValue({ items: [], unreadCount: 0 })
     render(<NotificationBell />)
