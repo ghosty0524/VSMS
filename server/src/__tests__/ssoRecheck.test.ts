@@ -21,6 +21,7 @@ function app(sessionInit: Record<string, unknown>, headers: Record<string, strin
     next()
   })
   a.use(ssoRecheck)
+  a.get('/api/config', (_req, res) => { res.json({ authProvider: 'vauth' }) })
   a.get('/probe', (req, res) => {
     const session = (req as unknown as { session: FakeSession }).session
     res.json({ sessionId: session.sessionId ?? null, ssoCheckedAt: session.ssoCheckedAt ?? null })
@@ -71,6 +72,14 @@ describe('VSMS ssoRecheck', () => {
     const res = await request(app({ sessionId: 's1', role: 'user' }, { cookie: 'vportal_sso=abc' })).get('/probe')
     expect(res.status).toBe(401)
     expect(res.body).toMatchObject({ ok: false, code: 'SSO_REVOKED' })
+    expect(endLocalSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('revoked 但打的是公開探測端點 /api/config → 結束 session 後放行（前端才讀得到 authProvider 並導回入口頁）', async () => {
+    checkSsoSession.mockResolvedValue('revoked')
+    const res = await request(app({ sessionId: 's1', role: 'user' }, { cookie: 'vportal_sso=abc' })).get('/api/config')
+    expect(res.status).toBe(200)
+    expect(res.body.authProvider).toBe('vauth')
     expect(endLocalSession).toHaveBeenCalledTimes(1)
   })
 

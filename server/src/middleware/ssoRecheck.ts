@@ -37,8 +37,17 @@ export async function ssoRecheck(req: Request, res: Response, next: NextFunction
   }
 
   // status === 'revoked'
+  // 公開的探測端點（前端載入時先打 /api/config 才知道自己在 vauth 模式）：只結束
+  // 本地 session、讓請求以未登入身分繼續。若在這裡就回 401，前端會把 authProvider
+  // 退回 local、顯示本地登入頁而不是導回入口頁。
+  const path = (req.originalUrl ?? req.url).split('?')[0]
+  const passThrough = PUBLIC_PROBE_PATHS.has(path)
   endLocalSession(req)
   req.session.destroy(() => {
+    if (passThrough) { next(); return }
     res.status(401).json({ ok: false, code: 'SSO_REVOKED', message: '單一登入已失效，請重新登入' })
   })
 }
+
+/** 免登入的探測端點：撤銷時只清 session 放行，不回 401。 */
+const PUBLIC_PROBE_PATHS = new Set(['/api/config'])
