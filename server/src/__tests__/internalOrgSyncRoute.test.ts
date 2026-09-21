@@ -8,7 +8,8 @@ import internalRouter from '../routes/internal.js'
 import { fixtureSnapshot } from '../lib/orgSync/fixture.js'
 
 const KEY = 'test-integration-key'
-process.env.INTEGRATION_API_KEY = KEY
+process.env.ORG_SYNC_API_KEY = KEY
+process.env.INTEGRATION_API_KEY = 'other-integration-key'
 function app() { const a = express(); a.use(express.json()); a.use('/api/internal', internalRouter); return a }
 // key 用 `string | null`（不是 `| undefined`）：JS 的預設參數在收到明確傳入的
 // `undefined` 時仍會套用預設值，所以「不帶 key」這個情境必須用 null 當哨兵，
@@ -25,6 +26,11 @@ beforeEach(() => {
 })
 
 describe('POST /api/internal/org-sync', () => {
+  it('拿 INTEGRATION_API_KEY 來打 → 401：組織同步只認 ORG_SYNC_API_KEY', async () => {
+    const res = await post(fixtureSnapshot(), '', 'other-integration-key')
+    expect(res.status).toBe(401)
+    expect(syncSpy).not.toHaveBeenCalled()
+  })
   it('AUTH_PROVIDER=local → 404，端點不存在（不會碰到組織同步）', async () => {
     process.env.AUTH_PROVIDER = 'local'
     const res = await post(fixtureSnapshot())

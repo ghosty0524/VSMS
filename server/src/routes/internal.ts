@@ -1,7 +1,7 @@
 // server/src/routes/internal.ts
-// 機器對機器的內部端點（vauth 推送組織快照）。掛在 ssoAdopt/guestReadOnly 之前，requireApiKey 逐路由掛。
+// 機器對機器的內部端點（vauth 推送組織快照）。掛在 ssoAdopt/guestReadOnly 之前；金鑰是專用的 ORG_SYNC_API_KEY（requireOrgSyncKey），不與 integration 共用。
 import { Router, type Request, type Response, type NextFunction } from 'express'
-import { requireApiKey } from '../middleware/requireApiKey.js'
+import { requireOrgSyncKey } from '../middleware/requireOrgSyncKey.js'
 import { validateSnapshot, type OrgSnapshot } from '../lib/orgSync/types.js'
 import { syncVsmsOrg } from '../lib/orgSync/apply.js'
 
@@ -18,7 +18,7 @@ function requireVauthMode(_req: Request, res: Response, next: NextFunction) {
   next()
 }
 
-router.post('/org-sync', requireVauthMode, requireApiKey, async (req, res) => {
+router.post('/org-sync', requireVauthMode, requireOrgSyncKey, async (req, res) => {
   const problem = validateSnapshot(req.body)
   if (problem) { res.status(400).json({ error: problem }); return }
   const dryRun = String(req.query.dryRun ?? '') === '1'
