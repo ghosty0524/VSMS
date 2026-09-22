@@ -28,7 +28,9 @@ export function summaryFor(
   settings: RestDaySettings,
   schedules: ScheduleForSummary[],
 ): SummaryItem[] {
-  const live = schedules.filter(s => !s.isCompleted && !s.isCancelled)
+  // 日期是零補齊的 YYYY/MM/DD 字串，直接比大小；空字串會被 `< today` 判成逾期、
+  // 又被本週篩掉（'' >= from 為 false），所以缺日期的列一律不計（舊資料可能有）。
+  const live = schedules.filter(s => !s.isCompleted && !s.isCancelled && !!s.startDate && !!s.endDate)
   const { from, to } = weekRange(today)
   const soon = addWorkdays(today, 3, settings)
   return [
