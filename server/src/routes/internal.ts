@@ -39,9 +39,10 @@ router.post('/org-sync', requireVauthMode, requireOrgSyncKey, async (req, res) =
 // 且金鑰仍由 requireOrgSyncKey 擋著）。帳號不存在或沒綁工程師 → 空陣列而非 404，
 // 因為「沒綁工程師的帳號本來就沒有排程」是正常狀態，不是查詢錯誤。
 router.get('/summary', requireOrgSyncKey, async (req, res) => {
-  const username = String(req.query.username ?? '')
+  const username = String(req.query.username ?? '').trim()
   const user = username ? await prisma.user.findUnique({ where: { username } }) : null
-  if (!user || !user.linkedEngineer) {
+  // 停用的帳號跟不存在一樣：不回真實排程數字（與 VTMS 端一致）。
+  if (!user || !user.isActive || !user.linkedEngineer) {
     res.json({ items: [] })
     return
   }

@@ -6,14 +6,14 @@ import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
-interface UserRow { username: string; linkedEngineer: string }
+interface UserRow { username: string; linkedEngineer: string; isActive?: boolean }
 interface ScheduleRow { testEngineer: string; startDate: string; endDate: string; isCompleted: boolean; isCancelled: boolean }
 
 function makePrisma(users: UserRow[], schedules: ScheduleRow[]) {
   return {
     user: {
       findUnique: async ({ where }: { where: { username: string } }) =>
-        users.find(u => u.username === where.username) ?? null,
+        (() => { const u = users.find(u => u.username === where.username); return u ? { isActive: true, ...u } : null })(),
     },
     schedule: {
       findMany: async ({ where }: { where: { testEngineer: string } }) =>
@@ -78,6 +78,17 @@ describe('GET /api/internal/summary', () => {
     currentPrisma = makePrisma([{ username: 'admin1', linkedEngineer: '' }], [])
     const res = await request(await buildApp())
       .get('/api/internal/summary?username=admin1')
+      .set('X-Api-Key', 'test-key')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ items: [] })
+  })
+
+  it('停用的帳號 → 200 空陣列（不回真實排程數）', async () => {
+    currentPrisma = makePrisma([{ username: 'gone', linkedEngineer: 'Rock_Cai', isActive: false }], [
+      { testEngineer: 'Rock_Cai', startDate: '2026/09/01', endDate: '2026/09/02', isCompleted: false, isCancelled: false },
+    ])
+    const res = await request(await buildApp())
+      .get('/api/internal/summary?username=gone')
       .set('X-Api-Key', 'test-key')
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ items: [] })
