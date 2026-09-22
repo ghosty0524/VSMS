@@ -43,8 +43,16 @@ export async function ssoRecheck(req: Request, res: Response, next: NextFunction
   const path = (req.originalUrl ?? req.url).split('?')[0]
   const passThrough = PUBLIC_PROBE_PATHS.has(path)
   endLocalSession(req)
+  if (passThrough) {
+    // 放行時不能用 destroy()：express-session 的 destroy 會把 req.session 整個拿掉，
+    // 接在後面的 guestReadOnly → applyHeaderAuth 讀 req.session.sessionId 就會
+    // 丟 TypeError，探測端點變成 500（2026-09-21 撤銷 SSO 測試時實際發生）。
+    // regenerate() 一樣會刪掉 store 裡的舊 session，但接著換上一個全新的空 session，
+    // 讓請求以匿名身分繼續走完。
+    req.session.regenerate(() => next())
+    return
+  }
   req.session.destroy(() => {
-    if (passThrough) { next(); return }
     res.status(401).json({ ok: false, code: 'SSO_REVOKED', message: '單一登入已失效，請重新登入' })
   })
 }

@@ -3,6 +3,9 @@ import { tokenStore } from '../lib/sessionTokens.js'
 import type { Role } from '../types.js'
 
 export function applyHeaderAuth(req: Request): boolean {
+  // express-session 的 destroy() 會把 req.session 整個拿掉；上游中介層若在同一個
+  // 請求裡 destroy 過，這裡不能假設 session 一定存在——當成未登入即可。
+  if (!req.session) return false
   if (req.session.sessionId) return true
   const token = req.headers['x-vsms-session'] as string | undefined
   if (!token) return false

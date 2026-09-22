@@ -9,19 +9,37 @@ const endLocalSession = vi.fn()
 vi.mock('../routes/auth.js', () => ({ endLocalSession: (...a: unknown[]) => endLocalSession(...a) }))
 
 const { ssoRecheck, SSO_RECHECK_MS } = await import('../middleware/ssoRecheck.js')
+const { guestReadOnly } = await import('../middleware/guestReadOnly.js')
 
-type FakeSession = Record<string, unknown> & { destroy: (cb: (err?: unknown) => void) => void }
+type FakeSession = Record<string, unknown> & {
+  destroy: (cb: (err?: unknown) => void) => void
+  regenerate: (cb: (err?: unknown) => void) => void
+}
 
+// 模擬 express-session 的真實語意：destroy() 之後 req.session 會變成 undefined，
+// regenerate() 則換成一個全新的空 session。假 session 若只是 cb() 了事，
+// 「destroy 之後還有中介層去讀 req.session.sessionId」這種 500 就測不出來
+// （2026-09-21 撤銷 SSO 測試時 GET /api/config 實際發生過）。
 function app(sessionInit: Record<string, unknown>, headers: Record<string, string> = {}) {
   const a = express()
   a.use((req, _res, next) => {
-    const session: FakeSession = { ...sessionInit, destroy: (cb) => cb() }
-    ;(req as unknown as { session: FakeSession }).session = session
+    const holder = req as unknown as { session: FakeSession | undefined }
+    const make = (init: Record<string, unknown>): FakeSession => ({
+      ...init,
+      destroy: (cb) => { holder.session = undefined; cb() },
+      regenerate: (cb) => { holder.session = make({}); cb() },
+    })
+    holder.session = make(sessionInit)
     for (const [k, v] of Object.entries(headers)) req.headers[k.toLowerCase()] = v
     next()
   })
   a.use(ssoRecheck)
-  a.get('/api/config', (_req, res) => { res.json({ authProvider: 'vauth' }) })
+  // 與 index.ts 的掛載順序一致：ssoRecheck 之後緊接 guestReadOnly，後者會讀 req.session。
+  a.use(guestReadOnly)
+  a.get('/api/config', (req, res) => {
+    const session = (req as unknown as { session: FakeSession | undefined }).session
+    res.json({ authProvider: 'vauth', sessionId: session?.sessionId ?? null })
+  })
   a.get('/probe', (req, res) => {
     const session = (req as unknown as { session: FakeSession }).session
     res.json({ sessionId: session.sessionId ?? null, ssoCheckedAt: session.ssoCheckedAt ?? null })
@@ -80,6 +98,8 @@ describe('VSMS ssoRecheck', () => {
     const res = await request(app({ sessionId: 's1', role: 'user' }, { cookie: 'vportal_sso=abc' })).get('/api/config')
     expect(res.status).toBe(200)
     expect(res.body.authProvider).toBe('vauth')
+    // 放行時必須以「匿名」身分繼續：req.session 還在、但沒有 sessionId。
+    expect(res.body.sessionId).toBeNull()
     expect(endLocalSession).toHaveBeenCalledTimes(1)
   })
 

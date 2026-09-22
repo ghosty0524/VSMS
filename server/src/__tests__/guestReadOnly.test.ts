@@ -79,6 +79,15 @@ describe('guestReadOnly middleware', () => {
     expect(next).toHaveBeenCalledOnce()
   })
 
+  it('req.session 被上游 destroy 掉（undefined）時不丟 TypeError，直接放行', () => {
+    const next = vi.fn() as NextFunction
+    const res = makeRes()
+    const req = { method: 'GET', path: '/config', headers: {}, session: undefined } as unknown as Request
+    expect(() => guestReadOnly(req, res, next)).not.toThrow()
+    expect(next).toHaveBeenCalledOnce()
+    expect(res.statusCode).toBe(0)
+  })
+
   it('可解析 X-Vsms-Session header token 的 guest 並擋下寫入', () => {
     tokenStore.set('guest-token-1', { username: 'Guest', role: 'guest' })
     const next = vi.fn() as NextFunction
