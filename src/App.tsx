@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from './store/authStore'
 import { useUIStore } from './store/uiStore'
-import { useNotificationStore } from './store/notificationStore'
 import { LoginPage } from './components/layout/LoginPage'
 import { ProtectedLayout } from './components/ProtectedLayout'
 import { SessionExpiryWarning } from './components/shared/SessionExpiryWarning'
@@ -24,8 +23,6 @@ export function App() {
     filterCollapsed, setFilterCollapsed,
   } = useUIStore()
 
-  const loadNotifications = useNotificationStore(s => s.load)
-
   useEffect(() => { checkAuth() }, [checkAuth])
 
   // 入口頁的訪客連結（?guest=1）：意圖在掛載時記一次就好，網址參數隨即拿掉。
@@ -43,19 +40,6 @@ export function App() {
     window.history.replaceState(null, '', window.location.pathname)
     void guestLogin().finally(() => setGuestPending(false))
   }, [guestPending, isChecking, isLoggedIn, authProvider, guestLogin])
-
-  // vauth 模式下每 60 秒輪詢一次通知（分頁不可見時不打）；guest 是虛擬帳號、
-  // deny-by-default，不該讓它連 /notify/inbox 都碰得到。
-  useEffect(() => {
-    if (!isLoggedIn || authProvider !== 'vauth' || role === 'guest') return
-    let timer: number | undefined
-    const tick = () => { if (document.visibilityState === 'visible') void loadNotifications() }
-    tick()
-    timer = window.setInterval(tick, 60_000)
-    const onVis = () => { if (document.visibilityState === 'visible') tick() }
-    document.addEventListener('visibilitychange', onVis)
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVis) }
-  }, [isLoggedIn, authProvider, role, loadNotifications])
 
   useEffect(() => {
     if (view === 'teams') setView('main')
