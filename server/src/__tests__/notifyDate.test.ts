@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeSendDate, isRestDay, addDays, daysBetween } from '../lib/notifyDate.js'
+import { computeSendDate, isRestDay, addDays, addWorkdays, daysBetween } from '../lib/notifyDate.js'
 
 const weekendsOnly = { weekends: true, specificDates: [] as string[] }
 const noRest = { weekends: false, specificDates: [] as string[] }
@@ -24,6 +24,27 @@ describe('daysBetween', () => {
   it('returns 0 for the same day and a negative count going backwards', () => {
     expect(daysBetween('2026/08/21', '2026/08/21')).toBe(0)
     expect(daysBetween('2026/08/24', '2026/08/21')).toBe(-3)
+  })
+})
+
+describe('addWorkdays', () => {
+  it('skips the weekend when counting forward three working days', () => {
+    // 2026/09/25 是週五 → 09/26(六)、09/27(日) 不計，09/28(一)=1、09/29(二)=2、09/30(三)=3
+    expect(addWorkdays('2026/09/25', 3, weekendsOnly)).toBe('2026/09/30')
+  })
+
+  it('skips listed specific dates as well as weekends', () => {
+    // 09/28(一) 被列為特休 → 不計；跳到 09/29(二)=1、09/30(三)=2、10/01(四)=3
+    const settings = { weekends: true, specificDates: ['2026/09/28'] }
+    expect(addWorkdays('2026/09/25', 3, settings)).toBe('2026/10/01')
+  })
+
+  it('counts every calendar day when nothing is a rest day', () => {
+    expect(addWorkdays('2026/09/25', 3, noRest)).toBe('2026/09/28')
+  })
+
+  it('returns the same date when n is 0', () => {
+    expect(addWorkdays('2026/09/25', 0, weekendsOnly)).toBe('2026/09/25')
   })
 })
 

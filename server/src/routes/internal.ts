@@ -4,6 +4,10 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { requireOrgSyncKey } from '../middleware/requireOrgSyncKey.js'
 import { validateSnapshot, type OrgSnapshot } from '../lib/orgSync/types.js'
 import { syncVsmsOrg } from '../lib/orgSync/apply.js'
+import { prisma } from '../lib/db.js'
+import { prismaNotifyStore } from '../lib/notifyStore.js'
+import { todayTaipei } from '../lib/today.js'
+import { summaryFor } from '../lib/summary.js'
 
 const router = Router()
 
@@ -28,6 +32,27 @@ router.post('/org-sync', requireVauthMode, requireOrgSyncKey, async (req, res) =
     console.error('[orgSync] sync failed:', err)
     res.status(500).json({ error: 'org sync failed' })
   }
+})
+
+// GET /api/internal/summary?username=<name> — vauth 入口頁彙整卡用的每人排程摘要。
+// 刻意不套 requireVauthMode：本地模式下入口頁一樣可能嵌卡片，端點本身無害（只讀，
+// 且金鑰仍由 requireOrgSyncKey 擋著）。帳號不存在或沒綁工程師 → 空陣列而非 404，
+// 因為「沒綁工程師的帳號本來就沒有排程」是正常狀態，不是查詢錯誤。
+router.get('/summary', requireOrgSyncKey, async (req, res) => {
+  const username = String(req.query.username ?? '')
+  const user = username ? await prisma.user.findUnique({ where: { username } }) : null
+  if (!user || !user.linkedEngineer) {
+    res.json({ items: [] })
+    return
+  }
+  const [settings, schedules] = await Promise.all([
+    prismaNotifyStore.loadRestDays(),
+    prisma.schedule.findMany({
+      where: { testEngineer: user.linkedEngineer },
+      select: { startDate: true, endDate: true, isCompleted: true, isCancelled: true },
+    }),
+  ])
+  res.json({ items: summaryFor(todayTaipei(), settings, schedules) })
 })
 
 export default router

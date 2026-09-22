@@ -35,6 +35,20 @@ export function daysBetween(fromYmd: string, toYmd: string): number {
   return Math.round((toUtc(toYmd).getTime() - toUtc(fromYmd).getTime()) / 86_400_000)
 }
 
+/**
+ * 從 fromYmd 往後數 n 個工作天（用於「三個工作天內開始」這類期限計算）。
+ * 與 computeSendDate 方向相反，但邏輯一致：休息日不計數，只是往後而非往前。
+ */
+export function addWorkdays(fromYmd: string, n: number, settings: RestDaySettings): string {
+  let cur = fromYmd
+  let left = n
+  while (left > 0) {
+    cur = addDays(cur, 1)
+    if (!isRestDay(cur, settings)) left--
+  }
+  return cur
+}
+
 export function isRestDay(ymd: string, settings: RestDaySettings): boolean {
   if (settings.weekends) {
     const dow = toUtc(ymd).getUTCDay()
