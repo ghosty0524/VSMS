@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from './store/authStore'
 import { useUIStore } from './store/uiStore'
 import { useNotificationStore } from './store/notificationStore'
@@ -28,6 +28,22 @@ export function App() {
 
   useEffect(() => { checkAuth() }, [checkAuth])
 
+  // 入口頁的訪客連結（?guest=1）：意圖在掛載時記一次就好，網址參數隨即拿掉。
+  // 之前把「拿掉參數 → 發訪客登入」寫在 render 裡，登入還沒回來前只要再 render 一次
+  // （StrictMode、第二次 checkAuth 落地）就看不到參數而導回入口頁——實機「訪客要按
+  // 好幾次才進得去」就是這個時序。改成 state + effect：pending 期間不導走、只發一次。
+  const [guestPending, setGuestPending] = useState(
+    () => new URLSearchParams(window.location.search).get('guest') === '1',
+  )
+  const guestStarted = useRef(false)
+  useEffect(() => {
+    if (!guestPending || isChecking || isLoggedIn || authProvider !== 'vauth') return
+    if (guestStarted.current) return
+    guestStarted.current = true
+    window.history.replaceState(null, '', window.location.pathname)
+    void guestLogin().finally(() => setGuestPending(false))
+  }, [guestPending, isChecking, isLoggedIn, authProvider, guestLogin])
+
   // vauth 模式下每 60 秒輪詢一次通知（分頁不可見時不打）；guest 是虛擬帳號、
   // deny-by-default，不該讓它連 /notify/inbox 都碰得到。
   useEffect(() => {
@@ -55,13 +71,10 @@ export function App() {
 
   if (!isLoggedIn) {
     if (authProvider === 'vauth') {
-      // 單一登入模式：入口頁的「以訪客身分瀏覽 VSMS」帶 ?guest=1 進來，直接以訪客登入；
+      // 單一登入模式：入口頁的「以訪客身分瀏覽 VSMS」帶 ?guest=1 進來，直接以訪客登入
+      // （上面的 effect 負責發請求，這裡只要在登入還沒回來前不要導走）；
       // 其餘一律導回入口頁登入（與 VTMS 一致，2026-09-21 起不再顯示本地的兩選項頁）。
-      if (new URLSearchParams(window.location.search).get('guest') === '1') {
-        window.history.replaceState(null, '', window.location.pathname)
-        void guestLogin()
-        return <LoadingScreen text="以訪客身分進入…" />
-      }
+      if (guestPending) return <LoadingScreen text="以訪客身分進入…" />
       window.location.replace('/')
       return <LoadingScreen text="導向入口頁…" />
     }
