@@ -10,6 +10,12 @@
 // Esc 在清單上處理並 stopPropagation：甘特圖的覆蓋式全螢幕（瀏覽器拒絕真全螢幕時）
 // 在 window 上聽 Esc 來離開，選單的 Esc 不能漏上去。瀏覽器真全螢幕時 Esc 由瀏覽器
 // 自己攔下離開全螢幕，網頁擋不住；離開全螢幕會 resize，選單因此自動關閉。
+//
+// Tab 也不能只是關閉：清單 portal 在 body 最後面，若放任瀏覽器照 DOM 順序走，
+// Tab 會直接離開文件（後面沒別的節點了），Shift+Tab 會跳到 #root 內最後一個可
+// 聚焦元素，都不是「接著觸發按鈕」的位置。做法是在 keydown 當下同步把焦點搬回
+// 按鈕、且不 preventDefault：瀏覽器算下一個 tab stop 是看事件處理完當下的
+// activeElement，所以會從按鈕接著走，Tab 到「更多」後面那個、Shift+Tab 到前面那個。
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -74,7 +80,9 @@ export function MenuButton({ label, items, ariaLabel, className }: Props) {
   const toggle = () => {
     if (open) { setOpen(false); return }
     const r = buttonRef.current?.getBoundingClientRect()
-    if (r) setPos({ top: r.bottom + 4, right: window.innerWidth - r.right })
+    // 工具列可以橫向捲動，按鈕捲到局部露出視窗外時 r.right 可能超過 innerWidth，
+    // 算出來會是負值把清單推到畫面外；下限夾在 4px（跟清單其他邊距一致）。
+    if (r) setPos({ top: r.bottom + 4, right: Math.max(4, window.innerWidth - r.right) })
     setActive(0)
     setOpen(true)
   }
@@ -102,7 +110,9 @@ export function MenuButton({ label, items, ariaLabel, className }: Props) {
         closeAndRefocus()
         break
       case 'Tab':
-        setOpen(false)
+        // 不 preventDefault：關閉選單、把焦點同步移回觸發按鈕，再讓瀏覽器接手
+        // 預設的 Tab 行為（見檔頭註解）。
+        closeAndRefocus()
         break
     }
   }

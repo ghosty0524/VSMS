@@ -3,7 +3,7 @@
 // overflow-x-auto，放在裡面會被裁掉），Esc 不能漏到 window（甘特圖的覆蓋式全螢幕
 // 在 window 上聽 Esc 來離開）。
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MenuButton, type MenuItem } from '../components/shared/MenuButton'
 
@@ -143,5 +143,34 @@ describe('MenuButton', () => {
     await user.click(trigger)
     await user.tab()
     expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  // 選單 portal 在 body 最後面；Tab／Shift+Tab 若照 DOM 順序走會離開文件或跳到
+  // 別的角落，而不是接著觸發按鈕。修法是在 keydown 當下同步把焦點搬回按鈕、且不
+  // preventDefault，讓瀏覽器接著算下一個 tab stop（見元件內註解）。
+  //
+  // 這裡直接對選單項目 fireEvent.keyDown('Tab' / shiftKey)，斷言選單關閉且焦點
+  // 落回按鈕——這是元件的 keydown handler 實際做的事，可以精確驗證。
+  //
+  // 沒有用 user.tab() 斷言「Tab 到後面那顆、Shift+Tab 到前面那顆」：實測過，這個
+  // repo 的 @testing-library/user-event 版本會在 dispatch 前就依「觸發當下」的
+  // DOM tab 順序算好下一個焦點目標，不會採用 handler 內同步 focus() 造成的新
+  // activeElement；因為選單項目是 portal 到 body 最後面，「下一個」在它算來就是
+  // 不存在，實測最終 document.activeElement 會是 <body>（不是按鈕、也不是後面
+  // 那顆按鈕）。也就是說 user.tab() 在 jsdom 裡量不出這個修正的效果，只能證明
+  // handler 本身有沒有把焦點移回按鈕，所以改用 fireEvent 直接驗 handler 行為，
+  // 真瀏覽器下的「接續 Tab／Shift+Tab」則交由本檔沒辦法涵蓋的手動驗證。
+  it('Tab／Shift+Tab：keydown handler 關閉選單並把焦點同步移回觸發按鈕', async () => {
+    const { user, trigger } = setup()
+
+    await user.click(trigger)
+    fireEvent.keyDown(screen.getAllByRole('menuitem')[0], { key: 'Tab' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(trigger).toHaveFocus()
+
+    await user.click(trigger)
+    fireEvent.keyDown(screen.getAllByRole('menuitem')[0], { key: 'Tab', shiftKey: true })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(trigger).toHaveFocus()
   })
 })
