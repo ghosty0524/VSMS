@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  countNarrowingFilters, hiddenStatuses,
+  countNarrowingFilters, hiddenStatuses, statusChipText,
   EMPTY_FILTER, DEFAULT_FILTER,
 } from '../components/schedule/FilterSortBar'
 import { summarizeSelection } from '../components/shared/MultiSelectDropdown'
@@ -85,5 +85,16 @@ describe('summarizeSelection', () => {
 
   it('沒有對照的值直接用原值', () => {
     expect(summarizeSelection(['Eric', 'Kirin'], { Eric: 'Eric（已停用）' })).toBe('Eric（已停用）、Kirin')
+  })
+})
+
+describe('statusChipText', () => {
+  it('預設篩選顯示中文的已隱藏狀態', () => {
+    expect(statusChipText(DEFAULT_FILTER)).toBe('已完成、已取消')
+  })
+  it('隱藏超過兩個時改列出已選的狀態，也是中文', () => {
+    const text = statusChipText({ ...DEFAULT_FILTER, statuses: ['Delayed'] as ScheduleStatus[] })
+    expect(text).toContain('延遲')
+    expect(text).not.toContain('Delayed')
   })
 })

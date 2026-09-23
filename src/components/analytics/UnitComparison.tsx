@@ -35,7 +35,7 @@ const UnitComparison: React.FC<Props> = ({ schedules }) => {
             <th className="text-left py-1.5 font-medium">單位</th>
             <th className="text-right py-1.5 font-medium">排程數</th>
             <th className="text-right py-1.5 font-medium">已到期完成率</th>
-            <th className="text-right py-1.5 font-medium">延遲中</th>
+            <th className="text-right py-1.5 font-medium">延遲</th>
             <th className="text-right py-1.5 font-medium">逾期未完成</th>
           </tr>
         </thead>

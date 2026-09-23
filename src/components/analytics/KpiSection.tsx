@@ -4,9 +4,9 @@ import type { Schedule } from '../../types'
 
 const CHIPS: { key: 'Planned' | 'Testing' | 'Completed' | 'Delayed' | 'Cancelled'; label: string; cls: string }[] = [
   { key: 'Planned',   label: '計畫中', cls: 'bg-gray-100 text-gray-600' },
-  { key: 'Testing',   label: '進行中', cls: 'bg-blue-50 text-blue-700' },
+  { key: 'Testing',   label: '測試中', cls: 'bg-blue-50 text-blue-700' },
   { key: 'Completed', label: '已完成', cls: 'bg-green-50 text-green-700' },
-  { key: 'Delayed',   label: '延遲中', cls: 'bg-red-50 text-red-700' },
+  { key: 'Delayed',   label: '延遲', cls: 'bg-red-50 text-red-700' },
   { key: 'Cancelled', label: '已取消', cls: 'bg-gray-900 text-white' },
 ]
 
@@ -32,7 +32,7 @@ const KpiSection: React.FC<Props> = ({ schedules }) => {
 
       <div className="tnum grid grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-gray-50 rounded-lg p-4">
-          <p className="text-xs text-gray-500">進行中</p>
+          <p className="text-xs text-gray-500">測試中</p>
           <p className="text-2xl font-semibold text-gray-800 mt-1">{counts.Testing}</p>
         </div>
         <div className="bg-red-50 rounded-lg p-4">
@@ -47,7 +47,7 @@ const KpiSection: React.FC<Props> = ({ schedules }) => {
           <p className="text-[11px] text-gray-400 mt-0.5">分母僅含已過完成日者（{dc.due} 筆）</p>
         </div>
         <div className="bg-gray-50 rounded-lg p-4">
-          <p className="text-xs text-gray-500">延遲中</p>
+          <p className="text-xs text-gray-500">延遲</p>
           <p className="text-2xl font-semibold text-gray-800 mt-1">{counts.Delayed}</p>
         </div>
       </div>

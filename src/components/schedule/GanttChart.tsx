@@ -7,7 +7,7 @@ import { useAuthStore } from '../../store/authStore'
 import { api } from '../../lib/api'
 import { STATUS_COLORS, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, resolveEngineerColor, readableTextColor } from '../../lib/colors'
-import { computeStatus, overdueDays } from '../../lib/status'
+import { computeStatus, overdueDays, statusLabel } from '../../lib/status'
 import { schedulesToTsv, schedulesToHtmlTable } from '../../lib/clipboardTable'
 import { copyTableToClipboard } from '../../lib/copyToClipboard'
 import { isRestDay } from '../../lib/restDays'
@@ -213,7 +213,7 @@ export function GanttChart({
   // 複製提示、Header 的 toast 是三套各自 fixed 定位的實作，同時出現會互相遮蔽。
   const handleSaved = useCallback(({ isCompleted }: { isCompleted: boolean }) => {
     if (isCompleted && filterSort.statuses.length > 0 && !filterSort.statuses.includes('Completed')) {
-      toast.info('已標記為 Completed。已完成的排程目前被「狀態」篩選隱藏，勾選 Completed 即可重新顯示。', 8000)
+      toast.info('已標記為已完成。已完成的排程目前被「狀態」篩選隱藏，在篩選裡勾選「已完成」即可重新顯示。', 8000)
     }
   }, [filterSort.statuses])
 
@@ -979,7 +979,7 @@ export function GanttChart({
                           <span
                             className="flex-shrink-0 h-[17px] px-1.5 rounded text-[11px] font-bold flex items-center"
                             style={{ background: statusColor.bg, color: statusColor.text, letterSpacing: '0.02em' }}>
-                            {STATUS_GLYPH[status]} {status}
+                            {STATUS_GLYPH[status]} {statusLabel(status)}
                           </span>
                           <span className="min-w-0 text-[11px] text-slate-600 truncate"
                             title={s.taskDescription}>
@@ -1085,7 +1085,7 @@ export function GanttChart({
                   background: STATUS_COLORS[computeStatus(tooltip.s)].bg,
                   color: STATUS_COLORS[computeStatus(tooltip.s)].text,
                 }}>
-                {STATUS_GLYPH[computeStatus(tooltip.s)]} {computeStatus(tooltip.s)}
+                {STATUS_GLYPH[computeStatus(tooltip.s)]} {statusLabel(computeStatus(tooltip.s))}
               </span>
               {overdueDays(tooltip.s) > 0 && (
                 <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-red-500/20 text-red-300 ring-1 ring-red-500/40">

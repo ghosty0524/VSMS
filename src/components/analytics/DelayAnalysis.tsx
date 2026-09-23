@@ -19,7 +19,7 @@ const DelayAnalysis: React.FC<Props> = ({ schedules }) => {
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1])
   }, [delayed])
 
-  if (delayed.length === 0) return <p className="text-gray-400 text-sm">目前無延遲中的排程</p>
+  if (delayed.length === 0) return <p className="text-gray-400 text-sm">目前沒有延遲的排程</p>
 
   const max = byUnit[0][1]
 

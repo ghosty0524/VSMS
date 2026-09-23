@@ -14,7 +14,7 @@ import {
   buildEngineerFilterOptions, buildEngineerInactiveValueSet,
   buildOptionLabels, buildLabelByValue, buildEngineerLabelByValue,
 } from '../../lib/filterOptions'
-import type { ScheduleStatus } from '../../lib/status'
+import { STATUS_LABELS, statusLabel, type ScheduleStatus } from '../../lib/status'
 import type { Role } from '../../types'
 
 // ── 排序型別 ─────────────────────────────────────────
@@ -132,6 +132,14 @@ export function countNarrowingFilters(v: FilterSortState): number {
 export function hiddenStatuses(v: FilterSortState): ScheduleStatus[] {
   if (v.statuses.length === 0) return []
   return ALL_STATUSES.filter(s => !v.statuses.includes(s))
+}
+
+/** 狀態 chip 的文字：擋掉 ≤2 個時列出被隱藏的，否則列出已選的。一律顯示中文。 */
+export function statusChipText(v: FilterSortState): string {
+  const hidden = hiddenStatuses(v)
+  return hidden.length <= 2
+    ? hidden.map(statusLabel).join('、')
+    : summarizeSelection(v.statuses, STATUS_LABELS)
 }
 
 function toInputVal(s: string): string { return s ? s.replace(/\//g, '-') : '' }
@@ -258,15 +266,15 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
     chips.push({ key: 'dev', label: '設備', text: summarizeSelection(value.devices), onRemove: () => set({ devices: [] }) })
 
   // 狀態用「擋掉了什麼」還是「留下了什麼」來說，取決於哪一句比較短。
-  // 登入預設留三個、擋兩個，說「已隱藏 Completed、Cancelled」比說
-  // 「狀態：Delayed、Testing +1」更接近使用者真正需要知道的事。
+  // 登入預設留三個、擋兩個，說「已隱藏 已完成、已取消」比說
+  // 「狀態：延遲、測試中 +1」更接近使用者真正需要知道的事。
   if (value.statuses.length > 0 && value.statuses.length < ALL_STATUSES.length) {
     const byHidden = hidden.length <= 2
     chips.push({
       key: 'status',
       label: byHidden ? '已隱藏' : '狀態',
       icon: byHidden ? <EyeOff size={11} /> : undefined,
-      text: byHidden ? hidden.join('、') : summarizeSelection(value.statuses),
+      text: statusChipText(value),
       onRemove: () => set({ statuses: [] }),
     })
   }
@@ -384,7 +392,7 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
               selected={value.testUnits} onChange={testUnits => set({ testUnits, testEngineers: [] })} />
             <MultiSelectDropdown label="測試人員" options={engineers} optionLabels={engineerLabels}
               selected={value.testEngineers} onChange={testEngineers => set({ testEngineers })} />
-            <MultiSelectDropdown label="狀態" options={ALL_STATUSES}
+            <MultiSelectDropdown label="狀態" options={ALL_STATUSES} optionLabels={STATUS_LABELS}
               selected={value.statuses} onChange={statuses => set({ statuses: statuses as ScheduleStatus[] })} />
 
             {/* 設備篩選（只在設備視角顯示） */}

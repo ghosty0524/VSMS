@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useOptionsStore } from '../../store/optionsStore'
-import { computeStatus } from '../../lib/status'
+import { computeStatus, STATUS_LABELS } from '../../lib/status'
 import { splitByStatsMode } from '../../lib/analytics'
 import { buildFilterOptions, buildInactiveValueSet, buildOptionLabels, buildLabelByValue } from '../../lib/filterOptions'
 import { CATEGORY_COLORS } from '../../constants'
@@ -158,7 +158,7 @@ const AnalyticsPage: React.FC = () => {
             selected={filter.testUnits} onChange={v => setFilter({ ...filter, testUnits: v })} />
           <MultiSelectDropdown inline label="測試人員" options={engineerOptions} optionLabels={engineerLabels}
             selected={filter.testEngineers} onChange={v => setFilter({ ...filter, testEngineers: v })} />
-          <MultiSelectDropdown inline label="排程狀態" options={STATUS_OPTIONS}
+          <MultiSelectDropdown inline label="排程狀態" options={STATUS_OPTIONS} optionLabels={STATUS_LABELS}
             selected={filter.statuses} onChange={v => setFilter({ ...filter, statuses: v })} />
           {hasFilter && (
             <button type="button" onClick={() => setFilter(emptyFilter)}

@@ -4,7 +4,7 @@
 // 不會改變當下的篩選條件。
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
-import { computeStatus } from '../../lib/status'
+import { computeStatus, statusLabel } from '../../lib/status'
 import { STATUS_COLORS, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, readableTextColor } from '../../lib/colors'
 import type { Schedule, Role, OptionsMap } from '../../types'
@@ -120,7 +120,7 @@ export default function ScheduleListView({
                 <td className="px-2 whitespace-nowrap">
                   <span className="px-1.5 py-0.5 rounded text-[11px] font-bold"
                     style={{ background: statusColor.bg, color: statusColor.text }}>
-                    {STATUS_GLYPH[status]} {status}
+                    {STATUS_GLYPH[status]} {statusLabel(status)}
                   </span>
                 </td>
                 <td className="px-2 whitespace-nowrap text-slate-600">{s.category}</td>
