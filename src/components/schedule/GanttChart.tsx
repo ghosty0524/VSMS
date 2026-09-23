@@ -968,7 +968,7 @@ export function GanttChart({
                             )}
                             {canWrite && (
                               <button type="button" title="刪除" onClick={() => setDeleteTarget(s)}
-                                className="w-[19px] h-[19px] flex items-center justify-center rounded-[5px] bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 transition-colors duration-100">
+                                className="w-[19px] h-[19px] flex items-center justify-center rounded-[5px] text-stone-500 hover:bg-red-50 hover:text-red-600 transition-colors duration-100">
                                 <Trash2 size={11} strokeWidth={2.5} />
                               </button>
                             )}

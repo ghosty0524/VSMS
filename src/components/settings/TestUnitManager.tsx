@@ -94,7 +94,7 @@ export function TestUnitManager() {
                 <>
                   <span className="flex-1 text-sm text-red-600">確定刪除「{u.label}」及其所有人員？</span>
                   <button type="button" onClick={() => handleDelete(u.id, u.label)}
-                    className="text-xs px-2 py-1 bg-red-500 text-white rounded">刪除</button>
+                    className="text-xs px-2 py-1 bg-red-600 text-white hover:bg-red-700 rounded">刪除</button>
                   <button type="button" onClick={() => { clearDeleteError(u.id); setDeletingId(null) }}
                     className="text-xs px-2 py-1 border rounded">取消</button>
                 </>
@@ -160,7 +160,7 @@ export function TestUnitManager() {
                         {u.isActive ? "停用" : "啟用"}
                       </button>
                       <button type="button" onClick={() => { clearDeleteError(u.id); setDeletingId(u.id) }}
-                        className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">刪除</button>
+                        className="text-xs px-2 py-1 border border-stone-300 text-stone-600 rounded hover:border-red-300 hover:bg-red-50 hover:text-red-700">刪除</button>
                     </>
                   )}
                 </>

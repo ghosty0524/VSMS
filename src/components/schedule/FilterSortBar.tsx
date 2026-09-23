@@ -587,8 +587,8 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
             <button type="button" onClick={() => onChange(EMPTY_FILTER)}
               className="inline-flex items-center gap-1 h-7 px-2.5
                          text-xs font-medium rounded-full
-                         border border-red-200 text-red-500 bg-white
-                         hover:bg-red-50 hover:border-red-300
+                         border border-stone-300 text-stone-600 bg-white
+                         hover:border-red-300 hover:bg-red-50 hover:text-red-600
                          transition-colors">
               <X size={11} />
               清除全部

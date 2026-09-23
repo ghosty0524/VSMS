@@ -46,7 +46,7 @@ export function CategoryManager() {
               <>
                 <span className="flex-1 text-sm text-red-600">確定刪除「{c.label}」？</span>
                 <button type="button" onClick={async () => { await deleteCategory(c.id); setDeletingId(null) }}
-                  className="text-xs px-2 py-1 bg-red-500 text-white rounded">刪除</button>
+                  className="text-xs px-2 py-1 bg-red-600 text-white hover:bg-red-700 rounded">刪除</button>
                 <button type="button" onClick={() => setDeletingId(null)}
                   className="text-xs px-2 py-1 border rounded">取消</button>
               </>
@@ -72,7 +72,7 @@ export function CategoryManager() {
                   {c.isActive ? "停用" : "啟用"}
                 </button>
                 <button type="button" onClick={() => setDeletingId(c.id)}
-                  className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">刪除</button>
+                  className="text-xs px-2 py-1 border border-stone-300 text-stone-600 rounded hover:border-red-300 hover:bg-red-50 hover:text-red-700">刪除</button>
               </>
             )}
           </div>

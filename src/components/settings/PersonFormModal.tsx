@@ -366,12 +366,12 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
           {authProvider !== 'vauth' && (hasRoster || (account && !account.isActive && !isSuperAdminAccount)) && (
             <div className="border-t pt-3 flex flex-wrap gap-2">
               {hasRoster && (
-                <button type="button" onClick={removeFromRoster} className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
+                <button type="button" onClick={removeFromRoster} className="text-xs px-2 py-1 border border-stone-300 text-stone-600 rounded hover:border-red-300 hover:bg-red-50 hover:text-red-700">
                   從名冊刪除此人
                 </button>
               )}
               {account && !account.isActive && !isSuperAdminAccount && (
-                <button type="button" onClick={deleteAccountPermanently} className="flex items-center gap-1 text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">
+                <button type="button" onClick={deleteAccountPermanently} className="flex items-center gap-1 text-xs px-2 py-1 border border-stone-300 text-stone-600 rounded hover:border-red-300 hover:bg-red-50 hover:text-red-700">
                   <AlertTriangle size={12} />永久刪除帳號
                 </button>
               )}

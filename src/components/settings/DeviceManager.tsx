@@ -60,7 +60,7 @@ export function DeviceManager() {
                 <span className="flex-1 text-sm text-red-600">確定刪除「{d.label}」？</span>
                 {deleteError && <span className="text-xs text-red-500">{deleteError}</span>}
                 <button type="button" onClick={() => handleDelete(d.id)}
-                  className="text-xs px-2 py-1 bg-red-500 text-white rounded">
+                  className="text-xs px-2 py-1 bg-red-600 text-white hover:bg-red-700 rounded">
                   刪除
                 </button>
                 <button type="button" onClick={() => { setDeletingId(null); setDeleteError(null) }}
@@ -90,7 +90,7 @@ export function DeviceManager() {
                 <button
                   type="button"
                   onClick={() => setDeletingId(d.id)}
-                  className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100"
+                  className="text-xs px-2 py-1 border border-stone-300 text-stone-600 rounded hover:border-red-300 hover:bg-red-50 hover:text-red-700"
                 >
                   刪除
                 </button>

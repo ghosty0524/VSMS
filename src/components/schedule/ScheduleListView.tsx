@@ -156,7 +156,7 @@ export default function ScheduleListView({
                     )}
                     {canWrite && (
                       <button type="button" title="刪除" onClick={() => onDelete(s)}
-                        className="w-[22px] h-[22px] flex items-center justify-center rounded-md bg-red-50 text-red-500 hover:bg-red-100">
+                        className="w-[22px] h-[22px] flex items-center justify-center rounded-md text-stone-500 hover:bg-red-50 hover:text-red-600">
                         <Trash2 size={12} strokeWidth={2.5} />
                       </button>
                     )}

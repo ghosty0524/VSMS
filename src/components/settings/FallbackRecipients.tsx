@@ -80,7 +80,7 @@ export function FallbackRecipients({
                 className="flex-1 text-xs border border-transparent hover:border-gray-300 focus:border-gray-300 rounded px-2 py-1" />
               <button type="button" disabled={busy}
                 onClick={() => run(() => api.deleteNotifyRecipient(r.id))}
-                className="px-2 py-1 text-xs text-red-600 border border-gray-300 rounded hover:bg-red-50 disabled:opacity-40">
+                className="px-2 py-1 text-xs border border-stone-300 text-stone-600 rounded hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:opacity-40">
                 刪除
               </button>
             </li>
