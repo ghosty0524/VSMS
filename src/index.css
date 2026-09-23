@@ -16,6 +16,8 @@
       三套混用，篩選面板的暖灰貼在頁面的中性灰上會說不出哪裡怪。
       三者一律指向同一組帶藍味的墨色階，既有的 gray-100 / stone-50 /
       slate-800 class 不必改寫即可統一。
+      100／200／300／500／600／800／900 指向共用 token
+      （styles/workspace-tokens.css），其餘階是 VSMS 自有值。
 
    2. 強調色階 —— blue 整條改為低飽和青綠。專案裡 blue-* 只用於介面
       （按鈕、選取態、focus ring、連結），資料色全部是 hex 常數，
@@ -30,40 +32,40 @@
 @theme {
   /* ── 中性：帶藍味的墨色階 ───────────────────────────────── */
   --color-slate-50:  #F7F8FA;
-  --color-slate-100: #F1F3F7;
-  --color-slate-200: #E6EAF0;
-  --color-slate-300: #D6DBE3;
+  --color-slate-100: var(--vw-surface-subtle);
+  --color-slate-200: var(--vw-border);
+  --color-slate-300: var(--vw-border-strong);
   --color-slate-400: #97A1AF;
-  --color-slate-500: #64707F;
-  --color-slate-600: #4B5666;
+  --color-slate-500: var(--vw-text-muted);
+  --color-slate-600: var(--vw-text-secondary);
   --color-slate-700: #37414F;
-  --color-slate-800: #232D3B;
-  --color-slate-900: #17212E;
+  --color-slate-800: var(--vw-primary-bg-hover);
+  --color-slate-900: var(--vw-ink);
   --color-slate-950: #0E1620;
 
   /* gray 與 stone 併入同一組值，既有 class 不必改寫 */
   --color-gray-50:  #F7F8FA;
-  --color-gray-100: #F1F3F7;
-  --color-gray-200: #E6EAF0;
-  --color-gray-300: #D6DBE3;
+  --color-gray-100: var(--vw-surface-subtle);
+  --color-gray-200: var(--vw-border);
+  --color-gray-300: var(--vw-border-strong);
   --color-gray-400: #97A1AF;
-  --color-gray-500: #64707F;
-  --color-gray-600: #4B5666;
+  --color-gray-500: var(--vw-text-muted);
+  --color-gray-600: var(--vw-text-secondary);
   --color-gray-700: #37414F;
-  --color-gray-800: #232D3B;
-  --color-gray-900: #17212E;
+  --color-gray-800: var(--vw-primary-bg-hover);
+  --color-gray-900: var(--vw-ink);
   --color-gray-950: #0E1620;
 
   --color-stone-50:  #F7F8FA;
-  --color-stone-100: #F1F3F7;
-  --color-stone-200: #E6EAF0;
-  --color-stone-300: #D6DBE3;
+  --color-stone-100: var(--vw-surface-subtle);
+  --color-stone-200: var(--vw-border);
+  --color-stone-300: var(--vw-border-strong);
   --color-stone-400: #97A1AF;
-  --color-stone-500: #64707F;
-  --color-stone-600: #4B5666;
+  --color-stone-500: var(--vw-text-muted);
+  --color-stone-600: var(--vw-text-secondary);
   --color-stone-700: #37414F;
-  --color-stone-800: #232D3B;
-  --color-stone-900: #17212E;
+  --color-stone-800: var(--vw-primary-bg-hover);
+  --color-stone-900: var(--vw-ink);
   --color-stone-950: #0E1620;
 
   /* ── 強調：低飽和青綠，取代介面藍 ───────────────────────── */
@@ -87,8 +89,8 @@
   --color-accent-bg:  #D7EDE8;
 
   /* ── 字型：三個系統共用，用戶端都是 Windows，不載外部字型 ─────── */
-  --font-sans: "Microsoft JhengHei UI", "Microsoft JhengHei", "Segoe UI", system-ui, sans-serif;
-  --font-mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
+  --font-sans: var(--vw-font-sans);
+  --font-mono: var(--vw-font-mono);
 
   /* Header 的 toast 一直掛著 animate-fade-in，但這個 class 從來沒有
      定義過，等於靜默失效。補上定義讓它真的有動畫。 */
@@ -106,11 +108,12 @@
    面板的圓角與卡片陰影是另一個決定，還沒做。
    ──────────────────────────────────────────────────────────────── */
 :root {
-  /* 頁面底。原本是 gray-100（#F1F3F7，對白卡 1.111，看不見），
-     加深到對比 1.22 —— 讀得出是兩層，又不會深到跟資料搶注意力。
-     不沿用 gray-100 是因為那個 class 還有 10 個別的地方在用，
-     那些地方要的是「淺灰色塊」而不是「頁面底」。 */
-  --app-ground: #E4E9F0;
+  /* VSMS 的識別色（共用檔只規定名稱，值由各系統決定） */
+  --vw-accent: #0E6B63;
+  --vw-accent-subtle: #E3F2F0;
+  /* 頁面底改用共用 token。原本 #E4E9F0 是為了讓白卡片看得出兩層；
+     共用底色較亮，卡片的區隔改由邊框與陰影負責。 */
+  --app-ground: var(--vw-bg);
 }
 
 @layer base {
@@ -120,22 +123,22 @@
   .app-ground-soft { background-color: color-mix(in oklab, var(--app-ground) 95%, transparent); }
 
   /*
-    可按的東西要看起來可按。主要按鈕原本是一塊純平的青綠矩形。
+    可按的東西要看起來可按。主要按鈕是墨色（2026-09-23 共用 token）。
 
-    用元素選擇器限定在 button／a 上，是因為 bg-blue-600 也用在指示點之類
+    用元素選擇器限定在 button／a 上，是因為 bg-stone-900 也用在指示點之類
     的非互動元素上，那些不該有投影。
 
     不設 transition —— 按壓回饋要即時；而且 Tailwind 的 transition-colors
     在 utilities 層，會蓋掉這裡寫的 transition，寫了也不會生效。
   */
-  button.bg-blue-600:not(:disabled),
-  a.bg-blue-600 {
-    box-shadow: 0 1px 0 rgba(23, 33, 46, 0.14), 0 2px 5px rgba(14, 107, 99, 0.24);
+  button.bg-stone-900:not(:disabled),
+  a.bg-stone-900 {
+    box-shadow: 0 1px 0 rgba(23, 33, 46, 0.14), 0 2px 5px rgba(23, 33, 46, 0.18);
   }
-  button.bg-blue-600:not(:disabled):active {
-    box-shadow: 0 1px 2px rgba(14, 107, 99, 0.28);
+  button.bg-stone-900:not(:disabled):active {
+    box-shadow: 0 1px 2px rgba(23, 33, 46, 0.24);
   }
-  button.bg-blue-600:disabled { box-shadow: none; }
+  button.bg-stone-900:disabled { box-shadow: none; }
 }
 
 /* ────────────────────────────────────────────────────────────────

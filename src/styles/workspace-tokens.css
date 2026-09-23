@@ -1,0 +1,62 @@
+/* ── Validation Workspace 共用設計 token ─────────────────────────────────
+   不要直接修改副本。來源是 vportal/tokens/workspace-tokens.css；
+   改完在 vportal 執行 npm run check:tokens -- --write 同步三份副本，
+   再執行 npm run check:tokens 確認一致與對比度。
+   淺色在 :root；深色在 [data-theme="dark"]，只有 VTMS 會設定這個屬性。
+   識別色 --vw-accent / --vw-accent-subtle 由各系統自己定義。
+   規格：vportal/docs/superpowers/specs/2026-09-23-workspace-tokens-design.md
+   ────────────────────────────────────────────────────────────────────── */
+:root {
+  --vw-bg: #F5F6F8;
+  --vw-surface: #FFFFFF;
+  --vw-surface-subtle: #EEF0F3;
+  --vw-border: #E3E7ED;
+  --vw-border-strong: #D6DBE3;
+  --vw-ink: #17212E;
+  --vw-text-secondary: #4B5666;
+  --vw-text-muted: #636E7D;
+  --vw-primary-bg: #17212E;
+  --vw-primary-bg-hover: #232D3B;
+  --vw-primary-text: #FFFFFF;
+  --vw-success: #1E7A46;
+  --vw-success-bg: #E6F4EC;
+  --vw-warning: #9A5A17;
+  --vw-warning-bg: #FBF1DF;
+  --vw-danger: #B3352B;
+  --vw-danger-bg: #FBEAE8;
+  --vw-danger-border: #E4BDB8;
+  --vw-danger-solid: #B3352B;
+  --vw-info: #2B69D0;
+  --vw-info-bg: #EDF2FC;
+  --vw-radius-control: 6px;
+  --vw-radius-card: 8px;
+  --vw-radius-dialog: 12px;
+  --vw-shadow: 0 1px 2px rgba(23, 33, 46, .06);
+  --vw-font-sans: "Microsoft JhengHei UI", "Microsoft JhengHei", "Segoe UI", system-ui, sans-serif;
+  --vw-font-mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
+}
+
+[data-theme="dark"] {
+  --vw-bg: #131A24;
+  --vw-surface: #1B2430;
+  --vw-surface-subtle: #222C3A;
+  --vw-border: #2A3442;
+  --vw-border-strong: #3A4556;
+  --vw-ink: #E6EAF0;
+  --vw-text-secondary: #B4BECB;
+  --vw-text-muted: #8E9AAB;
+  --vw-primary-bg: #E6EAF0;
+  --vw-primary-bg-hover: #FFFFFF;
+  --vw-primary-text: #17212E;
+  --vw-success: #5CC48A;
+  --vw-success-bg: rgba(92, 196, 138, .14);
+  --vw-warning: #E3A857;
+  --vw-warning-bg: rgba(227, 168, 87, .14);
+  --vw-danger: #F28B80;
+  --vw-danger-bg: rgba(242, 139, 128, .14);
+  --vw-danger-border: rgba(242, 139, 128, .35);
+  --vw-danger-solid: #B3352B;
+  --vw-info: #7EADF6;
+  --vw-info-bg: rgba(126, 173, 246, .14);
+  --vw-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+}
