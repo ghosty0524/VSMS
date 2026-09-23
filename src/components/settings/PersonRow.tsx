@@ -8,6 +8,7 @@ import { UserPlus } from 'lucide-react'
 import { useOptionsStore } from '../../store/optionsStore'
 import { resolveEngineerColor, resolveUnitColor, readableTextColor } from '../../lib/colors'
 import { roleLabel, type Person } from '../../lib/peopleRows'
+import { formatDateTime } from '../../lib/dateFormat'
 
 // 設定頁容器 768px，扣掉內距約 680px；姓名保底 140px，單位籤 `auto` 依實際籤數，帳號 190px，動作各 56px
 export const PEOPLE_GRID = 'grid grid-cols-[28px_minmax(140px,1fr)_auto_190px_56px_56px] items-center gap-2 min-w-[600px]'
@@ -88,7 +89,7 @@ export function PersonRow({ person, variant, authProvider, onEdit, onToggleActiv
             </span>
             {!person.account.isActive && <span className="text-red-500">已停用</span>}
             {person.account.lastLoginAt && (
-              <span className="text-gray-400">上次登入 {new Date(person.account.lastLoginAt).toLocaleDateString('zh-TW')}</span>
+              <span className="text-gray-400">上次登入 {formatDateTime(person.account.lastLoginAt).slice(0, 10)}</span>
             )}
           </div>
         ) : authProvider !== 'vauth' ? (

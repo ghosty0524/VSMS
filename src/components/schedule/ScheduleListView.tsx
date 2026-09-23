@@ -7,6 +7,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import { computeStatus, statusLabel } from '../../lib/status'
 import { STATUS_COLORS, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, readableTextColor } from '../../lib/colors'
+import { displayYmd } from '../../lib/dateFormat'
 import type { Schedule, Role, OptionsMap } from '../../types'
 
 const LIST_ROW_H = 36
@@ -137,8 +138,8 @@ export default function ScheduleListView({
                   </span>
                 </td>
                 <td className="px-2 whitespace-nowrap text-slate-700">{engLabel(s.testEngineer)}</td>
-                <td className="px-2 whitespace-nowrap text-slate-600">{s.startDate}</td>
-                <td className="px-2 whitespace-nowrap text-slate-600">{s.endDate}</td>
+                <td className="px-2 whitespace-nowrap text-slate-600">{displayYmd(s.startDate)}</td>
+                <td className="px-2 whitespace-nowrap text-slate-600">{displayYmd(s.endDate)}</td>
                 <td className="px-2 max-w-[160px] truncate text-slate-600" title={s.requiredPersonnel}>
                   {s.requiredPersonnel || '—'}
                 </td>

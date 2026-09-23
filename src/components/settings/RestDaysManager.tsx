@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import DatePicker from 'react-datepicker'
 import { useOptionsStore } from '../../store/optionsStore'
+import { displayYmd } from '../../lib/dateFormat'
 import type { RestDaysConfig } from '../../types'
 
 function ymd(d: Date): string {
@@ -46,7 +47,7 @@ export function RestDaysManager() {
         <ul className="space-y-1">
           {config.specificDates.map(v => (
             <li key={v} className="flex items-center justify-between text-sm bg-gray-50 rounded px-3 py-1.5">
-              <span>{v}</span>
+              <span>{displayYmd(v)}</span>
               <button type="button" onClick={() => update({ specificDates: config.specificDates.filter(d => d !== v) })}
                 className="text-gray-400 hover:text-red-500 text-xs">× 刪除</button>
             </li>

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { isOverdue, daysBetweenYmd, fmtYmd } from '../../lib/analytics'
+import { displayYmd } from '../../lib/dateFormat'
 import type { Schedule } from '../../types'
 
 interface Props { schedules: Schedule[] }
@@ -75,7 +76,7 @@ const RiskList: React.FC<Props> = ({ schedules }) => {
             <span className="text-gray-500 text-sm flex-1 truncate">
               {s.testEngineer || '-'} · {s.testUnit || '-'}
             </span>
-            <span className="tnum text-gray-500 text-sm">{s.endDate}</span>
+            <span className="tnum text-gray-500 text-sm">{displayYmd(s.endDate)}</span>
             <span className={`tnum text-sm font-semibold min-w-[80px] text-right ${
               kind === 'overdue' ? 'text-red-600' : 'text-amber-600'
             }`}>

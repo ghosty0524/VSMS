@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ClipboardList, Download, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { api } from '../../lib/api';
+import { formatDateTime } from '../../lib/dateFormat';
 
 /**
  * 動作代碼與中文標籤。
@@ -198,7 +199,7 @@ const AuditPage: React.FC = () => {
                 filtered.map((log) => (
                   <tr key={log.id} className="border-t hover:bg-gray-50">
                     <td className="tnum px-4 py-2 text-gray-500 whitespace-nowrap">
-                      {new Date(log.timestamp).toLocaleString('zh-TW')}
+                      {formatDateTime(log.timestamp, { seconds: true })}
                     </td>
                     <td className="px-4 py-2 font-medium text-gray-800">
                       {log.displayName || log.username}

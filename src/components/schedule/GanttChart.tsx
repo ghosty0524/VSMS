@@ -11,6 +11,7 @@ import { computeStatus, overdueDays, statusLabel } from '../../lib/status'
 import { schedulesToTsv, schedulesToHtmlTable } from '../../lib/clipboardTable'
 import { copyTableToClipboard } from '../../lib/copyToClipboard'
 import { isRestDay } from '../../lib/restDays'
+import { displayYmd } from '../../lib/dateFormat'
 import { matchesKeyword } from '../../lib/scheduleKeywordMatch'
 import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
 import { ScheduleFormModal } from './ScheduleFormModal'
@@ -1097,7 +1098,7 @@ export function GanttChart({
               <div><span className="text-slate-400">工作類別：</span>{tooltip.s.category}</div>
               <div><span className="text-slate-400">測試單位：</span>{tooltip.s.testUnit}</div>
               <div><span className="text-slate-400">測試人員：</span>{engLabel(tooltip.s.testEngineer)}</div>
-              <div><span className="text-slate-400">起始／完成日期：</span>{tooltip.s.startDate} ～ {tooltip.s.endDate}</div>
+              <div><span className="text-slate-400">起始／完成日期：</span>{displayYmd(tooltip.s.startDate)} ～ {displayYmd(tooltip.s.endDate)}</div>
               <div><span className="text-slate-400">需求人員：</span>{tooltip.s.requiredPersonnel}</div>
             </div>
             {canViewVtmsProgress && tooltip.s.vtmsPlanId && progressMap[tooltip.s.id] && (

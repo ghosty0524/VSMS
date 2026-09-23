@@ -46,8 +46,8 @@ describe('NotifyLogTable', () => {
     // 處理日，看起來就像記錄沒更新。兩欄都在，才分得出來。
     render(<NotifyLogTable />)
 
-    expect(await screen.findByText('2026/08/27 14:05')).toBeInTheDocument()
-    expect(screen.getByText('2026/08/25')).toBeInTheDocument()
+    expect(await screen.findByText('2026-08-27 14:05')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-25')).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: '最後處理' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: '預定寄信日' })).toBeInTheDocument()
   })
@@ -105,7 +105,7 @@ describe('NotifyLogTable — 新前端搭舊後端的過渡期', () => {
 
     render(<NotifyLogTable />)
 
-    expect(await screen.findByText('2026/08/20 09:30')).toBeInTheDocument()
+    expect(await screen.findByText('2026-08-20 09:30')).toBeInTheDocument()
     expect(screen.queryByText(/undefined/)).not.toBeInTheDocument()
   })
 })

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../../lib/api'
+import { formatDateTime, displayYmd } from '../../lib/dateFormat'
 import type { NotifyLog } from '../../types'
 
 const STATUS_STYLE: Record<NotifyLog['status'], string> = {
@@ -46,12 +47,6 @@ const PLATFORM_STATUS_TEXT: Record<string, string> = {
  * 才生效，中間必然有一段新前端搭舊後端。舊後端不回 updatedAt，也正好是以
  * createdAt 排序，退回去剛好與當下的排序一致。
  */
-function formatHandledAt(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
 
 export function NotifyLogTable({ refreshToken = 0 }: { refreshToken?: number }) {
   const [logs, setLogs] = useState<NotifyLog[] | null>(null)
@@ -98,11 +93,11 @@ export function NotifyLogTable({ refreshToken = 0 }: { refreshToken?: number }) 
             <tr key={l.id} className="border-b border-gray-100 align-top">
               <td className="py-2 px-2 whitespace-nowrap"
                 title="這筆通知最後一次被處理的時間，也是本表的排序依據">
-                {formatHandledAt(l.updatedAt ?? l.createdAt)}
+                {formatDateTime(l.updatedAt ?? l.createdAt) || (l.updatedAt ?? l.createdAt)}
               </td>
               <td className="py-2 px-2 whitespace-nowrap text-gray-600"
                 title="依提前天數與休息日算出的預定寄信日；補寄時會早於實際處理時間">
-                {l.sendDate}
+                {displayYmd(l.sendDate)}
               </td>
               <td className="py-2 px-2">
                 {l.projectName || <span className="text-gray-400">（排程已刪除）</span>}
