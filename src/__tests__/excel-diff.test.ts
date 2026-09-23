@@ -60,6 +60,7 @@ const baseExisting: Schedule = {
   requiredPersonnel: '人員A', testReport: '', isCompleted: false,
   isDelayed: false, isCancelled: false, completedAt: null, delayReason: '', createdBy: 'admin', updatedBy: 'admin',
   createdAt: '', updatedAt: '',
+  adminFlag: false, adminFlagNote: '', userFlag: false, userFlagNote: '', device: '',
 }
 
 const row = (overrides: Partial<IncomingRow> = {}): IncomingRow => ({

@@ -1,6 +1,6 @@
 import { withBase } from './basePath';
 import type {
-  Schedule, OptionsMap, Option, User, AuditLog, VtmsProgress, VtmsProjectCheck,
+  Schedule, ScheduleCreateInput, OptionsMap, Option, User, AuditLog, VtmsProgress, VtmsProjectCheck,
   NotifyConfig, NotifyRule, NotifyLog, NotifyPreview, NotifyRunResult, FallbackRecipient,
   WorkloadResponse,
 } from '../types'
@@ -102,7 +102,7 @@ export const api = {
   // ── Schedules ─────────────────────────────────────────
   getSchedules: () =>
     req<Schedule[]>('GET', '/schedules'),
-  createSchedule: (data: Omit<Schedule, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>) =>
+  createSchedule: (data: ScheduleCreateInput) =>
     req<Schedule>('POST', '/schedules', data),
   updateSchedule: (id: string, data: Partial<Schedule>) =>
     req<Schedule>('PUT', `/schedules/${id}`, data),

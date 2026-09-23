@@ -32,7 +32,7 @@ export function RestDaysManager() {
       </label>
       <p className="text-xs font-medium text-gray-600 mb-2">特定休息日（例：國定假日）</p>
       <div className="flex gap-2 mb-3">
-        <DatePicker selected={newDate} onChange={d => setNewDate(d)}
+        <DatePicker selected={newDate} onChange={(d: Date | null) => setNewDate(d)}
           dateFormat="yyyy/MM/dd" placeholderText="選擇日期"
           className="text-sm border border-gray-300 rounded px-2 py-1.5 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         <button type="button" onClick={handleAdd} disabled={!newDate}

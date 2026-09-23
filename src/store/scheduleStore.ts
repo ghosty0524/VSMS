@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import { api } from '../lib/api'
-import type { Schedule } from '../types'
+import type { Schedule, ScheduleCreateInput } from '../types'
 
 interface ScheduleState {
   schedules: Schedule[]
   init: () => Promise<void>
-  add: (data: Omit<Schedule, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>) => Promise<Schedule>
+  add: (data: ScheduleCreateInput) => Promise<Schedule>
   update: (id: string, data: Partial<Schedule>) => Promise<Schedule>
   remove: (id: string) => Promise<void>
   replaceAll: (data: Omit<Schedule, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>[]) => Promise<void>

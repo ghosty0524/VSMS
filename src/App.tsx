@@ -42,10 +42,6 @@ export function App() {
   }, [guestPending, isChecking, isLoggedIn, authProvider, guestLogin])
 
   useEffect(() => {
-    if (view === 'teams') setView('main')
-  }, [view, setView])
-
-  useEffect(() => {
     if ((role === 'user' || role === 'guest') && view !== 'main') {
       setView('main')
     }

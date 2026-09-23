@@ -132,7 +132,6 @@ function applyFilter(
   schedules: Schedule[],
   fs: FilterSortState,
   role: Role | null,
-  allowedUnits: string[],
   linkedEngineer: string,
   resolveEngineerLabel: (value: string) => string,
 ): Schedule[] {
@@ -197,7 +196,7 @@ export function GanttChart({
 }: Props) {
   const { schedules, remove, update } = useScheduleStore()
   const { options }           = useOptionsStore()
-  const { role, allowedUnits, linkedEngineer, canViewVtmsProgress } = useAuthStore()
+  const { role, linkedEngineer, canViewVtmsProgress } = useAuthStore()
   const [filterSort, setFilterSort]     = useState<FilterSortState>(DEFAULT_FILTER)
   const [editTarget, setEditTarget]     = useState<Schedule | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null)
@@ -372,7 +371,7 @@ export function GanttChart({
   const engLabel = (value: string) => engineerLabelMap.get(value) ?? value
 
   // 關鍵字篩選需要 engLabel 解析改名後的顯示名稱，故 engineerLabelMap 定義需在此之前
-  const filtered  = applyFilter(schedules, filterSort, role, allowedUnits, linkedEngineer, engLabel)
+  const filtered  = applyFilter(schedules, filterSort, role, linkedEngineer, engLabel)
   // guest 唯讀：所有寫入操作（旗標/編輯/刪除）一律隱藏
   const canWrite  = role === 'super_admin' || role === 'admin'
 

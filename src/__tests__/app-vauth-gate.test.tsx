@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 // 單一登入模式（vauth）下 VSMS 未登入時一律導回入口頁，與 VTMS 一致；
 // 只有入口頁的訪客連結（?guest=1）例外，直接以訪客登入。
 const apiMock = vi.hoisted(() => ({
-  config: vi.fn(async () => ({ authProvider: 'vauth' as const })),
+  config: vi.fn(async (): Promise<{ authProvider: 'local' | 'vauth' }> => ({ authProvider: 'vauth' })),
   me: vi.fn(async () => { throw new Error('401') }),
   guestLogin: vi.fn(async () => ({ ok: true, username: 'Guest', displayName: '訪客', role: 'guest', sessionId: 'g1' })),
   logout: vi.fn(async () => ({ ok: true })),

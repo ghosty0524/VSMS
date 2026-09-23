@@ -32,6 +32,21 @@ export interface Schedule {
   vtmsPlanId?: string
 }
 
+/**
+ * 新增排程的請求 payload。completedAt 一律由後端 completedAtPatch() 依 isCompleted
+ * 重算；adminFlag/adminFlagNote/userFlag/userFlagNote/isCancelled/device 在 DB
+ * 皆有預設值（見 prisma/schema.prisma 的 @default），後端 pickScheduleFields()
+ * 只挑 body 中存在的欄位，未帶到時就交給 DB 預設值 —— 故建立時皆為選填；
+ * ScheduleFormModal 對 user 角色即不送 isCancelled/device。
+ * Excel 匯入（附加／取代）仍會帶上完整值以保留原資料，選填不影響其可指派性。
+ */
+export type ScheduleCreateInput =
+  Omit<Schedule, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy' |
+    'completedAt' | 'adminFlag' | 'adminFlagNote' | 'userFlag' | 'userFlagNote' |
+    'isCancelled' | 'device'> &
+  Partial<Pick<Schedule, 'completedAt' | 'adminFlag' | 'adminFlagNote' | 'userFlag' | 'userFlagNote' |
+    'isCancelled' | 'device'>>
+
 export interface Option {
   id: string
   value: string
