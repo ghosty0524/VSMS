@@ -126,7 +126,7 @@ export function PeopleManager() {
             value={newNames[g.unitId] ?? ''}
             onChange={e => setNewNames(n => ({ ...n, [g.unitId!]: e.target.value }))}
             onKeyDown={e => { if (e.key === 'Enter') void handleAdd(g.unitId!) }} />
-          <button type="button" onClick={() => handleAdd(g.unitId!)} className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">新增</button>
+          <button type="button" onClick={() => handleAdd(g.unitId!)} className="px-2 py-1 text-xs bg-stone-900 text-white rounded hover:bg-stone-800">新增</button>
         </div>
       )}
       {g.unitId && addErrors[g.unitId] && <p className="text-xs text-red-500 mt-1">{addErrors[g.unitId]}</p>}
@@ -144,7 +144,7 @@ export function PeopleManager() {
             value={newNames[s.unitId] ?? ''}
             onChange={e => setNewNames(n => ({ ...n, [s.unitId]: e.target.value }))}
             onKeyDown={e => { if (e.key === 'Enter') void handleAdd(s.unitId) }} />
-          <button type="button" onClick={() => handleAdd(s.unitId)} className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">新增</button>
+          <button type="button" onClick={() => handleAdd(s.unitId)} className="px-2 py-1 text-xs bg-stone-900 text-white rounded hover:bg-stone-800">新增</button>
         </div>
       )}
       {addErrors[s.unitId] && <p className="text-xs text-red-500 mt-1">{addErrors[s.unitId]}</p>}

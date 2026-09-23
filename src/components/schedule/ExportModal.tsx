@@ -139,7 +139,7 @@ export function ExportModal({ isOpen, allUnits, onExportExcel, onExportDashboard
               取消
             </button>
             <button type="button" onClick={handleConfirm} disabled={kind === null || busy}
-              className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700
+              className="px-4 py-1.5 text-xs bg-stone-900 text-white rounded-lg hover:bg-stone-800
                          disabled:bg-gray-300 disabled:cursor-not-allowed">
               {kind === null ? '請先選擇匯出類型' : busy ? '匯出中…' : '確認匯出'}
             </button>

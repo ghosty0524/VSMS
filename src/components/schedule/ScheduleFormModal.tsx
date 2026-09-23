@@ -475,7 +475,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
             <button type="button" onClick={handleSave} disabled={submitting}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              className="px-4 py-2 text-sm bg-stone-900 text-white rounded-lg hover:bg-stone-800 disabled:opacity-50">
               {submitting ? '儲存中…' : '儲存'}
             </button>
           </div>

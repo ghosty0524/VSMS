@@ -54,8 +54,8 @@ export function SessionExpiryWarning() {
           type="button"
           onClick={keepAlive}
           disabled={refreshing}
-          className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg
-            hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className="w-full py-2.5 bg-stone-900 text-white text-sm font-medium rounded-lg
+            hover:bg-stone-800 disabled:opacity-50 transition-colors"
         >
           {refreshing ? '延長中…' : '繼續使用'}
         </button>

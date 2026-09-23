@@ -382,7 +382,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
         <div className="flex justify-end gap-2 p-4 border-t">
           <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
           <button type="button" onClick={handleSave} disabled={submitting}
-            className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300">
+            className="px-4 py-1.5 text-sm bg-stone-900 text-white rounded-lg hover:bg-stone-800 disabled:bg-gray-300">
             {submitting ? '儲存中…' : '儲存'}
           </button>
         </div>

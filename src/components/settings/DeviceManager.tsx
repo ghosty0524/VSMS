@@ -114,7 +114,7 @@ export function DeviceManager() {
         <button
           type="button"
           onClick={handleAdd}
-          className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+          className="px-3 py-1.5 bg-stone-900 text-white text-sm rounded hover:bg-stone-800"
         >
           新增
         </button>

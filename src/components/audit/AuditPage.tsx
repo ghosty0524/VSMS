@@ -122,7 +122,7 @@ const AuditPage: React.FC = () => {
         <button
           type="button"
           onClick={handleExport}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+          className="flex items-center gap-1.5 px-4 py-2 bg-stone-900 text-white rounded-lg hover:bg-stone-800 text-sm font-medium"
         >
           <Download size={15} />
           匯出 CSV

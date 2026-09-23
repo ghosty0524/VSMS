@@ -37,7 +37,7 @@ export function RestDaysManager() {
           dateFormat="yyyy/MM/dd" placeholderText="選擇日期"
           className="text-sm border border-gray-300 rounded px-2 py-1.5 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         <button type="button" onClick={handleAdd} disabled={!newDate}
-          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40">
+          className="px-3 py-1.5 text-sm bg-stone-900 text-white rounded hover:bg-stone-800 disabled:opacity-40">
           ＋ 新增
         </button>
       </div>

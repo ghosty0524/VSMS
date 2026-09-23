@@ -122,7 +122,7 @@ export function ScheduleToolbar({
               type="button"
               onClick={onAddSchedule}
               className="flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs font-semibold
-                         rounded-md bg-blue-600 text-white hover:bg-blue-700
+                         rounded-md bg-stone-900 text-white hover:bg-stone-800
                          transition-colors active:scale-95"
             >
               <Plus size={14} strokeWidth={2.5} />

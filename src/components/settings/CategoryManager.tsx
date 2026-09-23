@@ -83,7 +83,7 @@ export function CategoryManager() {
           value={newValue} onChange={e => setNewValue(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleAdd()} />
         <button type="button" onClick={handleAdd}
-          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">新增</button>
+          className="px-3 py-1 text-sm bg-stone-900 text-white rounded hover:bg-stone-800">新增</button>
       </div>
     </div>
   )

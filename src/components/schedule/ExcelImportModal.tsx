@@ -338,7 +338,7 @@ export function ExcelImportModal({ isOpen, onClose }: Props) {
             <button type="button" onClick={handleConfirm}
               disabled={!result || result.valid.length === 0 || mode === null || busy}
               className={`px-4 py-2 text-sm text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed
-                ${mode === 'replace' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                ${mode === 'replace' ? 'bg-red-600 hover:bg-red-700' : 'bg-stone-900 hover:bg-stone-800'}`}>
               {confirmLabel}
             </button>
           </div>
