@@ -4,7 +4,7 @@ import type { Request, Response, NextFunction } from 'express'
 import request from 'supertest'
 import { templateFieldErrors } from '../routes/notify.js'
 import { DEFAULT_NOTIFY_RULE_ID } from '../lib/storage.js'
-import { addDays, computeSendDate, daysBetween } from '../lib/notifyDate.js'
+import { addDays, computeSendDate, daysBetween, recentWorkdaysStart } from '../lib/notifyDate.js'
 import { todayTaipei } from '../lib/today.js'
 
 // notify.ts 現在寄信改打平台，路由測試不能真的打網路——mock 掉 client 層，
@@ -241,11 +241,19 @@ function makeFakePrisma(state: FakeState) {
     },
     notificationLog: {
       findMany: async (
-        { orderBy, take }: { orderBy?: Record<string, 'asc' | 'desc'>; take?: number } = {},
+        { where, orderBy, take }: {
+          where?: { OR?: Array<{ sendDate?: { gte: string }; updatedAt?: { gte: Date } }> }
+          orderBy?: Record<string, 'asc' | 'desc'>; take?: number
+        } = {},
       ) => {
+        // GET /logs 的顯示窗：sendDate 在窗內、或 updatedAt 在窗內（當天補寄的舊列）。
+        const or = where?.OR
+        const inWindow = (l: FakeLog) => !or || or.some(c =>
+          (c.sendDate !== undefined && l.sendDate >= c.sendDate.gte) ||
+          (c.updatedAt !== undefined && l.updatedAt.getTime() >= c.updatedAt.gte.getTime()))
         const [key, dir] = Object.entries(orderBy ?? {})[0] ?? ['createdAt', 'desc']
         const at = (l: FakeLog) => (l[key as keyof FakeLog] as Date).getTime()
-        const sorted = [...state.logs].sort((a, b) => dir === 'desc' ? at(b) - at(a) : at(a) - at(b))
+        const sorted = [...state.logs].filter(inWindow).sort((a, b) => dir === 'desc' ? at(b) - at(a) : at(a) - at(b))
         return typeof take === 'number' ? sorted.slice(0, take) : sorted
       },
     },
@@ -476,6 +484,8 @@ describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
     errorMessage: null, attempts: 1, messageId: null, smtpResponse: null,
     sentAt: null, createdAt: o.updatedAt, deliveryId: null, ...o,
   })
+  // 顯示窗只看最近五個工作日；這裡的案例只關心排序與欄位，sendDate 一律用今天。
+  const today = todayTaipei()
 
   it('依 updatedAt 排序，補寄的舊 sendDate 記錄排在最前面', async () => {
     // 使用者回報的情境：今天才補寄出去的那筆，sendDate 是好幾天前。若用
@@ -485,12 +495,12 @@ describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
       // 08/20 就建立、今天重試才成功的那筆。createdAt 停在 08/20，只有
       // updatedAt 會動 —— 用 createdAt 排序它就永遠浮不上來。
       log({
-        id: 'retried-today', sendDate: '2026/08/20',
+        id: 'retried-today', sendDate: today,
         createdAt: new Date('2026-08-20T00:00:00Z'),
         updatedAt: new Date('2026-08-27T00:00:00Z'),
       }),
       log({
-        id: 'sent-once-on-08-26', sendDate: '2026/08/26',
+        id: 'sent-once-on-08-26', sendDate: today,
         createdAt: new Date('2026-08-26T00:00:00Z'),
         updatedAt: new Date('2026-08-26T00:00:00Z'),
       }),
@@ -509,7 +519,7 @@ describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
 
   it('回傳 updatedAt，前端才有辦法把排序依據顯示出來', async () => {
     const state = makeDefaultState()
-    state.logs = [log({ id: 'l1', sendDate: '2026/08/25', updatedAt: new Date('2026-08-27T00:00:00Z') })]
+    state.logs = [log({ id: 'l1', sendDate: today, updatedAt: new Date('2026-08-27T00:00:00Z') })]
     currentPrisma = makeFakePrisma(state)
     const app = await buildAdminApp()
 
@@ -522,7 +532,7 @@ describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
     // 回字串 '(已刪除)' 會讓前端的 `l.projectName || …` 永遠不成立，灰字提示
     // 變成死碼。空字串才讓兩邊的約定成立。
     const state = makeDefaultState()
-    state.logs = [log({ id: 'l1', scheduleId: 'gone', sendDate: '2026/08/25', updatedAt: new Date('2026-08-27T00:00:00Z') })]
+    state.logs = [log({ id: 'l1', scheduleId: 'gone', sendDate: today, updatedAt: new Date('2026-08-27T00:00:00Z') })]
     currentPrisma = makeFakePrisma(state)
     const app = await buildAdminApp()
 
@@ -534,7 +544,7 @@ describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
 
   it('有 deliveryId 的列會去平台換回目前狀態，合併成 platformStatus／platformError／platformSentAt', async () => {
     const state = makeDefaultState()
-    state.logs = [log({ id: 'l1', sendDate: '2026/08/25', updatedAt: new Date('2026-08-27T00:00:00Z'), status: 'accepted', deliveryId: 'd1' })]
+    state.logs = [log({ id: 'l1', sendDate: today, updatedAt: new Date('2026-08-27T00:00:00Z'), status: 'accepted', deliveryId: 'd1' })]
     currentPrisma = makeFakePrisma(state)
     fetchDeliveryStatusesMock.mockResolvedValue(new Map([
       ['d1', { status: 'sent', lastError: null, sentAt: '2026-08-27T00:05:00.000Z' }],
@@ -551,7 +561,7 @@ describe('GET /api/notify/logs — 排序鍵與顯示欄位一致', () => {
 
   it('沒有 deliveryId 的列（舊資料或 dropped）platformStatus 一律為 null，不去查平台', async () => {
     const state = makeDefaultState()
-    state.logs = [log({ id: 'l1', sendDate: '2026/08/25', updatedAt: new Date('2026-08-27T00:00:00Z'), status: 'error', deliveryId: null })]
+    state.logs = [log({ id: 'l1', sendDate: today, updatedAt: new Date('2026-08-27T00:00:00Z'), status: 'error', deliveryId: null })]
     currentPrisma = makeFakePrisma(state)
     const app = await buildAdminApp()
 
@@ -835,5 +845,55 @@ describe('代收群組（fallback recipients）CRUD', () => {
 
     expect((await request(app).put('/api/notify/recipients/nope').send({ isActive: false })).status).toBe(404)
     expect((await request(app).delete('/api/notify/recipients/nope')).status).toBe(404)
+  })
+})
+
+describe('GET /api/notify/logs — 只顯示最近五個工作日', () => {
+  const log = (o: Partial<FakeLog> & { id: string; sendDate: string; updatedAt: Date }): FakeLog => ({
+    scheduleId: 'sched-1', status: 'sent', recipients: 'a@example.com',
+    errorMessage: null, attempts: 1, messageId: null, smtpResponse: null,
+    sentAt: null, createdAt: o.updatedAt, deliveryId: null, ...o,
+  })
+  const today = todayTaipei()
+  const longAgo = new Date('2026-01-01T00:00:00Z')
+
+  it('sendDate 在窗外、也沒有近期處理過的列不回傳；回應帶 windowStart', async () => {
+    const state = makeDefaultState()
+    state.restDays = { id: 1, weekends: false, specificDates: [] } // 沒有休息日 → 窗＝最近 5 個日曆天（含今天）
+    state.logs = [
+      log({ id: 'in', sendDate: addDays(today, -4), updatedAt: longAgo }),
+      log({ id: 'out', sendDate: addDays(today, -5), updatedAt: longAgo }),
+    ]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).get('/api/notify/logs')
+
+    expect(res.status).toBe(200)
+    expect(res.body.windowStart).toBe(addDays(today, -4))
+    expect(res.body.windowWorkdays).toBe(5)
+    expect(res.body.logs.map((l: { id: string }) => l.id)).toEqual(['in'])
+  })
+
+  it('sendDate 很舊但今天才補寄成功的列仍要看得到', async () => {
+    const state = makeDefaultState()
+    state.logs = [log({ id: 'retried', sendDate: addDays(today, -20), updatedAt: new Date() })]
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).get('/api/notify/logs')
+
+    expect(res.body.logs.map((l: { id: string }) => l.id)).toEqual(['retried'])
+  })
+
+  it('窗的起日依休息日設定往前推（週末不算工作日）', async () => {
+    const state = makeDefaultState()
+    state.restDays = { id: 1, weekends: true, specificDates: [] }
+    currentPrisma = makeFakePrisma(state)
+    const app = await buildAdminApp()
+
+    const res = await request(app).get('/api/notify/logs')
+
+    expect(res.body.windowStart).toBe(recentWorkdaysStart(today, 5, { weekends: true, specificDates: [] }))
   })
 })

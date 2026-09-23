@@ -7,7 +7,7 @@ import { validateTemplate, TEMPLATE_VARS } from '../lib/notifyTemplate.js'
 import { resolveRule } from '../lib/notifyRule.js'
 import { planRecipients, resolveRecipients } from '../lib/notifyRecipients.js'
 import { buildTemplateVars, buildMailBody } from '../lib/notifyMailBody.js'
-import { computeSendDate, daysBetween } from '../lib/notifyDate.js'
+import { computeSendDate, daysBetween, recentWorkdaysStart } from '../lib/notifyDate.js'
 import { todayTaipei } from '../lib/today.js'
 import { prismaNotifyStore } from '../lib/notifyStore.js'
 import { runDailyNotify } from '../lib/notifyRunner.js'
@@ -351,13 +351,27 @@ router.post('/preview', async (req, res) => {
   })
 })
 
+/** 寄送紀錄頁的顯示窗：最近幾個工作日（含當天）。 */
+export const LOG_WINDOW_WORKDAYS = 5
+
+/** YYYY/MM/DD 的台灣當日 00:00，換成 UTC 的 Date（updatedAt 欄位是 UTC 時間戳）。 */
+function taipeiMidnightUtc(ymd: string): Date {
+  return new Date(`${ymd.replace(/\//g, '-')}T00:00:00+08:00`)
+}
+
 // GET /api/notify/logs
 router.get('/logs', async (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 200), 500)
+  // 只顯示最近五個工作日（含當天）：這張表是給管理者看「最近有沒有寄」，不是稽核存底，
+  // 以前不設窗會無限延展（2026-09-23 使用者要求）。窗以 sendDate 判斷，但當天才補寄成功
+  // 的舊 sendDate 列也要看得到（updatedAt 在窗內就算），不然「今天有沒有跑」又看不出來。
+  // 更早的列留在資料庫，由 notifyRunner 的 purgeOldLogs 每天清 30 天以上的。
+  const windowStart = recentWorkdaysStart(todayTaipei(), LOG_WINDOW_WORKDAYS, await prismaNotifyStore.loadRestDays())
   // 以 updatedAt 而非 createdAt 排序：重試走的是 upsert-update，createdAt
   // 停在第一次建立的時間，用它排序會讓今天才處理完的記錄沉在下面，看起來
   // 就像當天沒跑。前端也要把這個時間顯示出來，排序依據才是看得見的。
   const logs = await prisma.notificationLog.findMany({
+    where: { OR: [{ sendDate: { gte: windowStart } }, { updatedAt: { gte: taipeiMidnightUtc(windowStart) } }] },
     orderBy: { updatedAt: 'desc' },
     take: limit,
   })
@@ -371,6 +385,8 @@ router.get('/logs', async (req, res) => {
   // platformStatus 一律回 null，前端退回顯示本地 status。
   const statuses = await fetchDeliveryStatuses(logs.map(l => l.deliveryId).filter((x): x is string => !!x))
   res.json({
+    windowStart,
+    windowWorkdays: LOG_WINDOW_WORKDAYS,
     logs: logs.map(l => {
       const s = l.deliveryId ? statuses.get(l.deliveryId) : undefined
       return {

@@ -8,7 +8,7 @@ import https from 'node:https'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import cron from 'node-cron'
-import { runDailyNotify } from './lib/notifyRunner.js'
+import { runDailyNotify, purgeOldLogs } from './lib/notifyRunner.js'
 import { prismaNotifyStore } from './lib/notifyStore.js'
 import { platformDeliverer, notifyConfigured } from './lib/notifyClient.js'
 import { guestReadOnly } from './middleware/guestReadOnly.js'
@@ -174,6 +174,11 @@ function startNotifyCron(): void {
         }
       })
       .catch(err => console.error('[notify] daily run failed:', err))
+      // 寄送紀錄只保留 LOG_RETENTION_DAYS 天（頁面只顯示最近五個工作日）；接在每日跑之後，
+      // 獨立 catch，清不掉不影響上面已完成的寄送。
+      .then(() => purgeOldLogs(prismaNotifyStore))
+      .then(p => { if (p.deleted > 0) console.log(`[notify] purged ${p.deleted} log row(s) with sendDate before ${p.before}`) })
+      .catch(err => console.error('[notify] log purge failed:', err))
   }, { timezone: 'Asia/Taipei' })
   // 明確指定時區：process 的時區與 todayTaipei() 硬編的 UTC+8 目前恰好一致
   // （伺服器本來就跑在 Asia/Taipei），但那只是巧合，不是保證。這個專案已經

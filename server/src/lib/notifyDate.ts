@@ -49,6 +49,21 @@ export function addWorkdays(fromYmd: string, n: number, settings: RestDaySetting
   return cur
 }
 
+/**
+ * 「最近 n 個工作日」的起日：從 today 往回數，休息日不計；today 本身是工作日就算第 1 天，
+ * 是休息日則從前一個工作日開始算。回傳第 n 個工作日的日期（YYYY/MM/DD）。
+ * 寄送紀錄頁只顯示這個窗內的列（GET /api/notify/logs）。n <= 0 回 today。
+ */
+export function recentWorkdaysStart(today: string, n: number, settings: RestDaySettings): string {
+  let cur = today
+  let left = isRestDay(cur, settings) ? n : n - 1
+  while (left > 0) {
+    cur = addDays(cur, -1)
+    if (!isRestDay(cur, settings)) left--
+  }
+  return cur
+}
+
 export function isRestDay(ymd: string, settings: RestDaySettings): boolean {
   if (settings.weekends) {
     const dow = toUtc(ymd).getUTCDay()

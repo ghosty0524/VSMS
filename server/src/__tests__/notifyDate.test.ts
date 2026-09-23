@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeSendDate, isRestDay, addDays, addWorkdays, daysBetween } from '../lib/notifyDate.js'
+import { computeSendDate, isRestDay, addDays, addWorkdays, daysBetween, recentWorkdaysStart } from '../lib/notifyDate.js'
 
 const weekendsOnly = { weekends: true, specificDates: [] as string[] }
 const noRest = { weekends: false, specificDates: [] as string[] }
@@ -45,6 +45,31 @@ describe('addWorkdays', () => {
 
   it('returns the same date when n is 0', () => {
     expect(addWorkdays('2026/09/25', 0, weekendsOnly)).toBe('2026/09/25')
+  })
+})
+
+describe('recentWorkdaysStart', () => {
+  it('counts today as the first working day and walks back over the weekend', () => {
+    // 2026/09/23 是週三：23(三)=1、22(二)=2、21(一)=3、20(日)／19(六) 不計、18(五)=4、17(四)=5
+    expect(recentWorkdaysStart('2026/09/23', 5, weekendsOnly)).toBe('2026/09/17')
+  })
+
+  it('skips listed specific dates as well as weekends', () => {
+    // 09/22 特休 → 23=1、21=2、18=3、17=4、16=5
+    expect(recentWorkdaysStart('2026/09/23', 5, { weekends: true, specificDates: ['2026/09/22'] })).toBe('2026/09/16')
+  })
+
+  it('does not count today when today is a rest day', () => {
+    // 2026/09/27 是週日：25(五)=1、24=2、23=3、22=4、21=5
+    expect(recentWorkdaysStart('2026/09/27', 5, weekendsOnly)).toBe('2026/09/21')
+  })
+
+  it('is plain calendar days when nothing is a rest day', () => {
+    expect(recentWorkdaysStart('2026/09/23', 5, noRest)).toBe('2026/09/19')
+  })
+
+  it('returns today for n <= 0', () => {
+    expect(recentWorkdaysStart('2026/09/23', 0, weekendsOnly)).toBe('2026/09/23')
   })
 })
 

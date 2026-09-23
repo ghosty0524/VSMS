@@ -55,27 +55,33 @@ function formatHandledAt(iso: string): string {
 
 export function NotifyLogTable({ refreshToken = 0 }: { refreshToken?: number }) {
   const [logs, setLogs] = useState<NotifyLog[] | null>(null)
+  const [windowStart, setWindowStart] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const reload = () => {
     api.notifyLogs()
-      .then(r => { setLogs(r.logs); setError(null) })
+      .then(r => { setLogs(r.logs); setWindowStart(r.windowStart ?? null); setError(null) })
       .catch(e => setError(e instanceof ApiError ? e.message : String(e)))
   }
+  // 後端只回最近五個工作日（含當天）的紀錄，這裡把窗講清楚，免得有人以為更早的通知沒寄。
+  const windowNote = `只顯示最近五個工作日${windowStart ? `（${windowStart} 起）` : ''}的紀錄`
   // refreshToken 由外層在「立即檢查並補寄」跑完後遞增 —— 這張表是那顆按鈕的
   // 兄弟元件，沒有這條線就只會停在進入頁面當下的內容。
   useEffect(() => { reload() }, [refreshToken])
 
   if (error) return <p className="text-sm text-red-600">{error}</p>
   if (!logs) return <p className="text-sm text-gray-400">載入中…</p>
-  if (logs.length === 0) return <p className="text-sm text-gray-400">尚無通知記錄</p>
+  if (logs.length === 0) return <p className="text-sm text-gray-400">{windowNote}；這段期間沒有通知記錄</p>
 
   return (
     <div className="overflow-x-auto">
-      <button type="button" onClick={reload}
-        className="mb-2 px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">
-        重新整理
-      </button>
+      <div className="mb-2 flex items-center gap-3">
+        <button type="button" onClick={reload}
+          className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">
+          重新整理
+        </button>
+        <span className="text-xs text-gray-500">{windowNote}</span>
+      </div>
       <table className="w-full text-sm">
         <thead>
           <tr className="text-xs text-gray-500 border-b border-gray-200">

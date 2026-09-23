@@ -94,6 +94,11 @@ export const prismaNotifyStore: NotifyStore = {
     })
   },
 
+  async deleteLogsBefore(sendDateExclusive: string): Promise<number> {
+    const r = await prisma.notificationLog.deleteMany({ where: { sendDate: { lt: sendDateExclusive } } })
+    return r.count
+  },
+
   async loadAccountByEngineer(value: string): Promise<{ id: string; username: string } | null> {
     return prisma.user.findFirst({
       where: { linkedEngineer: value, isActive: true },

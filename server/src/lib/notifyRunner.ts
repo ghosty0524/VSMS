@@ -1,5 +1,5 @@
 import { todayTaipei } from './today.js'
-import { computeSendDate, addDays, daysBetween } from './notifyDate.js'
+import { computeSendDate, addDays, daysBetween, MAX_STEP_BACK_DAYS } from './notifyDate.js'
 import type { RestDaySettings } from './notifyDate.js'
 import { planRecipients } from './notifyRecipients.js'
 import { resolveRule } from './notifyRule.js'
@@ -58,6 +58,8 @@ export interface NotifyStore {
   findCandidates(today: string): Promise<CandidateSchedule[]>
   findLogs(scheduleIds: string[]): Promise<NotificationLogRow[]>
   upsertLog(entry: LogUpsert): Promise<void>
+  /** 刪掉 sendDate 早於（不含）該日的紀錄，回傳筆數；只給 purgeOldLogs 用。 */
+  deleteLogsBefore(sendDateExclusive: string): Promise<number>
   /**
    * testEngineer 對應到的 VSMS 帳號（users.linkedEngineer === value），找不到回 null。
    * 同時回傳 username：跨系統的身分鍵是 username，不是本機的 id ——
@@ -75,6 +77,20 @@ export interface NotifyStore {
  * 各單位可調整的偏好。若日後出現第二個佔位編號，再考慮搬進 NotifyConfig。
  */
 export const EXCLUDED_PROJECT_NAMES = ['PDN-999999']
+
+/**
+ * 寄送紀錄在資料庫的保存天數（日曆天）。紀錄頁只顯示最近五個工作日，更早的列沒人看，
+ * 但「已寄過就不重寄」的判斷（findLogs）會回看 catchUpDays 天、最多 MAX_STEP_BACK_DAYS 天，
+ * 所以清除線一定要落在那兩個數字之外——purgeOldLogs 取三者最大值再多留一天。
+ */
+export const LOG_RETENTION_DAYS = 30
+
+export async function purgeOldLogs(store: NotifyStore, today: string = todayTaipei()): Promise<{ before: string; deleted: number }> {
+  const config = await store.loadConfig()
+  const keep = Math.max(LOG_RETENTION_DAYS, MAX_STEP_BACK_DAYS, config?.catchUpDays ?? 0) + 1
+  const before = addDays(today, -keep)
+  return { before, deleted: await store.deleteLogsBefore(before) }
+}
 
 export interface RunResult {
   /** 本次執行檢視過的候選排程總數（不論是否落在寄信視窗內）。 */

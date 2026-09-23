@@ -183,7 +183,7 @@ export const api = {
   notifyPreview: (scheduleId: string) =>
     req<NotifyPreview>('POST', '/notify/preview', { scheduleId }),
   notifyLogs: (limit = 200) =>
-    req<{ logs: NotifyLog[] }>('GET', `/notify/logs?limit=${limit}`),
+    req<{ logs: NotifyLog[]; windowStart?: string; windowWorkdays?: number }>('GET', `/notify/logs?limit=${limit}`),
   notifyRun: () =>
     req<NotifyRunResult>('POST', '/notify/run'),
   notifyTest: (to: string) =>

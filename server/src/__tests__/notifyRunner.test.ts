@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { runDailyNotify } from '../lib/notifyRunner.js'
+import { runDailyNotify, purgeOldLogs, LOG_RETENTION_DAYS } from '../lib/notifyRunner.js'
+import { addDays } from '../lib/notifyDate.js'
 import type { NotifyStore, NotifyConfigRow, CandidateSchedule, NotificationLogRow, LogUpsert } from '../lib/notifyRunner.js'
 import type { NotifyRuleRow } from '../lib/notifyRule.js'
 import type { Deliverer, DeliverInput } from '../lib/notifyClient.js'
@@ -50,6 +51,7 @@ function makeStore(overrides: Partial<{
     findCandidates: async () => overrides.candidates ?? [baseSchedule],
     findLogs: async () => overrides.logs ?? [],
     upsertLog: async (e) => { upserts.push(e) },
+    deleteLogsBefore: async () => 0,
     // accountsByEngineer 的值同時當作 id 與 username 用（id 加個字首避免跟
     // username 撞在一起）——這裡只是測試替身，真正的兩者關係見 notifyStore.ts。
     loadAccountByEngineer: async (value) => {
@@ -633,5 +635,29 @@ describe('runDailyNotify — 測試人員副本', () => {
     expect(sent[0].cc).toEqual([])
     expect(result.sent).toBe(1)
     expect(result.errors).toEqual([])
+  })
+})
+
+describe('purgeOldLogs', () => {
+  it('clears rows older than LOG_RETENTION_DAYS (+1 day of slack) when the catch-up window is small', async () => {
+    const { store } = makeStore()
+    const calls: string[] = []
+    store.deleteLogsBefore = async (d) => { calls.push(d); return 7 }
+
+    const r = await purgeOldLogs(store, '2026/09/23')
+
+    const before = addDays('2026/09/23', -(LOG_RETENTION_DAYS + 1))
+    expect(calls).toEqual([before])
+    expect(r).toEqual({ before, deleted: 7 })
+  })
+
+  it('never purges inside a catch-up window larger than the retention', async () => {
+    const { store } = makeStore({ config: { enabled: true, systemUrl: '', leadDays: 3, catchUpDays: 45, mailDomain: '' } })
+    const calls: string[] = []
+    store.deleteLogsBefore = async (d) => { calls.push(d); return 0 }
+
+    await purgeOldLogs(store, '2026/09/23')
+
+    expect(calls).toEqual([addDays('2026/09/23', -46)])
   })
 })
