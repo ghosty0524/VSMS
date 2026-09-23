@@ -46,7 +46,7 @@ export function DeviceManager() {
                 <button
                   type="button"
                   onClick={async () => { await updateDevice(d.id, editValue.trim()); setEditId(null) }}
-                  className="text-xs px-2 py-1 bg-blue-500 text-white rounded"
+                  className="text-xs px-2 py-1 bg-stone-900 hover:bg-stone-800 text-white rounded"
                 >
                   確認
                 </button>

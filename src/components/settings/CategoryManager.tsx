@@ -38,7 +38,7 @@ export function CategoryManager() {
                 <input className="border rounded px-2 py-1 text-sm flex-1"
                   value={editValue} onChange={e => setEditValue(e.target.value)} />
                 <button type="button" onClick={async () => { await updateCategory(c.id, editValue.trim()); setEditId(null) }}
-                  className="text-xs px-2 py-1 bg-blue-500 text-white rounded">確認</button>
+                  className="text-xs px-2 py-1 bg-stone-900 hover:bg-stone-800 text-white rounded">確認</button>
                 <button type="button" onClick={() => setEditId(null)}
                   className="text-xs px-2 py-1 border rounded">取消</button>
               </>
