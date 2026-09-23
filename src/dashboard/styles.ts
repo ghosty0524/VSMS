@@ -2,7 +2,7 @@ export const DASHBOARD_CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
+  font-family: 'Microsoft JhengHei UI', 'Microsoft JhengHei', 'Segoe UI', system-ui, sans-serif;
   background: #f1f5f9;
   color: #1e293b;
   font-size: 14px;

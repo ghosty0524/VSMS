@@ -86,6 +86,10 @@
   --color-accent-mid: #128077;
   --color-accent-bg:  #D7EDE8;
 
+  /* ── 字型：三個系統共用，用戶端都是 Windows，不載外部字型 ─────── */
+  --font-sans: "Microsoft JhengHei UI", "Microsoft JhengHei", "Segoe UI", system-ui, sans-serif;
+  --font-mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
+
   /* Header 的 toast 一直掛著 animate-fade-in，但這個 class 從來沒有
      定義過，等於靜默失效。補上定義讓它真的有動畫。 */
   --animate-fade-in: fade-in 0.18s ease-out;
