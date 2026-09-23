@@ -24,6 +24,10 @@ export const DASHBOARD_JS = `
   var STATUS_GLYPH = {
     'Cancelled': '✕', 'Completed': '✓', 'Delayed': '!', 'Testing': '▶', 'Planned': '○',
   };
+  /* 狀態的畫面文字。對照 src/lib/status.ts 的 STATUS_LABELS，兩份要一起改。 */
+  var STATUS_LABELS = {
+    'Planned': '計畫中', 'Testing': '測試中', 'Completed': '已完成', 'Delayed': '延遲', 'Cancelled': '已取消',
+  };
 
   /* ── 工具函式 ── */
   /* 顏色解析：與主系統 src/lib/colors.ts 同規則。
@@ -421,7 +425,7 @@ export const DASHBOARD_JS = `
         +'<div style="display:flex;align-items:center;gap:6px;padding-top:2px;overflow:hidden;">'
           +'<span style="flex-shrink:0;height:17px;padding:0 6px;border-radius:4px;font-size:11px;'
           +'font-weight:700;line-height:17px;white-space:nowrap;letter-spacing:0.02em;'
-          +'background:'+sc.bg+';color:'+sc.text+';">'+status+'</span>'
+          +'background:'+sc.bg+';color:'+sc.text+';">'+STATUS_LABELS[status]+'</span>'
           +(taskDesc ? '<span style="font-size:11px;color:#64748b;overflow:hidden;white-space:nowrap;'
             +'text-overflow:ellipsis;">'+taskDesc+'</span>' : '')
         +'</div>'
@@ -511,7 +515,7 @@ export const DASHBOARD_JS = `
       bar.addEventListener('mouseenter', function() {
         ganttTooltip.innerHTML =
           '<div style="font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:6px;">'+escapeHtml(s.projectName)+'</div>'
-          +'<div style="margin-bottom:4px;"><span class="status-badge status-'+status+'">'+status+'</span></div>'
+          +'<div style="margin-bottom:4px;"><span class="status-badge status-'+status+'">'+STATUS_LABELS[status]+'</span></div>'
           +'<div style="font-size:13px;color:#cbd5e1;">'
           +'<div>📁 類別：'+escapeHtml(s.category)+'</div>'
           +'<div>🏷 單位：'+escapeHtml(s.testUnit)+' / '+escapeHtml(s.testEngineer)+'</div>'
@@ -569,7 +573,7 @@ export const DASHBOARD_JS = `
       var glyph     = STATUS_GLYPH[status] || '';
       var restClass = isRestDay(parseDate(s.startDate)) ? ' rest-day' : '';
       return '<tr class="list-row'+restClass+'" data-idx="'+i+'" style="cursor:pointer">'
-        +'<td><span class="status-badge status-'+status+'">'+glyph+' '+status+'</span></td>'
+        +'<td><span class="status-badge status-'+status+'">'+glyph+' '+STATUS_LABELS[status]+'</span></td>'
         +'<td>'+escapeHtml(s.category)+'</td>'
         +'<td title="'+escapeHtml(s.projectName)+'">'+escapeHtml(s.projectName)+'</td>'
         +'<td title="'+escapeHtml(s.taskDescription||'')+'">'+escapeHtml(s.taskDescription||'—')+'</td>'
@@ -594,7 +598,7 @@ export const DASHBOARD_JS = `
   function openModal(s) {
     var status = computeStatus(s);
     var fields = [
-      ['狀態',     '<span class="status-badge status-'+status+'">'+status+'</span>'],
+      ['狀態',     '<span class="status-badge status-'+status+'">'+STATUS_LABELS[status]+'</span>'],
       ['工作類別', escapeHtml(s.category)],
       ['PDN Number', escapeHtml(s.projectName)],
       ['工作內容', escapeHtml(s.taskDescription || '—')],

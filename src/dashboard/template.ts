@@ -2,6 +2,7 @@ import type { Schedule, OptionsMap } from '../types'
 import { DASHBOARD_CSS } from './styles'
 import { DASHBOARD_JS } from './script'
 import { UNIT_COLORS, EXTRA_COLORS, OVERFLOW_COLOR } from '../constants'
+import { STATUS_LABELS } from '../lib/status'
 
 function getUnitColor(unit: string, allUnits: string[], options: OptionsMap): string {
   const custom = options.testUnits.find(u => u.value === unit)?.color
@@ -67,7 +68,7 @@ export function generateDashboardHTML(schedules: Schedule[], options: OptionsMap
   + `<span class="legend-item"><span class="legend-dot" style="background:${OVERFLOW_COLOR}"></span>超出時間資源</span>`
 
   const statusCheckboxes = ALL_STATUSES.map(s =>
-    `<label><input type="checkbox" class="status-cb" value="${s}"${s !== 'Completed' && s !== 'Cancelled' ? ' checked' : ''}> <span class="status-badge status-${s}">${s}</span></label>`
+    `<label><input type="checkbox" class="status-cb" value="${s}"${s !== 'Completed' && s !== 'Cancelled' ? ' checked' : ''}> <span class="status-badge status-${s}">${STATUS_LABELS[s]}</span></label>`
   ).join('')
 
   return `<!DOCTYPE html>
