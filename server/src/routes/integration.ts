@@ -432,4 +432,31 @@ router.patch('/schedules/:id/complete', requireApiKey, async (req, res) => {
   res.json(updated);
 });
 
+// PATCH /plans/:planId/complete — VTMS 確認完成時呼叫，也是 VTMS 定期比對的補送入口
+// 一個計畫可能連到多筆排程（同一個測試的不同設備或時段），沒取消的一起標完成。
+// 以前 VTMS 用 by-plan 的 findFirst 只拿到一筆，拿到已取消那筆時其他排程永遠不會完成，
+// 而有 vtmsPlanId 的排程又不准人手動改完成，只能一路逾期。
+// 已取消的不動：取消是 VSMS 排程層的人為決策，VTMS 完成事件不覆寫（同 /schedules/:id/complete）。
+// 沒有連結也回 200 與空陣列，呼叫端不必分辨「沒連結」和「錯誤」；重複呼叫是冪等的。
+router.patch('/plans/:planId/complete', requireApiKey, async (req, res) => {
+  const planId = String(req.params.planId).trim();
+  if (!planId) { res.status(400).json({ error: 'planId is required' }); return; }
+  const linked = await prisma.schedule.findMany({
+    where: { vtmsPlanId: planId },
+    select: { id: true, isCompleted: true, isCancelled: true },
+  });
+  const cancelled = linked.filter(s => s.isCancelled).length;
+  const alreadyCompleted = linked.filter(s => !s.isCancelled && s.isCompleted).length;
+  const completed: string[] = [];
+  for (const s of linked) {
+    if (s.isCancelled || s.isCompleted) continue;
+    await prisma.schedule.update({
+      where: { id: s.id },
+      data: { isCompleted: true, ...completedAtPatch(false, true), updatedAt: new Date() },
+    });
+    completed.push(s.id);
+  }
+  res.json({ planId, completed, alreadyCompleted, cancelled });
+});
+
 export default router;
