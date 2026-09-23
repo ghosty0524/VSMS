@@ -36,3 +36,20 @@ export function overdueDays(s: Schedule, today: Date = new Date()): number {
   const days = Math.round((t.getTime() - end.getTime()) / 86_400_000)
   return days > 0 ? days : 0
 }
+
+/**
+ * 狀態的畫面文字。只給「畫到畫面上」用：篩選、排序、Agent Excel、剪貼簿
+ * 一律用英文狀態值，不要拿這裡的中文去比較或輸出。
+ * 詞表與 VTMS、入口頁共用（2026-09-23 設計系統定案）。
+ */
+export const STATUS_LABELS: Record<ScheduleStatus, string> = {
+  Planned: '計畫中',
+  Testing: '測試中',
+  Completed: '已完成',
+  Delayed: '延遲',
+  Cancelled: '已取消',
+}
+
+export function statusLabel(s: ScheduleStatus): string {
+  return STATUS_LABELS[s]
+}
