@@ -266,7 +266,7 @@ export function PersonFormModal({ person, mode, onClose, onSaved }: Props) {
             {rosterError && <p className="text-xs text-red-600">{rosterError}</p>}
           </>)}
 
-          {section(account ? '帳號' : '建立帳號', <>
+          {section(account ? '帳號' : '新增帳號', <>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-600 mb-1">帳號</label>

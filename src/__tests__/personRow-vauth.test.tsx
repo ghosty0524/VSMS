@@ -46,7 +46,7 @@ describe('PersonRow under vauth', () => {
     )
     expect(screen.queryByRole('button', { name: '停用' })).toBeNull()
     expect(screen.queryByRole('button', { name: '啟用' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /建立帳號/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /新增帳號/ })).toBeNull()
     expect(screen.getByRole('button', { name: '編輯' })).toBeInTheDocument()
   })
 
@@ -56,7 +56,7 @@ describe('PersonRow under vauth', () => {
         onEdit={noop} onToggleActive={noop} onColorChange={noop} onCreateAccount={noop} />
     )
     expect(screen.getByRole('button', { name: '停用' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /建立帳號/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /新增帳號/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '編輯' })).toBeInTheDocument()
   })
 })

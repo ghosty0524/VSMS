@@ -517,7 +517,7 @@ export function GanttChart({
           <div className="flex flex-col items-center text-center text-gray-400">
             <ClipboardList size={44} strokeWidth={1.25} className="mb-4 text-gray-300" />
             <p className="text-base font-medium text-gray-600">尚無工作排程</p>
-            <p className="text-sm text-gray-500 mt-1">點擊上方的「＋ 新增排程」開始建立</p>
+            <p className="text-sm text-gray-500 mt-1">點擊上方的「新增排程」加入第一筆排程</p>
           </div>
         </div>
         <ScheduleFormModal isOpen={showAddModal} schedule={null} onSaved={handleSaved} onClose={onCloseAddModal} />

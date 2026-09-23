@@ -95,7 +95,7 @@ export function PersonRow({ person, variant, authProvider, onEdit, onToggleActiv
         ) : authProvider !== 'vauth' ? (
           <button type="button" onClick={() => onCreateAccount(person)}
             className="flex items-center gap-1 px-2 py-1 border border-dashed border-gray-300 rounded text-gray-500 hover:bg-white hover:text-gray-700">
-            <UserPlus size={12} />建立帳號
+            <UserPlus size={12} />新增帳號
           </button>
         ) : null}
       </div>
