@@ -13,6 +13,10 @@
 // 單位色塊改成可點擊的篩選，並同時保留圖例功能。色塊本來就帶單位色，
 // 點下去就是篩選那個單位，因此不需要另外一列圖例，也不需要那句
 // 「外框為測試單位，內裡為測試人員」——改放進 title。
+//
+// 2026-09（UI 統一第 3 項 C）：工具列在 1440px 寬時剛好塞滿，再窄就要橫向捲動。
+// 匯入、匯出、下載範本、複製表格都是低頻動作，收進右側的「更多」；主要動作
+// 「新增排程」移到最右邊，全螢幕只留圖示。條件列與工具列維持兩排（使用者選定）。
 import { useState } from 'react'
 import {
   Upload, Download, FileSpreadsheet, Plus,
@@ -25,6 +29,7 @@ import { downloadTemplate, exportSchedules, generateAgentExcel } from '../../lib
 import { resolveUnitColor, readableTextColor } from '../../lib/colors'
 import { toast } from '../../store/toastStore'
 import { SegmentedControl } from '../shared/SegmentedControl'
+import { MenuButton, type MenuItem } from '../shared/MenuButton'
 import { ExcelImportModal } from './ExcelImportModal'
 import { ExportModal } from './ExportModal'
 import { OVERFLOW_COLOR } from '../../constants'
@@ -109,49 +114,25 @@ export function ScheduleToolbar({
     onFilterChange({ ...filterSort, testUnits: next, testEngineers: [] })
   }
 
+  const fullscreenLabel = isFullscreen ? '離開全螢幕（Esc）' : '全螢幕檢視'
+
+  // 順序固定：匯入、匯出、範本、複製表格。沒有任何項目時 MenuButton 不渲染。
+  const moreItems: MenuItem[] = [
+    ...(canWrite ? [
+      { key: 'import', label: '匯入排程…', icon: <Upload size={13} />, title: '從 Excel 匯入排程', onSelect: () => setShowImport(true) },
+      { key: 'export', label: '匯出…', icon: <Download size={13} />, title: '匯出排程或 Dashboard', onSelect: () => setShowExport(true) },
+      { key: 'template', label: '下載匯入範本', icon: <FileSpreadsheet size={13} />, title: '下載 Excel 匯入範本', onSelect: downloadTemplate },
+    ] : []),
+    ...(viewMode === 'list' ? [
+      { key: 'copy', label: '複製表格', icon: <ClipboardCopy size={13} />, title: '複製目前篩選結果的完整列表（可貼到 Excel、Word 或 Outlook）', onSelect: onCopyList },
+    ] : []),
+  ]
+
   return (
     <>
       <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2
                       overflow-x-auto whitespace-nowrap
                       bg-slate-50 border-b border-slate-200">
-
-        {/* ── 排程操作 ── */}
-        {canWrite && (
-          <>
-            <button
-              type="button"
-              onClick={onAddSchedule}
-              className="flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs font-semibold
-                         rounded-md bg-stone-900 text-white hover:bg-stone-800
-                         transition-colors active:scale-95"
-            >
-              <Plus size={14} strokeWidth={2.5} />
-              新增排程
-            </button>
-            <button type="button" onClick={() => setShowImport(true)} title="從 Excel 匯入排程" className={BTN}>
-              <Upload size={13} />
-              匯入
-            </button>
-
-            <button type="button" onClick={() => setShowExport(true)} title="匯出排程或 Dashboard" className={BTN}>
-              <Download size={13} />
-              匯出
-            </button>
-
-            <button
-              type="button"
-              onClick={downloadTemplate}
-              title="下載 Excel 匯入範本"
-              className="flex flex-shrink-0 items-center justify-center w-8 h-8
-                         rounded-md border border-slate-300 bg-white text-slate-600
-                         hover:bg-slate-50 transition-colors"
-            >
-              <FileSpreadsheet size={14} />
-            </button>
-
-            <div className="w-px h-5 bg-slate-300 flex-shrink-0" />
-          </>
-        )}
 
         {/* ── 視圖 ── */}
         {/* 測試人員登入後預設只看自己的排程。這件事重要到不該埋在要展開才
@@ -243,28 +224,34 @@ export function ScheduleToolbar({
         {/* 日期範圍不在這裡顯示。它是一個篩選條件，位置在上方的條件列，
             工具列再放一份只會讓同一件事在畫面上出現兩次。 */}
 
-        {/* ── 右側工具 ── */}
+        {/* ── 右側工具：全螢幕、更多、主要動作 ── */}
         <div className="ml-auto flex flex-shrink-0 items-center gap-2 pl-2">
-          {viewMode === 'list' && (
-            <button
-              type="button"
-              title="複製目前篩選結果的完整列表（可貼到 Excel、Word 或 Outlook）"
-              onClick={onCopyList}
-              className={BTN}
-            >
-              <ClipboardCopy size={13} />
-              複製表格
-            </button>
-          )}
           <button
             type="button"
-            title={isFullscreen ? '離開全螢幕（Esc）' : '全螢幕檢視'}
+            title={fullscreenLabel}
+            aria-label={fullscreenLabel}
             onClick={onToggleFullscreen}
-            className={BTN}
+            className="flex flex-shrink-0 items-center justify-center w-8 h-8
+                       rounded-md border border-slate-300 bg-white text-slate-600
+                       hover:bg-slate-50 transition-colors"
           >
-            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-            {isFullscreen ? '離開全螢幕' : '全螢幕'}
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
+
+          <MenuButton label="更多" items={moreItems} className={BTN} />
+
+          {canWrite && (
+            <button
+              type="button"
+              onClick={onAddSchedule}
+              className="flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs font-semibold
+                         rounded-md bg-stone-900 text-white hover:bg-stone-800
+                         transition-colors active:scale-95"
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              新增排程
+            </button>
+          )}
         </div>
       </div>
 
