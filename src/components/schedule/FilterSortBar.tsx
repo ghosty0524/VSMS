@@ -15,6 +15,7 @@ import {
   buildOptionLabels, buildLabelByValue, buildEngineerLabelByValue,
 } from '../../lib/filterOptions'
 import { STATUS_LABELS, statusLabel, type ScheduleStatus } from '../../lib/status'
+import { displayYmd } from '../../lib/dateFormat'
 import type { Role } from '../../types'
 
 // ── 排序型別 ─────────────────────────────────────────
@@ -279,7 +280,7 @@ export function FilterSortBar({ value, onChange, collapsed, onToggleCollapse, ro
     })
   }
   if (hasGanttRange)
-    chips.push({ key: 'range', label: '期間', text: `${value.ganttStart || '最早'} ～ ${value.ganttEnd || '最晚'}`, onRemove: () => set({ ganttStart: '', ganttEnd: '' }) })
+    chips.push({ key: 'range', label: '期間', text: `${displayYmd(value.ganttStart) || '最早'} ～ ${displayYmd(value.ganttEnd) || '最晚'}`, onRemove: () => set({ ganttStart: '', ganttEnd: '' }) })
   if (value.showUserFlagged)
     chips.push({ key: 'uflag', text: '只顯示已標記', onRemove: () => set({ showUserFlagged: false }) })
   if (value.showAdminFlagged)
