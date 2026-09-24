@@ -42,6 +42,9 @@ export function PeopleManager() {
   // 讀帳號失敗的訊息。名冊來自 options，照常畫得出來，但每個人都會像「沒有帳號」，
   // 所以除了 toast 之外還要在清單上方留一條看得到的提示。
   const [usersError, setUsersError] = useState<string | null>(null)
+  // 重試中：只用來擋按鈕重複點擊，不能沿用 loading——loading 為 true 會讓上面
+  // `if (loading) return <p>載入中...</p>` 整頁跳回轉圈，蓋掉已經畫出來的名冊。
+  const [retrying, setRetrying] = useState(false)
   const [form, setForm] = useState<{ name: string; mode: 'edit' | 'create-account' } | null>(null)
   const [newNames, setNewNames] = useState<Record<string, string>>({})
   const [addErrors, setAddErrors] = useState<Record<string, string>>({})
@@ -57,6 +60,13 @@ export function PeopleManager() {
     } finally { setLoading(false) }
   }
   useEffect(() => { void loadUsers() }, [])
+
+  // 重試按鈕的動作：擋住重試進行中的第二次點擊（見 retrying 的說明），
+  // 不是靠 disabled 屬性，是靠不傳 onRetry 給 ListState——沒有 onRetry 按鈕就不畫。
+  const handleRetry = async () => {
+    setRetrying(true)
+    try { await loadUsers() } finally { setRetrying(false) }
+  }
 
   const model = useMemo(() => buildPeopleModel(options.testUnits, users), [options.testUnits, users])
   const inactiveCount = model.inactive.reduce((n, g) => n + g.people.length, 0)
@@ -195,7 +205,7 @@ export function PeopleManager() {
       </p>
 
       <ListState noun="帳號" loading={loading} error={usersError} count={activeCardCount}
-        onRetry={() => { void loadUsers() }}>
+        onRetry={retrying ? undefined : () => { void handleRetry() }}>
         {header}
         <div className="space-y-4">
           {activeDepts.map(d => deptCard(d, 'active'))}

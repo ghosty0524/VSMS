@@ -66,6 +66,28 @@ describe('PeopleManager 讀帳號失敗', () => {
     expect(screen.getByText('Rock_Cai')).toBeInTheDocument()
   })
 
+  it('重試進行中：按鈕消失，即使再次嘗試點擊也不會發出第二次重試請求', async () => {
+    apiMock.getUsers
+      .mockRejectedValueOnce(new Error('資料庫連線逾時'))
+      .mockReturnValueOnce(new Promise(() => {})) // 重試請求永不 resolve，模擬進行中
+    const user = userEvent.setup()
+    render(<PeopleManager />)
+
+    const retryButton = await screen.findByRole('button', { name: '重試' })
+    await user.click(retryButton)
+
+    // 重試中：按鈕應該消失（ListState 沒收到 onRetry 就不畫按鈕）
+    await waitFor(() => expect(screen.queryByRole('button', { name: '重試' })).toBeNull())
+    // 頁面不能整個跳回「載入中...」，名冊與失敗提示（含錯誤小字）都還在
+    expect(screen.queryByText('載入中...')).toBeNull()
+    expect(screen.getByRole('alert')).toHaveTextContent('無法載入帳號')
+    expect(screen.getByText('Rock_Cai')).toBeInTheDocument()
+
+    // 呼叫次數固定在 2（初始 1 次 + 重試 1 次），沒有按鈕可再點，
+    // 即使有殘留的 click 事件也不會再打第三次
+    expect(apiMock.getUsers).toHaveBeenCalledTimes(2)
+  })
+
   it('讀取成功：沒有失敗提示', async () => {
     apiMock.getUsers.mockResolvedValue([])
     render(<PeopleManager />)
