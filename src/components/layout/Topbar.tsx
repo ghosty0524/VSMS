@@ -93,7 +93,7 @@ export function Topbar() {
       />
 
       {inlineApps.length > 0 && (
-        <nav aria-label="系統" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+        <nav aria-label="系統" className="hidden md:flex min-w-0 items-center gap-1 overflow-x-auto">
           {inlineApps.map(a => {
             const current = a.code === CURRENT_APP_CODE
             return (
@@ -153,7 +153,7 @@ export function Topbar() {
                              bg-[var(--vw-accent)] text-[11px] font-bold text-white">
               {avatarInitials(displayName)}
             </span>
-            <span className="hidden sm:inline text-[13px] text-slate-800">{displayName}</span>
+            <span className="hidden sm:inline max-w-[160px] truncate text-[13px] text-slate-800">{displayName}</span>
           </>
         }
       />
