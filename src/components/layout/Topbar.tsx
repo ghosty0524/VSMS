@@ -4,7 +4,7 @@
 // F:\vportal\docs\superpowers\specs\2026-09-24-global-topbar-design.md
 //
 // 由左到右：產品切換（下拉）、並排連結、彈性空白、通知鈴鐺、使用者選單。
-// 原本 Header 的導覽分頁搬到頂欄下方的 NavTabs；「回入口頁」由產品切換取代；
+// 原本 Header 的導覽分頁搬到頂欄下方的左側欄（Sidebar，UI 統一 4C）；「回入口頁」由產品切換取代；
 // 角色縮寫徽章（SA/A/U/G）改成使用者選單標頭裡的中文角色。
 //
 // 連到入口頁與其他系統的網址都是站台根目錄的絕對路徑（/、/inbox、/change-password、
