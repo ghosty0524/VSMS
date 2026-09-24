@@ -3,15 +3,17 @@
 // 全域頂欄（UI 統一 4A）。三系統各自實作、行為一致，規格：
 // F:\vportal\docs\superpowers\specs\2026-09-24-global-topbar-design.md
 //
-// 由左到右：產品切換（下拉）、並排連結、彈性空白、通知鈴鐺、使用者選單。
+// 由左到右：（< md 且有側欄時）「選單」鈕、產品切換（下拉）、並排連結、彈性空白、通知鈴鐺、使用者選單。
 // 原本 Header 的導覽分頁搬到頂欄下方的左側欄（Sidebar，UI 統一 4C）；「回入口頁」由產品切換取代；
 // 角色縮寫徽章（SA/A/U/G）改成使用者選單標頭裡的中文角色。
 //
 // 連到入口頁與其他系統的網址都是站台根目錄的絕對路徑（/、/inbox、/change-password、
 // /vtms/），不經 withBase：VSMS 部署在 /vsms/ 底下，加前綴會變成 /vsms/inbox。
-import { Bell, Check, KeyRound, LogOut } from 'lucide-react'
+import { Bell, Check, KeyRound, LogOut, Menu } from 'lucide-react'
 import { MenuButton, type MenuItem } from '../shared/MenuButton'
 import { useAuthStore } from '../../store/authStore'
+import { useNavDrawerStore } from '../../store/navDrawerStore'
+import { NAV_DRAWER_ID, NAV_MENU_BUTTON_ID, sidebarVisible } from './Sidebar'
 import { useTopbarData } from './useTopbarData'
 import {
   CURRENT_APP_CODE, FALLBACK_APPS, PORTAL_HOME_LABEL, PORTAL_HOME_URL, INBOX_URL,
@@ -27,6 +29,11 @@ export function Topbar() {
   const vauth = authProvider === 'vauth'
   const guest = role === 'guest'
   const { apps, unreadCount } = useTopbarData({ vauth, guest })
+
+  // 窄螢幕（< md）打開側欄抽屜的「選單」鈕（UI 統一 4C）。沒有側欄的角色（測試人員、訪客）不顯示。
+  const showNavMenu = sidebarVisible(role)
+  const drawerOpen = useNavDrawerStore(s => s.open)
+  const setDrawerOpen = useNavDrawerStore(s => s.setOpen)
 
   // 下拉：入口頁首頁固定第一項，接著列出所有啟用中的系統（不看 showInTopbar）。
   // vauth 讀取中（apps 為 null）先用內建清單。
@@ -72,6 +79,20 @@ export function Topbar() {
   return (
     <header className="h-12 flex-shrink-0 flex items-center gap-4 px-4 whitespace-nowrap
                        bg-[var(--vw-surface)] border-b border-[var(--vw-border)]">
+      {showNavMenu && (
+        <button
+          id={NAV_MENU_BUTTON_ID}
+          type="button"
+          aria-label="開啟選單"
+          aria-expanded={drawerOpen}
+          aria-controls={NAV_DRAWER_ID}
+          onClick={() => setDrawerOpen(true)}
+          className="md:hidden flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md
+                     text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+        >
+          <Menu size={18} aria-hidden="true" />
+        </button>
+      )}
       <MenuButton
         label="Validation Workspace"
         ariaLabel="切換系統"
