@@ -151,6 +151,17 @@ export function MenuButton({
       case 'ArrowUp':   e.preventDefault(); setActive(i => (i - 1 + count) % count); break
       case 'Home':      e.preventDefault(); setActive(0); break
       case 'End':       e.preventDefault(); setActive(count - 1); break
+      case ' ': {
+        // <button role="menuitem"> 原生就會在 Space 觸發；<a role="menuitem"> 不是
+        // 表單控制項，瀏覽器預設把 Space 當成捲頁，要自己擋掉並補上 click()（走
+        // follow：關閉選單、導覽交給瀏覽器）。
+        const target = e.target as HTMLElement
+        if (target.tagName !== 'BUTTON') {
+          e.preventDefault()
+          target.click()
+        }
+        break
+      }
       case 'Escape':
         e.preventDefault()
         e.stopPropagation()

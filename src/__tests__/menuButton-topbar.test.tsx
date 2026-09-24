@@ -47,6 +47,42 @@ describe('MenuButton（頂欄用的擴充）', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('Space 觸發連結項目：關閉選單（<a> 不是表單控制項，Space 原生只會捲頁）', async () => {
+    const user = userEvent.setup()
+    render(<MenuButton label="系統" items={apps} />)
+    await user.click(screen.getByRole('button', { name: /系統/ }))
+
+    const link = screen.getByRole('menuitem', { name: '入口頁首頁' })
+    expect(link).toHaveFocus()
+    await user.keyboard(' ')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('Enter 觸發連結項目：關閉選單', async () => {
+    const user = userEvent.setup()
+    render(<MenuButton label="系統" items={apps} />)
+    await user.click(screen.getByRole('button', { name: /系統/ }))
+
+    const link = screen.getByRole('menuitem', { name: '入口頁首頁' })
+    expect(link).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('Space 觸發按鈕項目：呼叫 onSelect 一次', async () => {
+    const onSelect = vi.fn()
+    const user = userEvent.setup()
+    render(<MenuButton label="選單" items={[
+      { key: 'pw', label: '修改密碼', href: '#pw' },
+      { key: 'out', label: '登出', onSelect },
+    ]} />)
+    await user.click(screen.getByRole('button', { name: /選單/ }))
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getByRole('menuitem', { name: '登出' })).toHaveFocus()
+    await user.keyboard(' ')
+    expect(onSelect).toHaveBeenCalledTimes(1)
+  })
+
   it('上下鍵在連結與按鈕項目之間移動，Esc 關閉並把焦點還給按鈕', async () => {
     const user = userEvent.setup()
     render(<MenuButton label="選單" items={[
