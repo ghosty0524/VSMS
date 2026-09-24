@@ -1,6 +1,12 @@
 import { useState } from 'react'
-import { Users } from 'lucide-react'
+import { Check, Users } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
+
+// 輸入框（UI 統一 4B 共用視覺值）：高 40px、左右內距 12px、1px --vw-border-strong、
+// 圓角 6px、14px 字。focus 環沿用 VSMS 的 blue（已重新定義成青綠）。
+const INPUT_CLASS =
+  'w-full h-10 px-3 text-sm border border-[var(--vw-border-strong)] rounded-md ' +
+  'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
 
 export function LoginPage() {
   const { login, guestLogin, loginError, loginWarning, clearErrors, isChecking } = useAuthStore()
@@ -38,11 +44,10 @@ export function LoginPage() {
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
         {/* Logo / Title */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-xl mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
+          {/* Validation Workspace 標誌：與全域頂欄（4A）同一個勾勾圖形，28×28、圓角 7px、底色 --vw-accent */}
+          <div data-testid="login-logo" aria-hidden="true"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] bg-[var(--vw-accent)] text-white mb-4">
+            <Check size={18} strokeWidth={3} />
           </div>
           <h1 className="text-xl font-bold text-gray-900">VSMS</h1>
           <p className="text-sm text-gray-500 mt-1">Validation Schedule Management System</p>
@@ -94,8 +99,7 @@ export function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="請輸入帳號"
                 autoFocus
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={INPUT_CLASS}
               />
             </div>
 
@@ -108,8 +112,7 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="請輸入密碼"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={INPUT_CLASS}
               />
             </div>
 
@@ -121,8 +124,8 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={submitting || !username.trim() || !password.trim()}
-              className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg
-                hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
+              className="w-full h-11 bg-stone-900 text-white text-[15px] font-semibold rounded-md
+                hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-colors"
             >
               {submitting ? '登入中…' : '登入'}
