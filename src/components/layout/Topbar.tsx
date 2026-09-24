@@ -108,8 +108,11 @@ export function Topbar() {
         align="left"
         size="md"
         items={switcherItems}
-        className="flex flex-shrink-0 items-center gap-2 h-8 -ml-1.5 px-1.5 rounded-md
-                   text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] transition-colors"
+        // -ml-1.5 把 6px 內距抵掉，讓標誌方塊貼齊頂欄 16px 的左緣，只有切換鈕是第一個元素時才要。
+        // 窄螢幕「選單」鈕在它前面時不套，兩者間距維持 gap 的 16px；md 以上選單鈕隱藏，照舊套用。
+        // md:-ml-1.5 與 -ml-1.5 都要以完整字面出現在原始碼裡，Tailwind 才產生得出來。
+        className={`flex flex-shrink-0 items-center gap-2 h-8 ${showNavMenu ? 'md:-ml-1.5' : '-ml-1.5'} px-1.5 rounded-md
+                   text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] transition-colors`}
         trigger={
           <>
             <span aria-hidden="true"

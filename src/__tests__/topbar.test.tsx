@@ -305,3 +305,24 @@ describe('Topbar：下拉的鍵盤與關閉行為', () => {
     expect(userMenu.className).toContain('z-[110]')
   })
 })
+
+describe('Topbar：產品切換的負邊距（窄螢幕選單鈕到切換鈕 16px）', () => {
+  // 用空白切成 token 比對：直接比字串的話，'md:-ml-1.5' 會被當成包含 '-ml-1.5'。
+  const switcherTokens = () => screen.getByRole('button', { name: '切換系統' }).className.split(/\s+/)
+
+  it.each<Role>(['super_admin', 'admin'])('%s（有選單鈕）：負邊距只在 md 以上', role => {
+    login(role, 'local')
+    render(<Topbar />)
+    expect(screen.getByRole('button', { name: '開啟選單' })).toBeInTheDocument()
+    expect(switcherTokens()).toContain('md:-ml-1.5')
+    expect(switcherTokens()).not.toContain('-ml-1.5')
+  })
+
+  it.each<Role>(['user', 'guest'])('%s（沒有選單鈕）：任何寬度都保留 -ml-1.5', role => {
+    login(role, 'local')
+    render(<Topbar />)
+    expect(screen.queryByRole('button', { name: '開啟選單' })).toBeNull()
+    expect(switcherTokens()).toContain('-ml-1.5')
+    expect(switcherTokens()).not.toContain('md:-ml-1.5')
+  })
+})
