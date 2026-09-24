@@ -16,6 +16,7 @@ import { buildPeopleModel, UNASSIGNED_LABEL, type Person, type SafeUser, type Pe
 import { deactivatePerson, activatePerson, membershipTargets } from '../../lib/peopleActions'
 import { groupByDepartment, type DeptGroup, type SectionGroup } from '../../lib/orgGroups'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
+import { ListState } from '../shared/ListState'
 import { PersonRow, PEOPLE_GRID } from './PersonRow'
 import { PersonFormModal } from './PersonFormModal'
 
@@ -38,20 +39,30 @@ export function PeopleManager() {
   const authProvider = useAuthStore(s => s.authProvider)
   const [users, setUsers] = useState<SafeUser[]>([])
   const [loading, setLoading] = useState(true)
+  // 讀帳號失敗的訊息。名冊來自 options，照常畫得出來，但每個人都會像「沒有帳號」，
+  // 所以除了 toast 之外還要在清單上方留一條看得到的提示。
+  const [usersError, setUsersError] = useState<string | null>(null)
   const [form, setForm] = useState<{ name: string; mode: 'edit' | 'create-account' } | null>(null)
   const [newNames, setNewNames] = useState<Record<string, string>>({})
   const [addErrors, setAddErrors] = useState<Record<string, string>>({})
   const [confirm, setConfirm] = useState<{ title: string; message: string; run: () => Promise<void> } | null>(null)
 
   const loadUsers = async () => {
-    try { setUsers(await api.getUsers()) }
-    catch { toast.error('載入帳號列表失敗') }
-    finally { setLoading(false) }
+    try {
+      setUsers(await api.getUsers())
+      setUsersError(null)
+    } catch (e) {
+      toast.error('載入帳號列表失敗')
+      setUsersError(e instanceof Error ? e.message : String(e))
+    } finally { setLoading(false) }
   }
   useEffect(() => { void loadUsers() }, [])
 
   const model = useMemo(() => buildPeopleModel(options.testUnits, users), [options.testUnits, users])
   const inactiveCount = model.inactive.reduce((n, g) => n + g.people.length, 0)
+  const activeDepts = groupByDepartment(model.active, options.testUnits)
+  /** 上方清單會畫出幾張卡片（部門卡＋未歸屬卡），給 ListState 判斷「有沒有資料」 */
+  const activeCardCount = activeDepts.length + (model.unassigned.length > 0 ? 1 : 0)
 
   // 表單開著時人從 model 消失了（例如剛被刪除）就自動關閉；用 render 期間的
   // 判斷式而非 useEffect，理由同 PersonFormModal 開頭那段註解。
@@ -183,11 +194,14 @@ export function PeopleManager() {
           : '一個名字就是一個人：名冊名稱等於登入帳號。滑過一列會出現「編輯」與「停用」。'}
       </p>
 
-      {header}
-      <div className="space-y-4">
-        {groupByDepartment(model.active, options.testUnits).map(d => deptCard(d, 'active'))}
-        {model.unassigned.length > 0 && groupCard({ unitId: null, unitLabel: UNASSIGNED_LABEL, people: model.unassigned }, 'active')}
-      </div>
+      <ListState noun="帳號" loading={loading} error={usersError} count={activeCardCount}
+        onRetry={() => { void loadUsers() }}>
+        {header}
+        <div className="space-y-4">
+          {activeDepts.map(d => deptCard(d, 'active'))}
+          {model.unassigned.length > 0 && groupCard({ unitId: null, unitLabel: UNASSIGNED_LABEL, people: model.unassigned }, 'active')}
+        </div>
+      </ListState>
 
       <div className="mt-6 border-t pt-3">
         <button type="button" onClick={() => setPeopleInactiveOpen(!peopleInactiveOpen)}
