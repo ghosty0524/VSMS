@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  countNarrowingFilters, hiddenStatuses, statusChipText,
+  countNarrowingFilters, hiddenStatuses, statusChipText, isSameFilter,
   EMPTY_FILTER, DEFAULT_FILTER,
 } from '../components/schedule/FilterSortBar'
 import { summarizeSelection } from '../components/shared/MultiSelectDropdown'
@@ -61,6 +61,47 @@ describe('hiddenStatuses', () => {
   it('勾滿全部時沒有東西被擋掉', () => {
     const all: ScheduleStatus[] = ['Completed', 'Delayed', 'Testing', 'Planned', 'Cancelled']
     expect(hiddenStatuses({ ...EMPTY_FILTER, statuses: all })).toEqual([])
+  })
+})
+
+describe('isSameFilter', () => {
+  it('同一個物件（或內容相同的兩個物件）視為相同', () => {
+    expect(isSameFilter(EMPTY_FILTER, EMPTY_FILTER)).toBe(true)
+    expect(isSameFilter(EMPTY_FILTER, { ...EMPTY_FILTER })).toBe(true)
+  })
+
+  it('EMPTY_FILTER 與 DEFAULT_FILTER 不同（狀態與甘特圖範圍不同）', () => {
+    expect(isSameFilter(EMPTY_FILTER, DEFAULT_FILTER)).toBe(false)
+  })
+
+  it('陣列欄位內容相同但參考不同仍視為相同；內容不同則不同', () => {
+    const a = { ...EMPTY_FILTER, categories: ['NPI', 'AVL'] }
+    const b = { ...EMPTY_FILTER, categories: ['NPI', 'AVL'] }
+    expect(isSameFilter(a, b)).toBe(true)
+    expect(isSameFilter(a, { ...EMPTY_FILTER, categories: ['NPI'] })).toBe(false)
+    // 順序不同也算不同（陣列逐項比對，不排序）
+    expect(isSameFilter(a, { ...EMPTY_FILTER, categories: ['AVL', 'NPI'] })).toBe(false)
+  })
+
+  it('sortRules 內容相同（含 dir）視為相同，欄位或方向不同則不同', () => {
+    const a = { ...EMPTY_FILTER, sortRules: [{ field: 'startDate' as const, dir: 'asc' as const }] }
+    const b = { ...EMPTY_FILTER, sortRules: [{ field: 'startDate' as const, dir: 'asc' as const }] }
+    expect(isSameFilter(a, b)).toBe(true)
+    expect(isSameFilter(a, { ...EMPTY_FILTER, sortRules: [{ field: 'startDate' as const, dir: 'desc' as const }] })).toBe(false)
+    expect(isSameFilter(a, { ...EMPTY_FILTER, sortRules: [] })).toBe(false)
+  })
+
+  it('只有 showAllUnits 不同就視為不同（清除篩選要保留它，靠的就是這個判斷）', () => {
+    expect(isSameFilter({ ...EMPTY_FILTER, showAllUnits: true }, EMPTY_FILTER)).toBe(false)
+    expect(isSameFilter({ ...EMPTY_FILTER, showAllUnits: true }, { ...EMPTY_FILTER, showAllUnits: true })).toBe(true)
+  })
+
+  it('每個純量欄位（keyword／ganttStart／ganttEnd／旗標）不同都會被判定不同', () => {
+    expect(isSameFilter(EMPTY_FILTER, { ...EMPTY_FILTER, keyword: 'PDN' })).toBe(false)
+    expect(isSameFilter(EMPTY_FILTER, { ...EMPTY_FILTER, ganttStart: '2026/01/01' })).toBe(false)
+    expect(isSameFilter(EMPTY_FILTER, { ...EMPTY_FILTER, ganttEnd: '2026/12/31' })).toBe(false)
+    expect(isSameFilter(EMPTY_FILTER, { ...EMPTY_FILTER, showUserFlagged: true })).toBe(false)
+    expect(isSameFilter(EMPTY_FILTER, { ...EMPTY_FILTER, showAdminFlagged: true })).toBe(false)
   })
 })
 

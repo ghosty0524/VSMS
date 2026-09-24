@@ -13,7 +13,7 @@ import { copyTableToClipboard } from '../../lib/copyToClipboard'
 import { isRestDay } from '../../lib/restDays'
 import { displayYmd } from '../../lib/dateFormat'
 import { matchesKeyword } from '../../lib/scheduleKeywordMatch'
-import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES, EMPTY_FILTER } from './FilterSortBar'
+import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES, EMPTY_FILTER, isSameFilter } from './FilterSortBar'
 import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
 import { ListState } from '../shared/ListState'
@@ -377,6 +377,15 @@ export function GanttChart({
   // guest 唯讀：所有寫入操作（旗標/編輯/刪除）一律隱藏
   const canWrite  = role === 'super_admin' || role === 'admin'
 
+  // 「清除篩選」的目標：保留目前的「我的排程／全部」（showAllUnits），不能一律
+  // 回到 EMPTY_FILTER——EMPTY_FILTER 對測試人員等於「只看我的排程」，名下沒有
+  // 排程的人按了永遠沒效果，選了「全部」的人按了反而被縮回自己的範圍。
+  // 目前篩選已經等於這個目標時（按了不會有任何改變）就不顯示按鈕。
+  // 條件列自己的「清除全部」維持原樣，仍是 EMPTY_FILTER。
+  const clearedFilter: FilterSortState = { ...EMPTY_FILTER, showAllUnits: filterSort.showAllUnits }
+  const canClearFilters = !isSameFilter(filterSort, clearedFilter)
+  const handleClearFilters = () => setFilterSort(clearedFilter)
+
   // 列表模式「複製表格」：把「當前 filtered 陣列的全部資料」（非可視列）同時轉為
   // TSV 與 HTML 表格寫入剪貼簿，這是它存在的唯一理由——虛擬化只渲染可視列 ± 緩衝，
   // 若照 DOM 內容複製，篩選出的 599 筆會只拿到畫面上那 20～30 列且不會有任何警示。
@@ -598,7 +607,7 @@ export function GanttChart({
           options={options}
           onEdit={setEditTarget}
           onDelete={setDeleteTarget}
-          onFilterChange={setFilterSort}
+          onClearFilters={canClearFilters ? handleClearFilters : undefined}
         />
       ) : (
         groupBy === 'device' ? (
@@ -759,9 +768,10 @@ export function GanttChart({
         // ── 工程師視角 ──────────────────────────────────────────
         filtered.length === 0 ? (
           // 走到這裡代表 schedules 不是空的（全無排程的那一版在上面提早 return），
-          // 所以 0 筆一定是篩選造成的。「清除篩選」與條件列的「清除全部」同一個動作。
+          // 所以 0 筆一定是篩選造成的。「清除篩選」保留目前的 showAllUnits（見
+          // canClearFilters／clearedFilter 的說明），按了不會有效果時不顯示按鈕。
           <ListState noun="排程" loading={false} count={0} filtered
-            onClearFilters={() => setFilterSort(EMPTY_FILTER)}>
+            onClearFilters={canClearFilters ? handleClearFilters : undefined}>
             {null}
           </ListState>
         ) : (

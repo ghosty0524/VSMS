@@ -135,6 +135,36 @@ export function hiddenStatuses(v: FilterSortState): ScheduleStatus[] {
   return ALL_STATUSES.filter(s => !v.statuses.includes(s))
 }
 
+function sameStringArray(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i])
+}
+
+function sameSortRules(a: SortRule[], b: SortRule[]): boolean {
+  return a.length === b.length && a.every((r, i) => r.field === b[i].field && r.dir === b[i].dir)
+}
+
+/**
+ * 結構化比較兩個 FilterSortState 是否等價（包含陣列與 sortRules），
+ * 不能用 `===` 比較物件參考。「清除篩選」按鈕要不要顯示（目前的篩選是否已經
+ * 等於清除後的目標）靠這個判斷（UI 統一第 3 項 E，規格修正清單第 7 項）。
+ */
+export function isSameFilter(a: FilterSortState, b: FilterSortState): boolean {
+  return (
+    sameStringArray(a.categories, b.categories) &&
+    sameStringArray(a.testUnits, b.testUnits) &&
+    sameStringArray(a.testEngineers, b.testEngineers) &&
+    sameStringArray(a.statuses, b.statuses) &&
+    a.keyword === b.keyword &&
+    sameSortRules(a.sortRules, b.sortRules) &&
+    a.ganttStart === b.ganttStart &&
+    a.ganttEnd === b.ganttEnd &&
+    a.showAllUnits === b.showAllUnits &&
+    a.showUserFlagged === b.showUserFlagged &&
+    a.showAdminFlagged === b.showAdminFlagged &&
+    sameStringArray(a.devices, b.devices)
+  )
+}
+
 /** 狀態 chip 的文字：擋掉 ≤2 個時列出被隱藏的，否則列出已選的。一律顯示中文。 */
 export function statusChipText(v: FilterSortState): string {
   const hidden = hiddenStatuses(v)

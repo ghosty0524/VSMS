@@ -9,7 +9,6 @@ import { STATUS_COLORS, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, readableTextColor } from '../../lib/colors'
 import { displayYmd } from '../../lib/dateFormat'
 import { ListState } from '../shared/ListState'
-import { EMPTY_FILTER, type FilterSortState } from './FilterSortBar'
 import type { Schedule, Role, OptionsMap } from '../../types'
 
 const LIST_ROW_H = 36
@@ -36,8 +35,12 @@ interface Props {
   options: OptionsMap
   onEdit: (s: Schedule) => void
   onDelete: (s: Schedule) => void
-  /** 「清除篩選」用；與條件列的「清除全部」相同，傳入 EMPTY_FILTER */
-  onFilterChange: (v: FilterSortState) => void
+  /**
+   * 「清除篩選」按鈕的動作；由 GanttChart 算好（保留目前的 showAllUnits，
+   * 且目前篩選已等於清除目標時就不傳，等同不顯示按鈕——見 GanttChart 的
+   * canClearFilters／clearedFilter）。undefined 時 ListState 不顯示按鈕。
+   */
+  onClearFilters?: () => void
 }
 
 const HEADERS = [
@@ -46,7 +49,7 @@ const HEADERS = [
 ]
 
 export default function ScheduleListView({
-  schedules, role, linkedEngineer, engLabel, options, onEdit, onDelete, onFilterChange,
+  schedules, role, linkedEngineer, engLabel, options, onEdit, onDelete, onClearFilters,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // 表頭是 sticky 的，捲動後給它一道陰影，讓「內容從底下經過」讀得出來。
@@ -86,11 +89,12 @@ export default function ScheduleListView({
   }, [schedules.length, updateVisibleRange])
 
   // GanttChart 在「全無排程」時提早 return、不會掛載這個元件，所以 0 筆一定是
-  // 篩選造成的。「清除篩選」與條件列的「清除全部」同一個動作。
+  // 篩選造成的。「清除篩選」的目標與是否顯示由 GanttChart 算好傳入（見上方
+  // onClearFilters 的說明），這裡只負責原封不動轉交給 ListState。
   if (schedules.length === 0) {
     return (
       <ListState noun="排程" loading={false} count={0} filtered
-        onClearFilters={() => onFilterChange(EMPTY_FILTER)}>
+        onClearFilters={onClearFilters}>
         {null}
       </ListState>
     )
