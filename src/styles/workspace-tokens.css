@@ -3,8 +3,12 @@
    改完在 vportal 執行 npm run check:tokens -- --write 同步三份副本，
    再執行 npm run check:tokens 確認一致與對比度。
    淺色在 :root；深色在 [data-theme="dark"]，只有 VTMS 會設定這個屬性。
-   識別色 --vw-accent / --vw-accent-subtle 由各系統自己定義。
+   識別色 --vw-accent / --vw-accent-subtle 由各系統自己定義（框架上的淺版識別色
+   --vw-accent-on-chrome 也是）。
+   框架 token --vw-chrome-*：頂欄、側欄、抽屜的墨色框架。各系統在框架的根元素上
+   把一般 token 換成這一組，內容區不受影響。
    規格：vportal/docs/superpowers/specs/2026-09-23-workspace-tokens-design.md
+         vportal/docs/superpowers/specs/2026-09-24-ink-frame-design.md
    ────────────────────────────────────────────────────────────────────── */
 :root {
   --vw-bg: #F5F6F8;
@@ -34,14 +38,25 @@
   --vw-shadow: 0 1px 2px rgba(23, 33, 46, .06);
   --vw-font-sans: "Microsoft JhengHei UI", "Microsoft JhengHei", "Segoe UI", system-ui, sans-serif;
   --vw-font-mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
+
+  /* 墨色框架（頂欄、側欄、抽屜） */
+  --vw-chrome-top: #17212E;
+  --vw-chrome-side: #1B2636;
+  --vw-chrome-border: #243042;
+  --vw-chrome-hover: #243042;
+  --vw-chrome-active: #2A3553;
+  --vw-chrome-text: #FFFFFF;
+  --vw-chrome-text-secondary: #B8C0CC;
+  --vw-chrome-text-muted: #8A95A6;
 }
 
+/* 深色 D2：頁面底、卡片、框架都對齊墨色 #17212E 的色相；框架最深、卡片＝墨色。 */
 [data-theme="dark"] {
-  --vw-bg: #131A24;
-  --vw-surface: #1B2430;
-  --vw-surface-subtle: #222C3A;
-  --vw-border: #2A3442;
-  --vw-border-strong: #3A4556;
+  --vw-bg: #0E1520;
+  --vw-surface: #17212E;
+  --vw-surface-subtle: #1E2A3A;
+  --vw-border: #263345;
+  --vw-border-strong: #34425A;
   --vw-ink: #E6EAF0;
   --vw-text-secondary: #B4BECB;
   --vw-text-muted: #8E9AAB;
@@ -59,4 +74,14 @@
   --vw-info: #7EADF6;
   --vw-info-bg: rgba(126, 173, 246, .14);
   --vw-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+
+  /* 墨色框架：比頁面底（--vw-bg）更深 */
+  --vw-chrome-top: #0A1018;
+  --vw-chrome-side: #0B121B;
+  --vw-chrome-border: #1A2433;
+  --vw-chrome-hover: #1A2433;
+  --vw-chrome-active: #1E2A3A;
+  --vw-chrome-text: #FFFFFF;
+  --vw-chrome-text-secondary: #B8C0CC;
+  --vw-chrome-text-muted: #8A95A6;
 }
