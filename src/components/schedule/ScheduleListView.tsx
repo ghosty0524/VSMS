@@ -8,6 +8,8 @@ import { computeStatus, statusLabel } from '../../lib/status'
 import { STATUS_COLORS, STATUS_GLYPH } from '../../constants'
 import { resolveUnitColor, readableTextColor } from '../../lib/colors'
 import { displayYmd } from '../../lib/dateFormat'
+import { ListState } from '../shared/ListState'
+import { EMPTY_FILTER, type FilterSortState } from './FilterSortBar'
 import type { Schedule, Role, OptionsMap } from '../../types'
 
 const LIST_ROW_H = 36
@@ -34,6 +36,8 @@ interface Props {
   options: OptionsMap
   onEdit: (s: Schedule) => void
   onDelete: (s: Schedule) => void
+  /** 「清除篩選」用；與條件列的「清除全部」相同，傳入 EMPTY_FILTER */
+  onFilterChange: (v: FilterSortState) => void
 }
 
 const HEADERS = [
@@ -42,7 +46,7 @@ const HEADERS = [
 ]
 
 export default function ScheduleListView({
-  schedules, role, linkedEngineer, engLabel, options, onEdit, onDelete,
+  schedules, role, linkedEngineer, engLabel, options, onEdit, onDelete, onFilterChange,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // 表頭是 sticky 的，捲動後給它一道陰影，讓「內容從底下經過」讀得出來。
@@ -81,8 +85,15 @@ export default function ScheduleListView({
     updateVisibleRange()
   }, [schedules.length, updateVisibleRange])
 
+  // GanttChart 在「全無排程」時提早 return、不會掛載這個元件，所以 0 筆一定是
+  // 篩選造成的。「清除篩選」與條件列的「清除全部」同一個動作。
   if (schedules.length === 0) {
-    return <div className="p-10 text-center text-gray-400 text-sm">無符合篩選條件的排程</div>
+    return (
+      <ListState noun="排程" loading={false} count={0} filtered
+        onClearFilters={() => onFilterChange(EMPTY_FILTER)}>
+        {null}
+      </ListState>
+    )
   }
 
   // 即使上面的 effect 還沒跑到，render 當下也不能讓過期的 visibleRange

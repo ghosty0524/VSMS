@@ -13,9 +13,10 @@ import { copyTableToClipboard } from '../../lib/copyToClipboard'
 import { isRestDay } from '../../lib/restDays'
 import { displayYmd } from '../../lib/dateFormat'
 import { matchesKeyword } from '../../lib/scheduleKeywordMatch'
-import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES } from './FilterSortBar'
+import { FilterSortBar, DEFAULT_FILTER, DEFAULT_SORT_RULES, EMPTY_FILTER } from './FilterSortBar'
 import { ScheduleFormModal } from './ScheduleFormModal'
 import { DeleteConfirmDialog } from '../shared/DeleteConfirmDialog'
+import { ListState } from '../shared/ListState'
 import { FlagPopover } from './FlagPopover'
 import ScheduleListView from './ScheduleListView'
 import { ScheduleToolbar } from './ScheduleToolbar'
@@ -597,6 +598,7 @@ export function GanttChart({
           options={options}
           onEdit={setEditTarget}
           onDelete={setDeleteTarget}
+          onFilterChange={setFilterSort}
         />
       ) : (
         groupBy === 'device' ? (
@@ -756,7 +758,12 @@ export function GanttChart({
         ) : (
         // ── 工程師視角 ──────────────────────────────────────────
         filtered.length === 0 ? (
-          <div className="p-10 text-center text-gray-400 text-sm">無符合篩選條件的排程</div>
+          // 走到這裡代表 schedules 不是空的（全無排程的那一版在上面提早 return），
+          // 所以 0 筆一定是篩選造成的。「清除篩選」與條件列的「清除全部」同一個動作。
+          <ListState noun="排程" loading={false} count={0} filtered
+            onClearFilters={() => setFilterSort(EMPTY_FILTER)}>
+            {null}
+          </ListState>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
 
