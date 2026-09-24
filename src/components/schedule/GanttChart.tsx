@@ -770,10 +770,15 @@ export function GanttChart({
           // 走到這裡代表 schedules 不是空的（全無排程的那一版在上面提早 return），
           // 所以 0 筆一定是篩選造成的。「清除篩選」保留目前的 showAllUnits（見
           // canClearFilters／clearedFilter 的說明），按了不會有效果時不顯示按鈕。
-          <ListState noun="排程" loading={false} count={0} filtered
-            onClearFilters={canClearFilters ? handleClearFilters : undefined}>
-            {null}
-          </ListState>
+          // 置中方式比照上面「尚無工作排程」那一版，維持視覺一致；外層的白卡片
+          // （bg-white／rounded-lg／shadow）已經是這個元件最外層的容器，這裡
+          // 只需要補上垂直置中，不必再包一層。
+          <div className="flex-1 flex items-center justify-center">
+            <ListState noun="排程" loading={false} count={0} filtered
+              onClearFilters={canClearFilters ? handleClearFilters : undefined}>
+              {null}
+            </ListState>
+          </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
 
