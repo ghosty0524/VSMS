@@ -100,12 +100,14 @@ describe('Sidebar：版面、目前頁與點擊', () => {
     expect(item.closest('ul')?.className).toContain('gap-0.5')
   })
 
-  it('目前頁：aria-current="page"＋VSMS 青綠選取色；其他項目沒有，hover 用 surface-subtle', () => {
+  it('目前頁：aria-current="page"＋框架上的選取樣式（active 底、主要字、左側 3px 淺版識別色線）；其他項目沒有，hover 用 surface-subtle', () => {
     renderSidebar('super_admin', 'settings')
     const cur = screen.getByRole('button', { name: '系統設定' })
     expect(cur).toHaveAttribute('aria-current', 'page')
     expect(cur.className).toContain('bg-[var(--vw-accent-subtle)]')
-    expect(cur.className).toContain('text-[var(--vw-accent)]')
+    expect(cur.className).toContain('text-[var(--vw-ink)]')
+    expect(cur.className).toContain('shadow-[inset_3px_0_0_var(--vw-accent-on-chrome)]')
+    expect(cur.className).not.toContain('text-[var(--vw-accent)]')
     const other = screen.getByRole('button', { name: '排程管理' })
     expect(other).not.toHaveAttribute('aria-current')
     expect(other.className).toContain('hover:bg-[var(--vw-surface-subtle)]')

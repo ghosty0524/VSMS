@@ -7,6 +7,13 @@
 // 原本 Header 的導覽分頁搬到頂欄下方的左側欄（Sidebar，UI 統一 4C）；「回入口頁」由產品切換取代；
 // 角色縮寫徽章（SA/A/U/G）改成使用者選單標頭裡的中文角色。
 //
+// 墨色框架（2026-09-24，規格 F:\vportal\docs\superpowers\specs\2026-09-24-ink-frame-design.md）：
+// <header> 掛 .vw-chrome（index.css），框架範圍內 --vw-surface、--vw-ink 等 token 換成框架值；
+// 頂欄底色另外用 --vw-chrome-top。這裡的顏色一律直接寫 var(--vw-*)：Tailwind 的 slate-*／blue-*
+// 在 :root 就算好了，框架換不掉。刻意不跟框架走的兩個顏色：產品切換的標誌方塊維持 VSMS 識別色
+// #0E6B63（--color-accent，index.css @theme），使用者頭像是淺版識別色底配墨色字（#17212E，
+// 取 --vw-chrome-top）。下拉清單 portal 到 body、不在框架裡，維持白底，清單標頭照一般 token 上色。
+//
 // 連到入口頁與其他系統的網址都是站台根目錄的絕對路徑（/、/inbox、/change-password、
 // /vtms/），不經 withBase：VSMS 部署在 /vsms/ 底下，加前綴會變成 /vsms/inbox。
 import { Bell, Check, KeyRound, LogOut, Menu } from 'lucide-react'
@@ -69,16 +76,17 @@ export function Topbar() {
     separatorBefore: userItems.length > 0,
   })
 
+  // 顯示在白底的下拉清單裡（portal 到 body，不在框架內），token 是一般值。
   const userHeader = (
     <>
-      <div className="text-[13px] font-semibold text-slate-900">{displayName}</div>
-      {role && <div className="text-xs text-slate-500">{ROLE_LABELS[role]}</div>}
+      <div className="text-[13px] font-semibold text-[var(--vw-ink)]">{displayName}</div>
+      {role && <div className="text-xs text-[var(--vw-text-muted)]">{ROLE_LABELS[role]}</div>}
     </>
   )
 
   return (
-    <header className="h-12 flex-shrink-0 flex items-center gap-4 px-4 whitespace-nowrap
-                       bg-[var(--vw-surface)] border-b border-[var(--vw-border)]">
+    <header className="vw-chrome h-12 flex-shrink-0 flex items-center gap-4 px-4 whitespace-nowrap
+                       bg-[var(--vw-chrome-top)] border-b border-[var(--vw-border)]">
       {showNavMenu && (
         <button
           id={NAV_MENU_BUTTON_ID}
@@ -88,7 +96,8 @@ export function Topbar() {
           aria-controls={NAV_DRAWER_ID}
           onClick={() => setDrawerOpen(true)}
           className="md:hidden flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md
-                     text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                     text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] hover:text-[var(--vw-ink)]
+                     transition-colors"
         >
           <Menu size={18} aria-hidden="true" />
         </button>
@@ -100,15 +109,15 @@ export function Topbar() {
         size="md"
         items={switcherItems}
         className="flex flex-shrink-0 items-center gap-2 h-8 -ml-1.5 px-1.5 rounded-md
-                   text-slate-500 hover:bg-slate-100 transition-colors"
+                   text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] transition-colors"
         trigger={
           <>
             <span aria-hidden="true"
                   className="flex h-[22px] w-[22px] items-center justify-center rounded-md
-                             bg-[var(--vw-accent)] text-white">
+                             bg-[var(--color-accent)] text-white">
               <Check size={14} strokeWidth={3} />
             </span>
-            <span className="hidden sm:inline text-sm font-bold text-slate-900">Validation Workspace</span>
+            <span className="hidden sm:inline text-sm font-bold text-[var(--vw-ink)]">Validation Workspace</span>
           </>
         }
       />
@@ -125,8 +134,8 @@ export function Topbar() {
                 className={`flex h-8 flex-shrink-0 items-center px-3 rounded-md text-[13px] font-medium
                             transition-colors
                             ${current
-                              ? 'bg-blue-50 text-blue-700'
-                              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                              ? 'bg-[var(--vw-accent-subtle)] text-[var(--vw-ink)]'
+                              : 'text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] hover:text-[var(--vw-ink)]'}`}
               >
                 {a.name}
               </a>
@@ -144,7 +153,8 @@ export function Topbar() {
           aria-label="通知"
           title="通知"
           className="relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md
-                     text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                     text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] hover:text-[var(--vw-ink)]
+                     transition-colors"
         >
           <Bell size={18} />
           {badge && (
@@ -166,15 +176,15 @@ export function Topbar() {
         header={userHeader}
         items={userItems}
         className="flex flex-shrink-0 items-center gap-2 h-8 pl-1 pr-1.5 rounded-md
-                   text-slate-500 hover:bg-slate-100 transition-colors"
+                   text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] transition-colors"
         trigger={
           <>
             <span aria-hidden="true"
                   className="flex h-[26px] w-[26px] items-center justify-center rounded-full
-                             bg-[var(--vw-accent)] text-[11px] font-bold text-white">
+                             bg-[var(--vw-accent-on-chrome)] text-[11px] font-bold text-[var(--vw-chrome-top)]">
               {avatarInitials(displayName)}
             </span>
-            <span className="hidden sm:inline max-w-[160px] truncate text-[13px] text-slate-800">{displayName}</span>
+            <span className="hidden sm:inline max-w-[160px] truncate text-[13px] text-[var(--vw-ink)]">{displayName}</span>
           </>
         }
       />

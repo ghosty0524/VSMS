@@ -111,9 +111,41 @@
   /* VSMS 的識別色（共用檔只規定名稱，值由各系統決定） */
   --vw-accent: #0E6B63;
   --vw-accent-subtle: #E3F2F0;
+  /* 墨色框架（頂欄、側欄、抽屜）上用的淺版識別色：目前項目左側 3px 線、使用者頭像底、
+     框架上的焦點框。規格：vportal/docs/superpowers/specs/2026-09-24-ink-frame-design.md */
+  --vw-accent-on-chrome: #5FC4B8;
   /* 頁面底改用共用 token。原本 #E4E9F0 是為了讓白卡片看得出兩層；
      共用底色較亮，卡片的區隔改由邊框與陰影負責。 */
   --app-ground: var(--vw-bg);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   墨色框架（UI 統一收尾，2026-09-24）
+
+   頂欄 <header>、側欄 #app-sidebar、抽屜 #app-nav-drawer 掛 .vw-chrome：
+   框架範圍內把一般 token 換成框架值（--vw-chrome-* 在共用檔），元件照舊寫
+   var(--vw-surface)、var(--vw-ink) 這些，整片就變成墨色。頂欄的底另外用
+   --vw-chrome-top（比側欄深一階），在 Topbar.tsx 直接指定。
+
+   注意：上面 @theme 的 slate-*／gray-*／stone-*／blue-* 是 :root 上的變數
+   （例如 --color-slate-600: var(--vw-text-secondary)），在 :root 就已經算成
+   淺色值，這裡換不掉。框架裡的元素一律直接寫 var(--vw-*)，不要用這幾條色階。
+
+   下拉清單（MenuButton）portal 到 body、對話框也不在框架裡，維持白底。
+   放在 base 層：這裡的 color 只是框架裡沒寫字色的元素的預設值，utilities 要能蓋過。
+   ──────────────────────────────────────────────────────────────── */
+@layer base {
+  .vw-chrome {
+    --vw-surface: var(--vw-chrome-side);
+    --vw-surface-subtle: var(--vw-chrome-hover);
+    --vw-border: var(--vw-chrome-border);
+    --vw-ink: var(--vw-chrome-text);
+    --vw-text-secondary: var(--vw-chrome-text-secondary);
+    --vw-text-muted: var(--vw-chrome-text-muted);
+    --vw-accent-subtle: var(--vw-chrome-active);
+    --vw-accent: var(--vw-accent-on-chrome);
+    color: var(--vw-text-secondary);
+  }
 }
 
 @layer base {
@@ -263,6 +295,11 @@
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
     border-radius: 3px;
+  }
+
+  /* 墨色框架上的焦點框改用淺版識別色：深青綠 #0E6B63 在墨色底上幾乎看不到。 */
+  .vw-chrome :is(button, a, [role="button"], summary):focus-visible {
+    outline-color: var(--vw-accent-on-chrome);
   }
 
   /* 代號與日期在列表裡要能對齊比較，等寬數字讓欄位不會左右抖動 */

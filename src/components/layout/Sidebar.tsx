@@ -17,7 +17,11 @@
 //   打開時焦點到第一個項目、Tab 在抽屜內循環；點遮罩、Esc、點項目、視窗放大到 ≥ md 都會關閉，
 //   關閉後焦點回「選單」鈕（視窗放大那種除外：鈕已隱藏）。只有打開時滑入；關閉是立即隱藏（visibility 不做過場，
 //   打開當下才能馬上把焦點放進去）。
-// - 選取色是 VSMS 的青綠（--vw-accent／--vw-accent-subtle）。
+// - 墨色框架（2026-09-24，規格 F:\vportal\docs\superpowers\specs\2026-09-24-ink-frame-design.md）：
+//   桌面側欄與抽屜的根元素掛 .vw-chrome（index.css），框架範圍內 --vw-surface、--vw-ink 等 token
+//   換成框架值，這裡的 class 照舊寫 var(--vw-*)。目前項目：active 底、主要字、左側 3px 淺版識別色
+//   內陰影；分組標題與收合鈕用淡字。不要在這裡用 Tailwind 的 slate-*／blue-*（在 :root 就算好了，
+//   框架換不掉）。
 //
 // 甘特圖不用跟著改：它的 SVG 寬是「天數 × 22px」、外層是橫向捲動容器，寬度全由 CSS 決定，
 // 側欄收合時內容區變寬、可視範圍自動變大；統計頁的 recharts ResponsiveContainer 自己用
@@ -108,7 +112,11 @@ const ITEM_BASE =
   'flex h-9 w-full items-center gap-2.5 rounded-[var(--vw-radius-control)] text-[13px] font-medium whitespace-nowrap transition-colors'
 const ITEM_IDLE =
   'text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] hover:text-[var(--vw-ink)]'
-const ITEM_CURRENT = 'bg-[var(--vw-accent-subtle)] text-[var(--vw-accent)]'
+const ITEM_CURRENT =
+  'bg-[var(--vw-accent-subtle)] text-[var(--vw-ink)] shadow-[inset_3px_0_0_var(--vw-accent-on-chrome)]'
+// 收合鈕：淡字（框架的 --vw-chrome-text-muted），hover 同一般項目。
+const COLLAPSE_IDLE =
+  'text-[var(--vw-text-muted)] hover:bg-[var(--vw-surface-subtle)] hover:text-[var(--vw-ink)]'
 
 interface NavGroupsProps {
   groups: NavGroup[]
@@ -248,7 +256,7 @@ export function Sidebar({ currentView, onNavigate, role }: Props) {
     <>
       <aside
         id={SIDEBAR_ID}
-        className={`hidden md:flex flex-shrink-0 flex-col bg-[var(--vw-surface)] border-r border-[var(--vw-border)]
+        className={`vw-chrome hidden md:flex flex-shrink-0 flex-col bg-[var(--vw-surface)] border-r border-[var(--vw-border)]
                     motion-safe:transition-[width] duration-150 ${collapsed ? 'w-14' : 'w-[232px]'}`}
       >
         <nav aria-label="主選單" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 py-3">
@@ -262,7 +270,7 @@ export function Sidebar({ currentView, onNavigate, role }: Props) {
             aria-expanded={!collapsed}
             aria-controls={SIDEBAR_ID}
             title={collapsed ? '展開側欄' : undefined}
-            className={`${ITEM_BASE} ${collapsed ? 'justify-center px-0' : 'px-3'} ${ITEM_IDLE}`}
+            className={`${ITEM_BASE} ${collapsed ? 'justify-center px-0' : 'px-3'} ${COLLAPSE_IDLE}`}
           >
             {collapsed
               ? <PanelLeftOpen size={18} aria-hidden="true" className="flex-shrink-0" />
@@ -292,7 +300,7 @@ export function Sidebar({ currentView, onNavigate, role }: Props) {
           // Tab 循環仍由 onDrawerKeyDown 接手。與入口頁的 NavDrawer 一致。
           tabIndex={-1}
           onKeyDown={onDrawerKeyDown}
-          className={`fixed inset-y-0 left-0 z-[46] flex w-[232px] flex-col bg-[var(--vw-surface)] focus:outline-none
+          className={`vw-chrome fixed inset-y-0 left-0 z-[46] flex w-[232px] flex-col bg-[var(--vw-surface)] focus:outline-none
                       border-r border-[var(--vw-border)] shadow-lg motion-safe:transition-transform duration-150
                       ${drawerOpen ? 'translate-x-0' : 'invisible -translate-x-full'}`}
         >
