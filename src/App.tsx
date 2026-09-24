@@ -8,7 +8,8 @@ import { SessionExpiryWarning } from './components/shared/SessionExpiryWarning'
 import { StaleBuildBanner } from './components/shared/StaleBuildBanner'
 import { ToastHost } from './components/shared/ToastHost'
 import { LoadingScreen } from './components/shared/LoadingScreen'
-import { Header } from './components/layout/Header'
+import { Topbar } from './components/layout/Topbar'
+import { NavTabs } from './components/layout/NavTabs'
 import { GanttChart } from './components/schedule/GanttChart'
 import { SettingsPage } from './components/settings/SettingsPage'
 import AnalyticsPage from './components/analytics/AnalyticsPage'
@@ -64,7 +65,9 @@ export function App() {
   return (
     <ProtectedLayout>
       <div className="h-screen app-ground flex flex-col">
-        <Header
+        {/* 全域頂欄（UI 統一 4A）＋頂欄下方的導覽分頁列（只有一個可見分頁時不顯示） */}
+        <Topbar />
+        <NavTabs
           currentView={view}
           onNavigate={setView}
           role={role}
