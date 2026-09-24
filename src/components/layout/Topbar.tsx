@@ -164,7 +164,7 @@ export function Topbar() {
             <span
               data-testid="topbar-unread"
               className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full
-                         bg-[var(--vw-danger-solid)] text-white text-[10px] font-bold leading-4 text-center"
+                         bg-[var(--vw-chrome-badge)] text-white text-[10px] font-bold leading-4 text-center"
             >
               {badge}
             </span>

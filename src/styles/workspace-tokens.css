@@ -48,6 +48,8 @@
   --vw-chrome-text: #FFFFFF;
   --vw-chrome-text-secondary: #B8C0CC;
   --vw-chrome-text-muted: #8A95A6;
+  /* 框架上的紅色徽章與收合紅點：--vw-danger-solid 對框架底只有約 2.5，改用這個（≥ 3，白字 4.9） */
+  --vw-chrome-badge: #D2352B;
 }
 
 /* 深色 D2：頁面底、卡片、框架都對齊墨色 #17212E 的色相；框架最深、卡片＝墨色。 */
@@ -84,4 +86,6 @@
   --vw-chrome-text: #FFFFFF;
   --vw-chrome-text-secondary: #B8C0CC;
   --vw-chrome-text-muted: #8A95A6;
+  /* 框架上的紅色徽章與收合紅點（對框架底 ≥ 3，白字 4.9） */
+  --vw-chrome-badge: #D2352B;
 }

@@ -138,6 +138,14 @@ describe('Topbar：通知鈴鐺', () => {
     expect(screen.getByRole('link', { name: '通知' })).toHaveAttribute('href', '/inbox')
   })
 
+  it('徽章用框架紅 --vw-chrome-badge（對墨色頂欄 ≥ 3）、白字，不用 --vw-danger-solid', async () => {
+    login('admin')
+    render(<Topbar />)
+    const badge = await screen.findByTestId('topbar-unread')
+    expect(badge).toHaveClass('bg-[var(--vw-chrome-badge)]', 'text-white')
+    expect(badge.className).not.toContain('--vw-danger-solid')
+  })
+
   it('超過 99 顯示 99+', async () => {
     unread(150)
     login('admin')

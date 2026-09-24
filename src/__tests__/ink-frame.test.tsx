@@ -37,6 +37,7 @@ const CHROME_LIGHT: Record<string, string> = {
   'vw-chrome-text': '#FFFFFF',
   'vw-chrome-text-secondary': '#B8C0CC',
   'vw-chrome-text-muted': '#8A95A6',
+  'vw-chrome-badge': '#D2352B',
 }
 
 function ruleBody(css: string, re: RegExp): string {
