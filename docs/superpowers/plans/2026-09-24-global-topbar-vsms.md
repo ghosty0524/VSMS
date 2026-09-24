@@ -31,7 +31,7 @@
   - 退回清單（讀取失敗或非 vauth 模式）：入口頁首頁 `/`、VTMS `/vtms/`、VSMS `/vsms/`，`showInTopbar` 全為真。實作上「入口頁首頁」是產品切換下拉固定的第一項，`FALLBACK_APPS` 只放 VTMS、VSMS，所以下拉在退回時正好是這三項。
   - `showInTopbar` 缺欄位（vauth 尚未上新版）時視為真：`a.showInTopbar !== false`。
 - 逐字 UI 文字（照抄，不要改寫）：
-  - 產品切換鈕：「Validation Workspace」（按鈕 `aria-label="Validation Workspace"`）；下拉第一項「入口頁首頁」。
+  - 產品切換鈕：「Validation Workspace」（按鈕 `aria-label="切換系統"`，與入口頁、VTMS 一致；按鈕上看得到的文字仍是「Validation Workspace」）；下拉第一項「入口頁首頁」。
   - 鈴鐺 `aria-label="通知"`；未讀大於 99 顯示「99+」。
   - 使用者選單鈕 `aria-label="使用者選單"`、`aria-haspopup="menu"`。
   - VSMS 角色中文：`super_admin`「超級管理者」、`admin`「管理者」、`user`「測試人員」、`guest`「訪客（唯讀）」。
@@ -1104,8 +1104,8 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals() })
 
 async function openSwitcher(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: 'Validation Workspace' }))
-  return screen.getByRole('menu', { name: 'Validation Workspace' })
+  await user.click(screen.getByRole('button', { name: '切換系統' }))
+  return screen.getByRole('menu', { name: '切換系統' })
 }
 
 async function openUserMenu(user: ReturnType<typeof userEvent.setup>) {
@@ -1121,7 +1121,7 @@ describe('Topbar：版面', () => {
     expect(header.className).toContain('h-12')
     const nav = await screen.findByRole('navigation', { name: '系統' })
     const order = [
-      screen.getByRole('button', { name: 'Validation Workspace' }),
+      screen.getByRole('button', { name: '切換系統' }),
       nav,
       screen.getByRole('link', { name: '通知' }),
       screen.getByRole('button', { name: '使用者選單' }),
@@ -1446,7 +1446,7 @@ export function Topbar() {
                        bg-[var(--vw-surface)] border-b border-[var(--vw-border)]">
       <MenuButton
         label="Validation Workspace"
-        ariaLabel="Validation Workspace"
+        ariaLabel="切換系統"
         align="left"
         size="md"
         items={switcherItems}
@@ -1680,7 +1680,7 @@ describe('App 外框', () => {
     render(<App />)
     const topbar = screen.getByRole('banner')
     const nav = screen.getByRole('navigation', { name: '主導覽' })
-    expect(within(topbar).getByRole('button', { name: 'Validation Workspace' })).toBeInTheDocument()
+    expect(within(topbar).getByRole('button', { name: '切換系統' })).toBeInTheDocument()
     expect(topbar.contains(nav)).toBe(false)
     expect(topbar.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.queryByText('回入口頁')).toBeNull()
