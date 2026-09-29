@@ -141,7 +141,7 @@ describe('頂欄', () => {
         'text-[var(--vw-text-secondary)]', 'hover:bg-[var(--vw-surface-subtle)]', 'hover:text-[var(--vw-ink)]',
       ]))
     }
-    const [vtms, vsms] = within(screen.getByRole('navigation', { name: '系統' })).getAllByRole('link')
+    const [, vtms, vsms] = within(screen.getByRole('navigation', { name: '系統' })).getAllByRole('link')
     expect(classes(vtms)).toEqual(expect.arrayContaining([
       'text-[var(--vw-text-secondary)]', 'hover:bg-[var(--vw-surface-subtle)]', 'hover:text-[var(--vw-ink)]',
     ]))
@@ -192,7 +192,7 @@ describe('頂欄', () => {
     await user.click(screen.getByRole('button', { name: '使用者選單' }))
     const menu = screen.getByRole('menu', { name: '使用者選單' })
     const name = within(menu).getByText('Will Wang')
-    const roleLabel = within(menu).getByText('管理者')
+    const roleLabel = within(menu).getByText('部級主管')
     expect(classes(name)).toContain('text-[var(--vw-ink)]')
     expect(classes(name)).not.toContain('text-slate-900')
     expect(classes(roleLabel)).toContain('text-[var(--vw-text-muted)]')

@@ -23,7 +23,7 @@ import { useNavDrawerStore } from '../../store/navDrawerStore'
 import { NAV_DRAWER_ID, NAV_MENU_BUTTON_ID, sidebarVisible } from './Sidebar'
 import { useTopbarData } from './useTopbarData'
 import {
-  CURRENT_APP_CODE, FALLBACK_APPS, PORTAL_HOME_LABEL, PORTAL_HOME_URL, INBOX_URL,
+  CURRENT_APP_CODE, FALLBACK_APPS, PORTAL_HOME_LABEL, PORTAL_HOME_URL, PORTAL_HOME_LINK, INBOX_URL,
   CHANGE_PASSWORD_URL, ROLE_LABELS, avatarInitials, formatUnreadBadge,
 } from '../../lib/topbarData'
 
@@ -54,8 +54,9 @@ export function Topbar() {
       current: a.code === CURRENT_APP_CODE,
     })),
   ]
-  // 並排連結：只列 showInTopbar 的系統。讀取中不畫，免得內建清單閃一下又被換掉。
-  const inlineApps = (apps ?? []).filter(a => a.showInTopbar)
+  // 並排連結：「入口頁」固定第一項（2026-09-29，一鍵回入口頁），接著只列 showInTopbar 的系統。
+  // 系統清單讀取中只畫入口頁，免得內建清單閃一下又被換掉。
+  const inlineApps = [PORTAL_HOME_LINK, ...(apps ?? []).filter(a => a.showInTopbar)]
 
   const badge = formatUnreadBadge(unreadCount)
 
@@ -125,27 +126,25 @@ export function Topbar() {
         }
       />
 
-      {inlineApps.length > 0 && (
-        <nav aria-label="系統" className="hidden md:flex min-w-0 items-center gap-1 overflow-x-auto">
-          {inlineApps.map(a => {
-            const current = a.code === CURRENT_APP_CODE
-            return (
-              <a
-                key={a.code}
-                href={a.url}
-                aria-current={current ? 'page' : undefined}
-                className={`flex h-8 flex-shrink-0 items-center px-3 rounded-md text-[13px] font-medium
-                            transition-colors
-                            ${current
-                              ? 'bg-[var(--vw-accent-subtle)] text-[var(--vw-ink)]'
-                              : 'text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] hover:text-[var(--vw-ink)]'}`}
-              >
-                {a.name}
-              </a>
-            )
-          })}
-        </nav>
-      )}
+      <nav aria-label="系統" className="hidden md:flex min-w-0 items-center gap-1 overflow-x-auto">
+        {inlineApps.map(a => {
+          const current = a.code === CURRENT_APP_CODE
+          return (
+            <a
+              key={a.code}
+              href={a.url}
+              aria-current={current ? 'page' : undefined}
+              className={`flex h-8 flex-shrink-0 items-center px-3 rounded-md text-[13px] font-medium
+                          transition-colors
+                          ${current
+                            ? 'bg-[var(--vw-accent-subtle)] text-[var(--vw-ink)]'
+                            : 'text-[var(--vw-text-secondary)] hover:bg-[var(--vw-surface-subtle)] hover:text-[var(--vw-ink)]'}`}
+            >
+              {a.name}
+            </a>
+          )
+        })}
+      </nav>
 
       <div className="flex-1" />
 

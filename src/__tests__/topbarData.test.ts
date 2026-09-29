@@ -41,8 +41,8 @@ describe('常數', () => {
 
   it('VSMS 角色中文', () => {
     expect(ROLE_LABELS).toEqual({
-      super_admin: '超級管理者',
-      admin: '管理者',
+      super_admin: '系統管理員',
+      admin: '部級主管',
       user: '測試人員',
       guest: '訪客（唯讀）',
     })

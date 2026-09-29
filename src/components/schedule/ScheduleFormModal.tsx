@@ -281,7 +281,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-semibold text-gray-500 tracking-wide">排程內容</h3>
-                <span className="text-xs text-gray-400">由管理者維護，唯讀</span>
+                <span className="text-xs text-gray-400">由部級主管維護，唯讀</span>
               </div>
               <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                 {roRow('PDN', form.projectName)}
@@ -408,7 +408,7 @@ export function ScheduleFormModal({ isOpen, schedule, onClose, onSaved }: Props)
                     { value: 'completed', label: '已完成', disabled: vtmsLocked,
                       title: vtmsLocked ? '已關聯 VTMS 測試計畫，完成狀態由 VTMS 控制' : undefined },
                     { value: 'cancelled', label: '已取消', disabled: isUser,
-                      title: isUser ? '取消排程需由管理者操作' : undefined },
+                      title: isUser ? '取消排程需由部級主管操作' : undefined },
                   ]}
                 />
               </div>

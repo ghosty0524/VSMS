@@ -105,7 +105,7 @@ const AuditPage: React.FC = () => {
     return (
       <div className="p-8 flex items-center justify-center gap-2 text-gray-500">
         <ShieldAlert size={16} className="flex-shrink-0" />
-        此功能僅限 Super Admin 使用
+        此功能僅限系統管理員使用
       </div>
     );
   }

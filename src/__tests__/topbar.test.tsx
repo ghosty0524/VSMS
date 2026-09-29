@@ -96,15 +96,16 @@ describe('Topbar：產品切換與並排連結', () => {
     expect(items.filter(i => i.getAttribute('aria-current') === 'page')).toHaveLength(1)
   })
 
-  it('並排連結只列 showInTopbar 的系統、依 sortOrder；VSMS 有 aria-current', async () => {
+  it('並排連結第一項固定「入口頁」，接著只列 showInTopbar 的系統、依 sortOrder；VSMS 有 aria-current', async () => {
     login('admin')
     render(<Topbar />)
     const nav = await screen.findByRole('navigation', { name: '系統' })
     const links = within(nav).getAllByRole('link')
-    expect(links.map(l => l.textContent)).toEqual(['VTMS', 'VSMS'])
-    expect(links.map(l => l.getAttribute('href'))).toEqual(['/vtms/', '/vsms/'])
-    expect(links[1]).toHaveAttribute('aria-current', 'page')
+    expect(links.map(l => l.textContent)).toEqual(['入口頁', 'VTMS', 'VSMS'])
+    expect(links.map(l => l.getAttribute('href'))).toEqual(['/', '/vtms/', '/vsms/'])
+    expect(links[2]).toHaveAttribute('aria-current', 'page')
     expect(links[0]).not.toHaveAttribute('aria-current')
+    expect(links[1]).not.toHaveAttribute('aria-current')
   })
 
   it('/portal/apps 失敗：退回內建三項（入口頁首頁、VTMS、VSMS）', async () => {
@@ -113,7 +114,7 @@ describe('Topbar：產品切換與並排連結', () => {
     const user = userEvent.setup()
     render(<Topbar />)
     const nav = await screen.findByRole('navigation', { name: '系統' })
-    expect(within(nav).getAllByRole('link').map(l => l.getAttribute('href'))).toEqual(['/vtms/', '/vsms/'])
+    expect(within(nav).getAllByRole('link').map(l => l.getAttribute('href'))).toEqual(['/', '/vtms/', '/vsms/'])
 
     const items = within(await openSwitcher(user)).getAllByRole('menuitem')
     expect(items.map(i => i.getAttribute('href'))).toEqual(['/', '/vtms/', '/vsms/'])
@@ -124,7 +125,7 @@ describe('Topbar：產品切換與並排連結', () => {
     login('admin', 'local')
     render(<Topbar />)
     const nav = screen.getByRole('navigation', { name: '系統' })
-    expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['VTMS', 'VSMS'])
+    expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['入口頁', 'VTMS', 'VSMS'])
     await flush()
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -212,8 +213,8 @@ describe('Topbar：使用者選單', () => {
   })
 
   it.each<[Role, string]>([
-    ['super_admin', '超級管理者'],
-    ['admin', '管理者'],
+    ['super_admin', '系統管理員'],
+    ['admin', '部級主管'],
     ['user', '測試人員'],
     ['guest', '訪客（唯讀）'],
   ])('%s：標頭顯示名稱與「%s」', async (role, label) => {

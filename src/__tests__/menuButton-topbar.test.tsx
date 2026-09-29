@@ -134,7 +134,7 @@ describe('MenuButton（頂欄用的擴充）', () => {
     const user = userEvent.setup()
     render(
       <MenuButton label="Will Wang" ariaLabel="使用者選單"
-        header={<><div>Will Wang</div><div>管理者</div></>}
+        header={<><div>Will Wang</div><div>部級主管</div></>}
         items={[{ key: 'out', label: '登出', onSelect: vi.fn() }]} />,
     )
     await user.click(screen.getByRole('button', { name: '使用者選單' }))
@@ -144,7 +144,7 @@ describe('MenuButton（頂欄用的擴充）', () => {
     expect(describedBy).toBeTruthy()
     const header = document.getElementById(describedBy as string)
     expect(header).toHaveTextContent('Will Wang')
-    expect(header).toHaveTextContent('管理者')
+    expect(header).toHaveTextContent('部級主管')
     expect(menu.contains(header)).toBe(true)
     expect(screen.getAllByRole('menuitem')).toHaveLength(1)
     expect(screen.getByRole('menuitem', { name: '登出' })).toHaveFocus()

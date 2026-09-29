@@ -34,13 +34,20 @@ export const FALLBACK_APPS: readonly TopbarApp[] = [
 
 export const PORTAL_HOME_LABEL = '入口頁首頁'
 export const PORTAL_HOME_URL = '/'
+/** 並排連結最前面固定的「入口頁」（2026-09-29 使用者回饋：一鍵回入口頁）；三系統同一項，不受 showInTopbar 影響。 */
+export const PORTAL_HOME_LINK = { code: 'portal', name: '入口頁', url: PORTAL_HOME_URL } as const
 export const INBOX_URL = '/inbox'
 /** 入口頁的 React Route（BrowserRouter；舊 Header 的 /#change-password 其實只會到首頁）。 */
 export const CHANGE_PASSWORD_URL = '/change-password'
 
+/**
+ * 角色名稱（2026-09-29 三系統統一詞彙，規格 F:\vportal\docs\superpowers\specs\2026-09-29-portal-feedback-four-items-design.md）：
+ * super_admin＝系統管理員（＝VTMS admin）、admin＝部級主管（＝VTMS 無課的 lead）、user＝測試人員。
+ * 與 lib/peopleRows.ts 的 ROLE_LABEL 同一套；只改顯示，資料值不動。
+ */
 export const ROLE_LABELS: Record<Role, string> = {
-  super_admin: '超級管理者',
-  admin: '管理者',
+  super_admin: '系統管理員',
+  admin: '部級主管',
   user: '測試人員',
   guest: '訪客（唯讀）',
 }
