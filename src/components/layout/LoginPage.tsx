@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Check, Users } from 'lucide-react'
+import { Users } from 'lucide-react'
+import { WorkspaceGlyph } from './WorkspaceGlyph'
 import { useAuthStore } from '../../store/authStore'
 
 // 輸入框（UI 統一 4B 共用視覺值）：高 40px、左右內距 12px、1px --vw-border-strong、
@@ -44,10 +45,10 @@ export function LoginPage() {
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
         {/* Logo / Title */}
         <div className="text-center mb-8">
-          {/* Validation Workspace 標誌：與全域頂欄（4A）同一個勾勾圖形，28×28、圓角 7px、底色 --vw-accent */}
+          {/* Validation Workspace 標誌：與全域頂欄（4A）同一個四格拼塊圖形（WorkspaceGlyph），28×28、圓角 7px、底色 --vw-accent */}
           <div data-testid="login-logo" aria-hidden="true"
             className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] bg-[var(--vw-accent)] text-white mb-4">
-            <Check size={18} strokeWidth={3} />
+            <WorkspaceGlyph size={18} />
           </div>
           <h1 className="text-xl font-bold text-gray-900">VSMS</h1>
           <p className="text-sm text-gray-500 mt-1">Validation Schedule Management System</p>

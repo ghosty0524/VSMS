@@ -16,7 +16,8 @@
 //
 // 連到入口頁與其他系統的網址都是站台根目錄的絕對路徑（/、/inbox、/change-password、
 // /vtms/），不經 withBase：VSMS 部署在 /vsms/ 底下，加前綴會變成 /vsms/inbox。
-import { Bell, Check, KeyRound, LogOut, Menu } from 'lucide-react'
+import { Bell, KeyRound, LogOut, Menu } from 'lucide-react'
+import { WorkspaceGlyph } from './WorkspaceGlyph'
 import { MenuButton, type MenuItem } from '../shared/MenuButton'
 import { useAuthStore } from '../../store/authStore'
 import { useNavDrawerStore } from '../../store/navDrawerStore'
@@ -119,7 +120,7 @@ export function Topbar() {
             <span aria-hidden="true"
                   className="flex h-[22px] w-[22px] items-center justify-center rounded-md
                              bg-[var(--color-accent)] text-white">
-              <Check size={14} strokeWidth={3} />
+              <WorkspaceGlyph size={14} />
             </span>
             <span className="hidden sm:inline text-sm font-bold text-[var(--vw-ink)]">Validation Workspace</span>
           </>

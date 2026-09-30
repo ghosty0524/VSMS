@@ -52,16 +52,17 @@ async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('LoginPage 外觀（UI 統一 4B）', () => {
-  it('標誌是 Validation Workspace 的勾勾圖形，28×28、圓角 7px、底色 --vw-accent；標題與副標不變', () => {
+  it('標誌是 Validation Workspace 的四格拼塊圖形，28×28、圓角 7px、底色 --vw-accent；標題與副標不變', () => {
     const { container } = render(<LoginPage />)
     const logo = screen.getByTestId('login-logo')
     expect(logo).toHaveAttribute('aria-hidden', 'true')
     expect(logo).toHaveClass('w-7', 'h-7', 'rounded-[7px]', 'bg-[var(--vw-accent)]', 'text-white')
     expect(logo).not.toHaveClass('bg-blue-600')
-    // lucide Check：與 4A 頂欄標誌同一個圖形
-    const svg = logo.querySelector('svg.lucide-check')
+    // WorkspaceGlyph：與 4A 頂欄標誌同一個圖形（四格、右下一格實心），不再是勾勾
+    const svg = logo.querySelector('svg[data-glyph="workspace"]')
     expect(svg).not.toBeNull()
-    expect(svg?.querySelector('path')?.getAttribute('d')).toBe('M20 6 9 17l-5-5')
+    expect(svg?.querySelectorAll('rect')).toHaveLength(4)
+    expect(logo.querySelector('svg.lucide-check')).toBeNull()
     // 舊的剪貼簿圖形不在了
     expect(container.querySelector('path[d^="M9 5H7"]')).toBeNull()
     expect(screen.getByRole('heading', { level: 1, name: 'VSMS' })).toBeInTheDocument()
