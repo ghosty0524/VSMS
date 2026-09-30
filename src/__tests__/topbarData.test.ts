@@ -23,11 +23,12 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('常數', () => {
-  it('目前系統是 vsms；退回清單是 VTMS、VSMS，全部顯示在頂欄', () => {
+  it('目前系統是 vsms；退回清單是 VTMS、VSMS、LRMS，全部顯示在頂欄', () => {
     expect(CURRENT_APP_CODE).toBe('vsms')
     expect(FALLBACK_APPS.map(a => [a.code, a.name, a.url])).toEqual([
       ['vtms', 'VTMS', '/vtms/'],
       ['vsms', 'VSMS', '/vsms/'],
+      ['lrms', 'LRMS', '/lrms/'],
     ])
     expect(FALLBACK_APPS.every(a => a.showInTopbar)).toBe(true)
   })

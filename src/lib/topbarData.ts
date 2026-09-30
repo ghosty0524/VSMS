@@ -23,13 +23,14 @@ export interface TopbarApp {
 }
 
 /**
- * 讀取失敗或非 vauth 模式時的內建清單。規格的退回清單是「入口頁首頁、VTMS、VSMS」；
- * 入口頁首頁是產品切換下拉固定的第一項，不在這裡，所以這裡只有兩個系統。
+ * 讀取失敗或非 vauth 模式時的內建清單。規格的退回清單是「入口頁首頁、VTMS、VSMS、LRMS」；
+ * 入口頁首頁是產品切換下拉固定的第一項，不在這裡，所以這裡只有三個系統。
  * 說明文字與 vauth 的預設種子（auth/sql/008-portal.sql）相同。
  */
 export const FALLBACK_APPS: readonly TopbarApp[] = [
   { code: 'vtms', name: 'VTMS', description: '測試計畫、任務、案例、報告', url: '/vtms/', sortOrder: 1, showInTopbar: true },
   { code: 'vsms', name: 'VSMS', description: '工作排程、設備排程、負載分析', url: '/vsms/', sortOrder: 2, showInTopbar: true },
+  { code: 'lrms', name: 'LRMS', description: '可靠度管理：送測、MTBF、規範、ISO 17025、設備', url: '/lrms/', sortOrder: 3, showInTopbar: true },
 ]
 
 export const PORTAL_HOME_LABEL = '入口頁首頁'

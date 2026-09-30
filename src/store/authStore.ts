@@ -146,12 +146,15 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     // 登出審計由後端 /api/logout 寫入
     await api.logout().catch(console.error)
     // 單一登入模式：系統內登出＝整個平台登出（撤銷入口頁的 SSO），同源、盡力而為。
-    // 三個請求都要等完才把 isLoggedIn 設為 false：App 一看到未登入就會導回入口頁，
+    // 所有請求都要等完才把 isLoggedIn 設為 false：App 一看到未登入就會導回入口頁，
     // 導頁會中斷還在飛的請求，SSO 撤銷沒送出去的話入口頁仍是登入狀態。
     if (get().authProvider === 'vauth') {
-      // 先結束 VTMS 的本地 session 再撤銷 SSO：VTMS 的 session 不會因 SSO 撤銷而失效，
-      // 不打它的登出，改網址到 /vtms/ 仍是登入狀態。與入口頁的登出做法一致。
-      await fetch('/vtms/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
+      // 先結束 VTMS、LRMS 的本地 session 再撤銷 SSO：這兩邊的 session 不會因 SSO 撤銷而失效，
+      // 不打它們的登出，改網址過去仍是登入狀態。與入口頁的登出做法一致；兩者順序不重要，都等完即可。
+      await Promise.allSettled([
+        fetch('/vtms/api/logout', { method: 'POST', credentials: 'same-origin' }),
+        fetch('/lrms/api/logout', { method: 'POST', credentials: 'same-origin' }),
+      ])
       await fetch('/auth/session/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
     }
     sessionStorage.removeItem('vsms-session-token')

@@ -108,16 +108,16 @@ describe('Topbar：產品切換與並排連結', () => {
     expect(links[1]).not.toHaveAttribute('aria-current')
   })
 
-  it('/portal/apps 失敗：退回內建三項（入口頁首頁、VTMS、VSMS）', async () => {
+  it('/portal/apps 失敗：退回內建四項（入口頁首頁、VTMS、VSMS、LRMS）', async () => {
     routes[APPS_URL] = { status: 500, body: {} }
     login('admin')
     const user = userEvent.setup()
     render(<Topbar />)
     const nav = await screen.findByRole('navigation', { name: '系統' })
-    expect(within(nav).getAllByRole('link').map(l => l.getAttribute('href'))).toEqual(['/', '/vtms/', '/vsms/'])
+    expect(within(nav).getAllByRole('link').map(l => l.getAttribute('href'))).toEqual(['/', '/vtms/', '/vsms/', '/lrms/'])
 
     const items = within(await openSwitcher(user)).getAllByRole('menuitem')
-    expect(items.map(i => i.getAttribute('href'))).toEqual(['/', '/vtms/', '/vsms/'])
+    expect(items.map(i => i.getAttribute('href'))).toEqual(['/', '/vtms/', '/vsms/', '/lrms/'])
     expect(items[0]).toHaveTextContent('入口頁首頁')
   })
 
@@ -125,7 +125,7 @@ describe('Topbar：產品切換與並排連結', () => {
     login('admin', 'local')
     render(<Topbar />)
     const nav = screen.getByRole('navigation', { name: '系統' })
-    expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['入口頁', 'VTMS', 'VSMS'])
+    expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['入口頁', 'VTMS', 'VSMS', 'LRMS'])
     await flush()
     expect(fetchMock).not.toHaveBeenCalled()
   })

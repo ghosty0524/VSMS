@@ -30,7 +30,9 @@ describe('authStore.logout 單一登出', () => {
     await p
     const paths = calledPaths()
     expect(paths).toContain('/vtms/api/logout')
+    expect(paths).toContain('/lrms/api/logout')
     expect(paths.indexOf('/vtms/api/logout')).toBeLessThan(paths.indexOf('/auth/session/logout'))
+    expect(paths.indexOf('/lrms/api/logout')).toBeLessThan(paths.indexOf('/auth/session/logout'))
     for (const c of fetchMock.mock.calls) {
       const init = (c as unknown[])[1] as RequestInit
       expect(init.method).toBe('POST')
