@@ -2,16 +2,22 @@ import type { Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/db.js'
 import { getSsoUser } from '../lib/vauthClient.js'
 import { establishSession } from '../routes/auth.js'
+import { tokenStore } from '../lib/sessionTokens.js'
 
 /**
  * 單一登入認領：入口頁登入後帶 vportal_sso cookie 進到 /vsms/，這裡換成本地 session，
  * 之後走 VSMS 自己的 session 與閒置逾時。只在 AUTH_PROVIDER=vauth 時作用（預設 local＝no-op）。
- * 已有 session、帶 header token、無 cookie 一律略過；vauth 認不得就當沒發生，讓 requireAuth 照擋。
+ * 已有 session、帶「還有效的」header token、無 cookie 一律略過；vauth 認不得就當沒發生，讓 requireAuth 照擋。
  */
 export async function ssoAdopt(req: Request, _res: Response, next: NextFunction): Promise<void> {
   if (process.env.AUTH_PROVIDER !== 'vauth') return next()
   if (req.session.sessionId) return next()
-  if (req.headers['x-vsms-session']) return next()
+  // header token 要真的還在 tokenStore 裡才算數。前端把本地／訪客登入拿到的 token 放在分頁的
+  // sessionStorage，只有按登出才清；訪客 session 閒置失效後 token 還會跟著每個請求送來，
+  // 原本「看到 header 就略過」讓 SSO 已登入的人永遠認領不到、被 401 踢回入口頁，而且
+  // 伺服器端沒有任何紀錄（2026-09-30 實際案例）。
+  const headerToken = req.headers['x-vsms-session']
+  if (typeof headerToken === 'string' && tokenStore.get(headerToken)) return next()
   const cookie = req.headers.cookie
   if (!cookie || !cookie.includes('vportal_sso')) return next()
 

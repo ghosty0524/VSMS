@@ -10,6 +10,8 @@ const create = vi.fn()
 vi.mock('../lib/db.js', () => ({ prisma: { user: { findUnique: (...a: unknown[]) => findUnique(...a), create: (...a: unknown[]) => create(...a) } } }))
 const establishSession = vi.fn()
 vi.mock('../routes/auth.js', () => ({ establishSession: (...a: unknown[]) => establishSession(...a) }))
+const tokenGet = vi.fn()
+vi.mock('../lib/sessionTokens.js', () => ({ tokenStore: { get: (...a: unknown[]) => tokenGet(...a) } }))
 
 const { ssoAdopt } = await import('../middleware/ssoAdopt.js')
 
@@ -27,7 +29,7 @@ function app(sessionInit: Record<string, unknown>, headers: Record<string, strin
 
 beforeEach(() => {
   process.env.AUTH_PROVIDER = 'vauth'
-  getSsoUser.mockReset(); findUnique.mockReset(); create.mockReset(); establishSession.mockReset()
+  getSsoUser.mockReset(); findUnique.mockReset(); create.mockReset(); establishSession.mockReset(); tokenGet.mockReset()
   establishSession.mockImplementation((req: { session: Record<string, unknown> }) => { req.session.sessionId = 'new-sid'; return Promise.resolve('new-sid') })
 })
 
@@ -43,9 +45,22 @@ describe('VSMS ssoAdopt', () => {
     expect(getSsoUser).not.toHaveBeenCalled()
   })
 
-  it('帶 x-vsms-session header 略過（交給 header 認證）', async () => {
+  it('帶「還有效」的 x-vsms-session header 略過（交給 header 認證）', async () => {
+    tokenGet.mockReturnValue({ username: 'alice', role: 'user' })
     await request(app({}, { cookie: 'vportal_sso=abc', 'x-vsms-session': 'tok' })).get('/probe')
+    expect(tokenGet).toHaveBeenCalledWith('tok')
     expect(getSsoUser).not.toHaveBeenCalled()
+  })
+
+  // 2026-09-30 實際案例：分頁 sessionStorage 殘留訪客登入時的 token，訪客 session 早已失效；
+  // 舊版只要看到 header 就跳過認領，結果 SSO 已登入卻永遠進不了 VSMS，而且沒有任何紀錄。
+  it('帶「已失效」的 x-vsms-session header 不算數，照常認領', async () => {
+    tokenGet.mockReturnValue(undefined)
+    getSsoUser.mockResolvedValue({ id: 'u1', username: 'alice', displayName: 'Alice' })
+    findUnique.mockResolvedValue({ id: 'u1', username: 'alice', displayName: 'Alice', role: 'user', isActive: true })
+    const res = await request(app({}, { cookie: 'vportal_sso=abc', 'x-vsms-session': 'stale' })).get('/probe')
+    expect(res.body.established).toBe(1)
+    expect(res.body.sessionId).toBe('new-sid')
   })
 
   it('無 vportal_sso cookie 略過', async () => {

@@ -38,6 +38,14 @@ interface AuthState {
   updateAccount: (id: string, updates: Partial<Account & { password: string }>) => Promise<void>
 }
 
+/** 跨系統登出請求的上限；超過就放棄那一個，不能讓整個登出卡在連不上的系統。 */
+const CROSS_LOGOUT_TIMEOUT_MS = 3_000
+function abortAfter(ms: number): AbortSignal {
+  const controller = new AbortController()
+  setTimeout(() => controller.abort(), ms)
+  return controller.signal
+}
+
 export const useAuthStore = create<AuthState>()((set, get) => ({
   isLoggedIn: false,
   isFirstRun: false,
@@ -75,6 +83,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         sessionTimeoutMin: res.sessionTimeoutMin ?? 30,
       })
     } catch {
+      // 伺服器不認這個 session，分頁裡存的 header token（本地／訪客登入時寫入）也一定失效了。
+      // 留著會跟著之後每個請求一起送出，SSO 認領時伺服器仍以 header 為準而拒絕（2026-09-30 案例）。
+      sessionStorage.removeItem('vsms-session-token')
       set({ isLoggedIn: false, isChecking: false })
     }
   },
@@ -151,11 +162,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (get().authProvider === 'vauth') {
       // 先結束 VTMS、LRMS 的本地 session 再撤銷 SSO：這兩邊的 session 不會因 SSO 撤銷而失效，
       // 不打它們的登出，改網址過去仍是登入狀態。與入口頁的登出做法一致；兩者順序不重要，都等完即可。
+      // 每個跨系統請求最多等 3 秒：某個系統連不上時（2026-09-30 LRMS 上游斷線）TCP 連線逾時要
+      // 21 秒，畫面像沒反應，使用者連按登出、離開頁面，SSO 撤銷根本沒送出。逾時就放棄那一個往下走。
       await Promise.allSettled([
-        fetch('/vtms/api/logout', { method: 'POST', credentials: 'same-origin' }),
-        fetch('/lrms/api/logout', { method: 'POST', credentials: 'same-origin' }),
+        fetch('/vtms/api/logout', { method: 'POST', credentials: 'same-origin', signal: abortAfter(CROSS_LOGOUT_TIMEOUT_MS) }),
+        fetch('/lrms/api/logout', { method: 'POST', credentials: 'same-origin', signal: abortAfter(CROSS_LOGOUT_TIMEOUT_MS) }),
       ])
-      await fetch('/auth/session/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
+      await fetch('/auth/session/logout', { method: 'POST', credentials: 'same-origin', signal: abortAfter(CROSS_LOGOUT_TIMEOUT_MS) }).catch(() => undefined)
     }
     sessionStorage.removeItem('vsms-session-token')
     useUIStore.getState().setView('main')

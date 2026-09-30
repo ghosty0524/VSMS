@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/authStore'
 
 // 單一登入模式下，系統內登出必須把 VTMS 的本地 session 也結束掉，
 // 否則在 VSMS 按登出後改網址到 /vtms/ 仍是登入狀態。與入口頁的登出行為一致。
-const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(null, { status: 204 }))
 
 beforeEach(() => {
   fetchMock.mockClear()
@@ -44,6 +44,35 @@ describe('authStore.logout 單一登出', () => {
   it('local 模式：不碰 VTMS 也不碰 SSO', async () => {
     await useAuthStore.getState().logout()
     expect(calledPaths()).toEqual([])
+    expect(useAuthStore.getState().isLoggedIn).toBe(false)
+  })
+})
+
+// 2026-09-30：LRMS 上游連不上時，跨系統登出等到 TCP 連線逾時要 21 秒，畫面像沒反應，使用者連按
+// 登出、離開頁面後 SSO 撤銷根本沒送出。每個跨系統請求最多等 3 秒，逾時就放棄那一個往下走。
+describe('authStore.logout 跨系統請求逾時', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('每個跨系統請求都帶 AbortSignal；卡住的系統 3 秒後被放棄，SSO 仍照撤銷', async () => {
+    useAuthStore.setState({ authProvider: 'vauth' })
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url) === '/lrms/api/logout') {
+        return new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+        })
+      }
+      return new Response(null, { status: 204 })
+    })
+    const p = useAuthStore.getState().logout()
+    await vi.advanceTimersByTimeAsync(2_900)
+    expect(calledPaths()).not.toContain('/auth/session/logout')
+    await vi.advanceTimersByTimeAsync(200)
+    await p
+    expect(calledPaths()).toContain('/auth/session/logout')
+    for (const c of fetchMock.mock.calls) {
+      expect(((c as unknown[])[1] as RequestInit).signal).toBeInstanceOf(AbortSignal)
+    }
     expect(useAuthStore.getState().isLoggedIn).toBe(false)
   })
 })
