@@ -36,8 +36,11 @@ import { OVERFLOW_COLOR } from '../../constants'
 import type { Role } from '../../types'
 import type { FilterSortState } from './FilterSortBar'
 
+// Dashboard 匯出檔名固定（2026-09-30 使用者要求）：不再帶日期，每次匯出都是同一個名字，方便覆蓋更新。
+export const DASHBOARD_EXPORT_FILENAME = 'Validation_Schedule.html'
+
 async function saveDashboardHTML(html: string): Promise<void> {
-  const name = `dashboard_${new Date().toISOString().slice(0, 10)}.html`
+  const name = DASHBOARD_EXPORT_FILENAME
   if ('showSaveFilePicker' in window) {
     try {
       const handle = await (window as Window & typeof globalThis & {

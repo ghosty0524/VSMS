@@ -5,7 +5,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useScheduleStore } from '../store/scheduleStore'
 import { useOptionsStore } from '../store/optionsStore'
-import { ScheduleToolbar } from '../components/schedule/ScheduleToolbar'
+import { ScheduleToolbar, DASHBOARD_EXPORT_FILENAME } from '../components/schedule/ScheduleToolbar'
 import { DEFAULT_FILTER } from '../components/schedule/FilterSortBar'
 import type { OptionsMap, Role } from '../types'
 
@@ -137,5 +137,12 @@ describe('ScheduleToolbar「更多」', () => {
     unmount()
     renderToolbar('admin', 'gantt', { isFullscreen: true })
     expect(screen.getByRole('button', { name: '離開全螢幕（Esc）' })).toHaveAttribute('title', '離開全螢幕（Esc）')
+  })
+})
+
+// Dashboard 匯出檔名固定為 Validation_Schedule（2026-09-30 使用者要求），不帶日期。
+describe('Dashboard 匯出檔名', () => {
+  it('固定為 Validation_Schedule.html', () => {
+    expect(DASHBOARD_EXPORT_FILENAME).toBe('Validation_Schedule.html')
   })
 })
