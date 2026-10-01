@@ -10,7 +10,7 @@ import { listTestPlans, getTestPlanProgress, listProjects } from '../lib/vtmsCli
 import { matchPdn } from '../lib/pdnMatch.js'
 import { completedAtPatch } from '../lib/completedAt.js'
 import { notifyScheduleAssigned } from '../lib/scheduleNotify.js'
-import { recordChange } from '../lib/changeHistory.js'
+import { recordChange, recordChanges } from '../lib/changeHistory.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -191,6 +191,7 @@ router.patch('/:id/vtms-link', async (req, res) => {
     where: { id: req.params.id },
     data: { vtmsPlanId, updatedAt: new Date() },
   });
+  await recordChange({ action: vtmsPlanId ? 'link' : 'unlink', actor: username, actorSource: 'user', before: schedule, after: updated });
   res.json(toSchedule(updated));
 });
 
@@ -241,41 +242,42 @@ router.put('/replace-all', async (req, res) => {
   }
 
   const now = new Date()
+  // 先產生整批列（含 id）：匯入後要靠 id 逐筆留下變動歷程
+  const rows = incoming.map(d => ({
+    id: uuidv4(), ...d,
+    completedAt: (d as Record<string, unknown>).isCompleted === true ? now : null,
+    createdBy: username, updatedBy: username,
+    createdAt: now, updatedAt: now,
+  }))
 
-  if (allowedUnits === null || allowedUnits.length === 0) {
-    // super_admin: replace all
-    await prisma.$transaction(async (tx) => {
-      await tx.schedule.deleteMany()
-      if (incoming.length > 0) {
-        await tx.schedule.createMany({
-          data: incoming.map(d => ({
-            id: uuidv4(), ...d,
-            completedAt: (d as Record<string, unknown>).isCompleted === true ? now : null,
-            createdBy: username, updatedBy: username,
-            createdAt: now, updatedAt: now,
-          })),
-        })
-      }
-    })
-  } else {
-    // admin: only delete + replace schedules in their allowed units
-    await prisma.$transaction(async (tx) => {
-      await tx.schedule.deleteMany({ where: { testUnit: { in: allowedUnits } } })
-      if (incoming.length > 0) {
-        await tx.schedule.createMany({
-          data: incoming.map(d => ({
-            id: uuidv4(), ...d,
-            completedAt: (d as Record<string, unknown>).isCompleted === true ? now : null,
-            createdBy: username, updatedBy: username,
-            createdAt: now, updatedAt: now,
-          })),
-        })
-      }
-    })
-  }
+  // 取代範圍：super_admin 是全部排程；admin 只動自己管轄單位內的排程
+  // （deleteMany({ where: {} }) 與原本的 deleteMany() 同義，都是全刪）
+  const scope = allowedUnits === null || allowedUnits.length === 0
+    ? {}
+    : { testUnit: { in: allowedUnits } }
+
+  // 刪除前先在同一個 transaction 裡把範圍內的舊排程整列讀出來：
+  // 每筆被替換掉的舊排程要記一列 delete，PDN 與標籤必須取刪除當下的資料
+  const replaced = await prisma.$transaction(async (tx) => {
+    const old = await tx.schedule.findMany({ where: scope })
+    await tx.schedule.deleteMany({ where: scope })
+    if (rows.length > 0) {
+      await tx.schedule.createMany({ data: rows })
+    }
+    return old
+  })
 
   const all = await prisma.schedule.findMany({ orderBy: { createdAt: 'asc' } })
   await appendAudit(username, displayName, 'IMPORT_SCHEDULES', `${incoming.length} schedules`, [])
+  // 變動歷程一次寫入：先每筆被刪的舊排程各一列 delete，再每筆新排程各一列 import
+  // （import 取 DB 讀回的列，含預設值）；範圍外其他單位的排程不動也不記。
+  const createdIds = new Set(rows.map(r => r.id))
+  await recordChanges([
+    ...replaced.map(s => ({ action: 'delete' as const, actor: username, actorSource: 'user' as const, before: s, after: null })),
+    ...all
+      .filter(s => createdIds.has(s.id))
+      .map(s => ({ action: 'import' as const, actor: username, actorSource: 'user' as const, before: null, after: s })),
+  ])
   res.json(all.map(toSchedule))
 })
 
