@@ -198,6 +198,18 @@ describe('recordChange', () => {
     process.env.CHANGE_HISTORY_ENABLED = 'true'
     expect(isChangeHistoryEnabled()).toBe(true)
   })
+
+  it('unlink 時 after.vtmsPlanId 為空字串則視為 null，planId 記被解除的計畫', async () => {
+    planBatch.mockResolvedValue({ 'plan-1': { planId: 'plan-1', planName: 'EMC 預測試計畫' } })
+    await recordChange({
+      action: 'unlink', actor: 'Will_Wang', actorSource: 'user',
+      before: scheduleRow({ vtmsPlanId: 'plan-1' }), after: scheduleRow({ vtmsPlanId: '' as any }),
+    })
+    expect(written()[0]).toMatchObject({
+      action: 'unlink', planId: 'plan-1',
+      changes: [{ field: 'vtmsPlanId', label: 'VTMS 關聯計畫', before: 'EMC 預測試計畫', after: null }],
+    })
+  })
 })
 
 describe('recordChanges', () => {

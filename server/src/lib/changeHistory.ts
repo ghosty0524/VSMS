@@ -114,7 +114,7 @@ function normalize(v: Raw): string | number | boolean {
 function toDisplay(field: string, v: string | number | boolean, planNames: Record<string, string>): DisplayValue {
   if (v === '') return null
   if (typeof v === 'boolean') return v ? '是' : '否'
-  if (field === 'vtmsPlanId' && typeof v === 'string') return planNames[v] ?? v
+  if (field === 'vtmsPlanId' && typeof v === 'string') return Object.hasOwn(planNames, v) ? planNames[v] : v
   return v
 }
 
@@ -228,7 +228,7 @@ async function buildEntry(input: RecordChangeInput): Promise<Prisma.ChangeHistor
     entityId: subject.id,
     entityLabel: clip(scheduleEntityLabel(subject), LABEL_MAX),
     // 解除關聯後 vtmsPlanId 是 null，planId 記被解除的那個計畫
-    planId: subject.vtmsPlanId ?? before?.vtmsPlanId ?? null,
+    planId: subject.vtmsPlanId || before?.vtmsPlanId || null,
     action,
     actor: clip(input.actor.trim() || 'unknown', ACTOR_MAX),
     actorSource: input.actorSource,

@@ -138,6 +138,16 @@ describe('diffSchedule', () => {
       'timeResource', 'userFlag', 'userFlagNote', 'vtmsPlanId',
     ])
   })
+
+  it('vtmsPlanId 為 constructor 時用 Object.hasOwn 避免繼承鍵被誤認作計畫名稱', () => {
+    expect(diffSchedule(
+      scheduleRow(),
+      scheduleRow({ vtmsPlanId: 'constructor' }),
+      {},
+    )).toEqual([
+      { field: 'vtmsPlanId', label: 'VTMS 關聯計畫', before: null, after: 'constructor' },
+    ])
+  })
 })
 
 describe('createChanges', () => {
