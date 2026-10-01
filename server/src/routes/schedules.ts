@@ -10,6 +10,7 @@ import { listTestPlans, getTestPlanProgress, listProjects } from '../lib/vtmsCli
 import { matchPdn } from '../lib/pdnMatch.js'
 import { completedAtPatch } from '../lib/completedAt.js'
 import { notifyScheduleAssigned } from '../lib/scheduleNotify.js'
+import { recordChange } from '../lib/changeHistory.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -112,6 +113,7 @@ router.post('/', validateSchedule, async (req, res) => {
   })
 
   await appendAudit(username, displayName, 'CREATE_SCHEDULE', schedule.id, [])
+  await recordChange({ action: 'create', actor: username, actorSource: 'user', before: null, after: schedule })
   void notifyScheduleAssigned({ schedule })
   res.status(201).json(toSchedule(schedule))
 })
@@ -323,6 +325,8 @@ router.put('/:id', validateSchedule, async (req, res) => {
         testEngineer: engineer, updatedBy: username, updatedAt: new Date(),
       },
     })
+    // 變動歷程：拿 DB 的前後兩列比對；只動旗標時 lib 會把 update 記成 flag
+    await recordChange({ action: 'update', actor: username, actorSource: 'user', before: existing, after: updated })
     void notifyScheduleAssigned({ schedule: updated, previous: { testEngineer: existing.testEngineer, startDate: existing.startDate, endDate: existing.endDate } })
     const userFlagFields = ['userFlag', 'userFlagNote']
     const isFlagOnly = changedFields.length > 0 && changedFields.every(f => userFlagFields.includes(f))
@@ -368,6 +372,8 @@ router.put('/:id', validateSchedule, async (req, res) => {
       updatedBy: username, updatedAt: new Date(),
     },
   })
+  // 變動歷程：拿 DB 的前後兩列比對；只動旗標時 lib 會把 update 記成 flag
+  await recordChange({ action: 'update', actor: username, actorSource: 'user', before: existing, after: updated })
   void notifyScheduleAssigned({ schedule: updated, previous: { testEngineer: existing.testEngineer, startDate: existing.startDate, endDate: existing.endDate } })
   const flagFields = ['adminFlag', 'adminFlagNote', 'userFlag', 'userFlagNote']
   const isFlagOnly = changedFields.length > 0 && changedFields.every(f => flagFields.includes(f))
@@ -402,6 +408,7 @@ router.delete('/:id', async (req, res) => {
   const dbUser = await prisma.user.findUnique({ where: { username } })
   const displayName = dbUser?.displayName ?? username
   await appendAudit(username, displayName, 'DELETE_SCHEDULE', scheduleId, [])
+  await recordChange({ action: 'delete', actor: username, actorSource: 'user', before: target, after: null })
   res.json({ ok: true })
 })
 
