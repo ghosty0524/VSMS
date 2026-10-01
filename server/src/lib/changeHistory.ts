@@ -5,6 +5,11 @@
 // 記值原則：下拉、勾選、日期、數字、識別碼記前後值（存顯示值）；手填文字只記
 // { changed: true }，changes 裡絕不放原文。舊的 audit_logs 照寫，兩者互不取代。
 
+import { v4 as uuidv4 } from 'uuid'
+import type { Prisma } from '@prisma/client'
+import { prisma } from './db.js'
+import { getTestPlanProgressBatch } from './vtmsClient.js'
+
 export type ChangeAction =
   | 'create' | 'update' | 'flag' | 'delete' | 'import'
   | 'link' | 'unlink' | 'delay' | 'complete'
@@ -138,4 +143,117 @@ export function createChanges(after: ScheduleSnapshot): FieldChange[] {
     .map(({ field, label }) => ({
       field, label, before: null, after: toDisplay(field, normalize(after[field] as Raw), {}),
     }))
+}
+
+// ── 寫入 ──────────────────────────────────────────────────────
+
+export type RecordChangeInput = {
+  action: ChangeAction
+  actor: string
+  actorSource: ActorSource
+  /** 修改前；新增／匯入為 null。 */
+  before: ScheduleSnapshot | null
+  /** 修改後；刪除為 null。 */
+  after: ScheduleSnapshot | null
+}
+
+const ACTOR_MAX = 100
+const LABEL_MAX = 500
+
+/** 退版開關：CHANGE_HISTORY_ENABLED=false（不分大小寫）時完全不寫入。每次呼叫都重讀環境變數。 */
+export function isChangeHistoryEnabled(): boolean {
+  return (process.env.CHANGE_HISTORY_ENABLED ?? '').trim().toLowerCase() !== 'false'
+}
+
+/** 查 VTMS 計畫名稱的上限。vtmsClient 本身逾時是 10 秒，不能讓排程操作卡那麼久。 */
+export const PLAN_NAME_TIMEOUT_MS = 3000
+
+/**
+ * VTMS 計畫 id → 名稱。走既有的 progress-batch 整合 API（排程的 VTMS 進度也走它），
+ * 不跨庫讀 vtms.test_plans。查不到（VTMS 停機、逾時、計畫已刪）就不放進結果，
+ * 呼叫端退回存 id。
+ */
+export async function resolvePlanNames(ids: (string | null | undefined)[]): Promise<Record<string, string>> {
+  const wanted = [...new Set(ids.filter((id): id is string => !!id))]
+  if (wanted.length === 0) return {}
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('plan name lookup timed out')), PLAN_NAME_TIMEOUT_MS)
+    })
+    const batch = await Promise.race([getTestPlanProgressBatch(wanted), timeout])
+    const names: Record<string, string> = {}
+    for (const id of wanted) {
+      const name = batch[id]?.planName
+      if (name) names[id] = name
+    }
+    return names
+  } catch {
+    return {}
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function clip(s: string, max: number): string {
+  return Array.from(s).slice(0, max).join('')
+}
+
+async function buildEntry(input: RecordChangeInput): Promise<Prisma.ChangeHistoryCreateManyInput | null> {
+  const { before, after } = input
+  const subject = after ?? before
+  if (!subject) return null
+
+  let action = input.action
+  let changes: FieldChange[]
+  if (action === 'delete') {
+    changes = []
+  } else if (!before) {
+    changes = createChanges(subject)
+  } else {
+    if (!after) return null
+    const planChanged = (before.vtmsPlanId ?? null) !== (after.vtmsPlanId ?? null)
+    const planNames = planChanged ? await resolvePlanNames([before.vtmsPlanId, after.vtmsPlanId]) : {}
+    changes = diffSchedule(before, after, planNames)
+    if (changes.length === 0) return null
+    if (action === 'update' && changes.every(c => FLAG_FIELDS.includes(c.field))) action = 'flag'
+  }
+
+  return {
+    id: uuidv4(),
+    at: new Date(),
+    pdn: parsePdn(subject.projectName),
+    projectLabel: clip(subject.projectName ?? '', LABEL_MAX),
+    entityType: 'schedule',
+    entityId: subject.id,
+    entityLabel: clip(scheduleEntityLabel(subject), LABEL_MAX),
+    // 解除關聯後 vtmsPlanId 是 null，planId 記被解除的那個計畫
+    planId: subject.vtmsPlanId ?? before?.vtmsPlanId ?? null,
+    action,
+    actor: clip(input.actor.trim() || 'unknown', ACTOR_MAX),
+    actorSource: input.actorSource,
+    changes: changes as unknown as Prisma.InputJsonValue,
+  }
+}
+
+/** 一次寫多筆（整批匯入、計畫完成）。失敗只留 log，絕不往外丟、不影響原本的操作。 */
+export async function recordChanges(inputs: RecordChangeInput[]): Promise<void> {
+  if (!isChangeHistoryEnabled() || inputs.length === 0) return
+  try {
+    const built = await Promise.all(inputs.map(buildEntry))
+    const data = built.filter((e): e is Prisma.ChangeHistoryCreateManyInput => e !== null)
+    if (data.length === 0) return
+    await prisma.changeHistory.createMany({ data })
+  } catch (err) {
+    console.error('change_history_error', {
+      actions: [...new Set(inputs.map(i => i.action))].join(','),
+      entityIds: inputs.slice(0, 5).map(i => (i.after ?? i.before)?.id).join(','),
+      count: inputs.length,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
+export function recordChange(input: RecordChangeInput): Promise<void> {
+  return recordChanges([input])
 }

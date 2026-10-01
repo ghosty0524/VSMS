@@ -204,3 +204,25 @@ model NotifyRule {
 
   @@map("notify_rules")
 }
+
+// 變動歷程（2026-10-01）。表由 prisma/migrations/manual/2026-10-01-change-history.sql
+// 以 prisma db execute 手動建立，不跑 migrate dev。changes 只存顯示值，手填欄位只記有改。
+model ChangeHistory {
+  id           String   @id @db.VarChar(36)
+  at           DateTime @db.DateTime(3)
+  pdn          String?  @db.VarChar(20)
+  projectLabel String   @db.VarChar(500)
+  entityType   String   @db.VarChar(20)
+  entityId     String   @db.VarChar(36)
+  entityLabel  String   @db.VarChar(500)
+  planId       String?  @db.VarChar(36)
+  action       String   @db.VarChar(30)
+  actor        String   @db.VarChar(100)
+  actorSource  String   @db.VarChar(20)
+  changes      Json
+
+  @@index([pdn, at])
+  @@index([entityType, entityId, at])
+  @@index([at])
+  @@map("change_history")
+}
