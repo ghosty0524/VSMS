@@ -5,13 +5,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
-const { scheduleFindMany, scheduleUpdate } = vi.hoisted(() => ({
+const { scheduleFindMany, scheduleUpdate, historyCreateMany } = vi.hoisted(() => ({
   scheduleFindMany: vi.fn(),
   scheduleUpdate: vi.fn(),
+  historyCreateMany: vi.fn(),
 }))
 
 vi.mock('../lib/db.js', () => ({
-  prisma: { schedule: { findMany: scheduleFindMany, update: scheduleUpdate } },
+  prisma: {
+    schedule: { findMany: scheduleFindMany, update: scheduleUpdate },
+    changeHistory: { createMany: historyCreateMany },
+  },
 }))
 
 import integrationRouter from '../routes/integration.js'
@@ -33,6 +37,7 @@ beforeEach(() => {
   process.env.INTEGRATION_API_KEY = KEY
   scheduleFindMany.mockResolvedValue([])
   scheduleUpdate.mockResolvedValue({})
+  historyCreateMany.mockResolvedValue({ count: 0 })
 })
 
 describe('PATCH /api/integration/plans/:planId/complete', () => {

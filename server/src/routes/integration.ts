@@ -7,6 +7,7 @@ import { matchEngineers, compareOrdinal, type EngineerRecord } from '../lib/engi
 import { completedAtPatch } from '../lib/completedAt.js';
 import { normalizeStatsMode } from './optionsMapping.js';
 import { todayTaipei } from '../lib/today.js';
+import { recordChange, recordChanges, syncActor, type RecordChangeInput } from '../lib/changeHistory.js';
 
 const router = Router();
 
@@ -402,6 +403,7 @@ router.patch('/schedules/:id/delay', requireApiKey, async (req, res) => {
     where: { id },
     data: { isDelayed: true, delayReason: appendedReason, updatedAt: new Date() },
   });
+  await recordChange({ action: 'delay', actor: syncActor(req.body), actorSource: 'vtms-sync', before: existing, after: updated });
   res.json(updated);
 });
 
@@ -415,6 +417,7 @@ router.patch('/schedules/:id/vtms-plan', requireApiKey, async (req, res) => {
     where: { id },
     data: { vtmsPlanId: vtmsPlanId ?? null, updatedAt: new Date() },
   });
+  await recordChange({ action: vtmsPlanId ? 'link' : 'unlink', actor: syncActor(req.body), actorSource: 'vtms-sync', before: existing, after: updated });
   res.json(updated);
 });
 
@@ -429,6 +432,7 @@ router.patch('/schedules/:id/complete', requireApiKey, async (req, res) => {
     where: { id },
     data: { isCompleted: true, ...completedAtPatch(existing.isCompleted, true), updatedAt: new Date() },
   });
+  await recordChange({ action: 'complete', actor: syncActor(req.body), actorSource: 'vtms-sync', before: existing, after: updated });
   res.json(updated);
 });
 
@@ -441,21 +445,23 @@ router.patch('/schedules/:id/complete', requireApiKey, async (req, res) => {
 router.patch('/plans/:planId/complete', requireApiKey, async (req, res) => {
   const planId = String(req.params.planId).trim();
   if (!planId) { res.status(400).json({ error: 'planId is required' }); return; }
-  const linked = await prisma.schedule.findMany({
-    where: { vtmsPlanId: planId },
-    select: { id: true, isCompleted: true, isCancelled: true },
-  });
+  // 取整列（不只 id／旗標）：變動歷程要用 projectName、taskDescription 組 PDN 與標籤
+  const linked = await prisma.schedule.findMany({ where: { vtmsPlanId: planId } });
   const cancelled = linked.filter(s => s.isCancelled).length;
   const alreadyCompleted = linked.filter(s => !s.isCancelled && s.isCompleted).length;
   const completed: string[] = [];
+  const history: RecordChangeInput[] = [];
+  const actor = syncActor(req.body);
   for (const s of linked) {
     if (s.isCancelled || s.isCompleted) continue;
-    await prisma.schedule.update({
+    const updated = await prisma.schedule.update({
       where: { id: s.id },
       data: { isCompleted: true, ...completedAtPatch(false, true), updatedAt: new Date() },
     });
     completed.push(s.id);
+    history.push({ action: 'complete', actor, actorSource: 'vtms-sync', before: s, after: updated });
   }
+  await recordChanges(history);
   res.json({ planId, completed, alreadyCompleted, cancelled });
 });
 

@@ -294,3 +294,16 @@ export function scheduleChangeHistoryCleaner(): void {
   run()
   setInterval(run, DAY_MS).unref()
 }
+
+// ── VTMS 同步呼叫的觸發者 ─────────────────────────────────────
+
+/**
+ * /api/integration 四支同步 API 的選填 body.actor：VTMS 帶觸發者帳號，
+ * 6 小時自動比對帶 system，舊版 VTMS 不帶 → unknown。actorSource 由呼叫端固定為 vtms-sync。
+ */
+export function syncActor(body: unknown): string {
+  const raw = (body as { actor?: unknown } | null | undefined)?.actor
+  if (typeof raw !== 'string') return 'unknown'
+  const trimmed = raw.trim()
+  return trimmed ? clip(trimmed, ACTOR_MAX) : 'unknown'
+}

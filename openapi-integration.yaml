@@ -346,6 +346,7 @@ paths:
               properties:
                 date:    { type: string, description: 'YYYY-MM-DD' }
                 content: { type: string }
+                actor:   { type: string, description: 'Optional. Username that triggered the change in VTMS (system for the periodic reconciliation). Recorded in change_history.actor; omitted → unknown.' }
       responses:
         '200':
           description: Updated schedule
@@ -368,6 +369,14 @@ paths:
           name: id
           required: true
           schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actor: { type: string, description: 'Optional. Username that triggered the change in VTMS (system for the periodic reconciliation). Recorded in change_history.actor; omitted → unknown.' }
       responses:
         '200':
           description: Updated schedule
@@ -377,5 +386,67 @@ paths:
                 $ref: '#/components/schemas/Schedule'
         '404':
           description: Schedule not found
+        '401':
+          description: Unauthorized
+
+  /schedules/{id}/vtms-plan:
+    patch:
+      summary: Link or unlink a VTMS plan (called by VTMS)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vtmsPlanId: { type: string, nullable: true, description: 'null to unlink' }
+                actor:      { type: string, description: 'Optional. Username that triggered the change in VTMS. Recorded in change_history.actor; omitted → unknown.' }
+      responses:
+        '200':
+          description: Updated schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '404':
+          description: Schedule not found
+        '401':
+          description: Unauthorized
+
+  /plans/{planId}/complete:
+    patch:
+      summary: Complete every non-cancelled schedule linked to a VTMS plan (VTMS confirm-complete and periodic reconciliation)
+      parameters:
+        - in: path
+          name: planId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actor: { type: string, description: 'Optional. Username that triggered the change in VTMS (system for the periodic reconciliation). One change_history row per completed schedule; omitted → unknown.' }
+      responses:
+        '200':
+          description: Idempotent result; a plan with no linked schedules also returns 200
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  planId:           { type: string }
+                  completed:        { type: array, items: { type: string }, description: 'Schedule ids completed by this call' }
+                  alreadyCompleted: { type: integer }
+                  cancelled:        { type: integer }
+        '400':
+          description: Blank planId
         '401':
           description: Unauthorized
