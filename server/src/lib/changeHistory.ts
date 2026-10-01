@@ -257,3 +257,40 @@ export async function recordChanges(inputs: RecordChangeInput[]): Promise<void> 
 export function recordChange(input: RecordChangeInput): Promise<void> {
   return recordChanges([input])
 }
+
+// ── 保留期 ────────────────────────────────────────────────────
+// 用固定天數（不是 audit 的兩個曆月）：設計寫的是 365 天，環境變數也以天為單位。
+// 清除與寫入開關無關：CHANGE_HISTORY_ENABLED=false 只停寫入，既有紀錄照保留期清。
+
+export const DEFAULT_CHANGE_HISTORY_RETENTION_DAYS = 365
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export function changeHistoryRetentionDays(
+  raw: string | undefined = process.env.CHANGE_HISTORY_RETENTION_DAYS,
+): number {
+  const n = Number(raw)
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_CHANGE_HISTORY_RETENTION_DAYS
+}
+
+export function changeHistoryRetentionCutoff(now: Date, days: number): Date {
+  return new Date(now.getTime() - days * DAY_MS)
+}
+
+export async function purgeOldChangeHistory(now: Date = new Date()): Promise<number> {
+  const { count } = await prisma.changeHistory.deleteMany({
+    where: { at: { lt: changeHistoryRetentionCutoff(now, changeHistoryRetentionDays()) } },
+  })
+  return count
+}
+
+export function scheduleChangeHistoryCleaner(): void {
+  const run = () => {
+    purgeOldChangeHistory()
+      .then(n => {
+        if (n > 0) console.log(`[change-history] purged ${n} row(s) older than ${changeHistoryRetentionDays()} days`)
+      })
+      .catch(err => console.error('[change-history] purge failed:', err))
+  }
+  run()
+  setInterval(run, DAY_MS).unref()
+}

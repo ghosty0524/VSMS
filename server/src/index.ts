@@ -187,11 +187,13 @@ function startNotifyCron(): void {
 }
 
 const { initDb, scheduleAuditCleaner } = await import('./lib/storage.js')
+const { scheduleChangeHistoryCleaner } = await import('./lib/changeHistory.js')
 const { prisma } = await import('./lib/db.js')
 const PORT = process.env.PORT ?? 3001
 await prisma.$connect()
 await initDb()
 scheduleAuditCleaner()
+scheduleChangeHistoryCleaner()
 const { pullOrgSnapshotAtStartup } = await import('./lib/orgSync/pull.js')
 await pullOrgSnapshotAtStartup()
 if (httpsEnabled) {
