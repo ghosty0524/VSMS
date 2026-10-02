@@ -16,11 +16,15 @@
 //
 // 連到入口頁與其他系統的網址都是站台根目錄的絕對路徑（/、/inbox、/change-password、
 // /vtms/），不經 withBase：VSMS 部署在 /vsms/ 底下，加前綴會變成 /vsms/inbox。
-import { Bell, KeyRound, LogOut, Menu } from 'lucide-react'
+import { useState } from 'react'
+import { Bell, BookOpen, KeyRound, LogOut, Menu } from 'lucide-react'
 import { WorkspaceGlyph } from './WorkspaceGlyph'
 import { MenuButton, type MenuItem } from '../shared/MenuButton'
 import { useAuthStore } from '../../store/authStore'
 import { useNavDrawerStore } from '../../store/navDrawerStore'
+import { useUIStore } from '../../store/uiStore'
+import { guideHref } from '../../lib/guideLink'
+import { GuideDialog } from '../shared/GuideDialog'
 import { NAV_DRAWER_ID, NAV_MENU_BUTTON_ID, sidebarVisible } from './Sidebar'
 import { useTopbarData } from './useTopbarData'
 import {
@@ -61,7 +65,13 @@ export function Topbar() {
 
   const badge = formatUnreadBadge(unreadCount)
 
-  const userItems: MenuItem[] = []
+  // 「使用說明」（2026-10-02，與 VTMS 同一做法）：站內對話框以 iframe 載入入口頁說明，依目前頁面深連結；
+  // 所有角色（含訪客）都看得到。
+  const view = useUIStore(s => s.view)
+  const [showGuide, setShowGuide] = useState(false)
+  const userItems: MenuItem[] = [
+    { key: 'guide', label: '使用說明', icon: <BookOpen size={14} />, onSelect: () => setShowGuide(true) },
+  ]
   // 修改密碼：單一登入模式一律到入口頁；訪客沒有密碼可改；local 模式維持現狀（沒有入口）。
   if (vauth && !guest) {
     userItems.push({
@@ -87,6 +97,7 @@ export function Topbar() {
   )
 
   return (
+    <>
     <header className="vw-chrome h-12 flex-shrink-0 flex items-center gap-4 px-4 whitespace-nowrap
                        bg-[var(--vw-chrome-top)] border-b border-[var(--vw-border)]">
       {showNavMenu && (
@@ -192,5 +203,7 @@ export function Topbar() {
         }
       />
     </header>
+    {showGuide && <GuideDialog href={guideHref(view)} onClose={() => setShowGuide(false)} />}
+    </>
   )
 }
