@@ -8,7 +8,9 @@ import type { OptionsMap, Option, CategoryOption, CategoryStatsMode, TestUnitOpt
 interface OptionsState {
   options: OptionsMap
   init: () => Promise<void>
-  setRestDays: (config: RestDaysConfig) => Promise<void>
+  /** 新增／刪除一個休息日：伺服器單筆寫入並回傳完整清單（規格 2026-10-05-rest-days-hardening） */
+  addRestDay: (date: string) => Promise<void>
+  removeRestDay: (date: string) => Promise<void>
   /** 只更新 store、不 PUT：伺服器已經寫好（例如政府日曆匯入），用它的回應同步畫面 */
   applyRestDays: (config: RestDaysConfig) => void
   addCategory: (value: string) => Promise<void>
@@ -60,9 +62,12 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
     set({ options })
   },
 
-  setRestDays: async (config) => {
-    const next = { ...get().options, restDays: config }
-    set({ options: await persistOptions(next) })
+  addRestDay: async (date) => {
+    get().applyRestDays(await api.addRestDay(date))
+  },
+
+  removeRestDay: async (date) => {
+    get().applyRestDays(await api.removeRestDay(date))
   },
 
   applyRestDays: (config) => {

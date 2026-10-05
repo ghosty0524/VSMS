@@ -2,7 +2,7 @@ import { withBase } from './basePath';
 import type {
   Schedule, ScheduleCreateInput, OptionsMap, Option, User, AuditLog, VtmsProgress, VtmsProjectCheck,
   NotifyConfig, NotifyRule, NotifyLog, NotifyPreview, NotifyRunResult, FallbackRecipient,
-  WorkloadResponse,
+  WorkloadResponse, RestDaysConfig,
 } from '../types'
 
 export class ApiError extends Error {
@@ -116,6 +116,12 @@ export const api = {
     req<OptionsMap>('GET', '/options'),
   updateOptions: (options: OptionsMap) =>
     req<OptionsMap>('PUT', '/options', options),
+
+  // ── 休息日（單筆寫入，回傳完整清單；PUT /options 不再寫休息日）──
+  addRestDay: (date: string) =>
+    req<RestDaysConfig>('POST', '/options/rest-days', { date }),
+  removeRestDay: (date: string) =>
+    req<RestDaysConfig>('DELETE', `/options/rest-days/${date.replace(/\//g, '-')}`),
 
   // ── Users（Super Admin only）──────────────────────────
   getUsers: () =>

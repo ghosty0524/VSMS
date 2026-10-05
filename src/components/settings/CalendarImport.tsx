@@ -37,9 +37,13 @@ export default function CalendarImport() {
     try {
       const fd = new FormData()
       fd.append('file', file)
+      // 跟 api.ts 的 req() 一樣帶 session：匯入現在要求系統管理員登入（規格 2026-10-05-rest-days-hardening）
+      const token = sessionStorage.getItem('vsms-session-token')
       const resp = await fetch(withBase('/api/calendar/import-government'), {
         method: 'POST',
         body: fd,
+        headers: token ? { 'X-Vsms-Session': token } : {},
+        credentials: 'include',
       })
       const json = await resp.json()
 
