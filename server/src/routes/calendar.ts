@@ -158,29 +158,30 @@ router.post(
         })
       }
 
-      await prisma.calendarConfig.upsert({
-        where: { id: 1 },
-        create: {
-          id: 1,
-          year: parsed.year,
-          nonWeekendHolidays: parsed.nonWeekendHolidays,
-          sourceName: f.originalname,
-          updatedAt: new Date(),
-        },
-        update: {
-          year: parsed.year,
-          nonWeekendHolidays: parsed.nonWeekendHolidays,
-          sourceName: f.originalname,
-          updatedAt: new Date(),
-        },
+      // 併進全平台唯一的休息日清單（rest_days_config）。只新增不刪除：清單裡手動加的
+      // 公司休假與其他年度的日期都要留著；匯入錯的日期由管理員在同一個畫面刪除。
+      // 不再寫 calendar_config（2026-10-05 停用，見 specs/2026-10-05-unified-holiday-list-design.md）。
+      const incoming = parsed.nonWeekendHolidays.map(d => d.replace(/-/g, '/'))
+      const merged = await prisma.$transaction(async tx => {
+        const row = await tx.restDaysConfig.findUnique({ where: { id: 1 } })
+        const existing = new Set((row?.specificDates as string[] | undefined) ?? [])
+        const added = incoming.filter(d => !existing.has(d))
+        const specificDates = [...existing, ...added].sort()
+        await tx.restDaysConfig.upsert({
+          where: { id: 1 },
+          create: { id: 1, weekends: true, specificDates },
+          update: { weekends: true, specificDates },
+        })
+        return { added: added.length, specificDates }
       })
 
       return res.json({
         ok: true,
         year: parsed.year,
-        detectedHolidayColor: parsed.holidayColor,
-        nonWeekendHolidayCount: parsed.nonWeekendHolidays.length,
-        sample: parsed.nonWeekendHolidays.slice(0, 12),
+        detected: incoming.length,
+        added: merged.added,
+        skipped: incoming.length - merged.added,
+        specificDates: merged.specificDates,
       })
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '匯入失敗'
@@ -188,21 +189,5 @@ router.post(
     }
   }
 )
-
-// GET /api/calendar/non-weekend-holidays
-router.get('/non-weekend-holidays', async (req: Request, res: Response) => {
-  const store = await prisma.calendarConfig.findUnique({ where: { id: 1 } })
-  if (!store) return res.json({ year: null, nonWeekendHolidays: [] })
-
-  const yearParam = Number(req.query.year)
-  if (yearParam && store.year !== yearParam) {
-    return res.json({ year: store.year, nonWeekendHolidays: [] })
-  }
-
-  return res.json({
-    year: store.year,
-    nonWeekendHolidays: (store.nonWeekendHolidays as string[]) ?? [],
-  })
-})
 
 export default router

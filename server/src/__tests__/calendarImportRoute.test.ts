@@ -4,11 +4,16 @@ import express from 'express'
 import request from 'supertest'
 import ExcelJS from 'exceljs'
 
-const { calendarUpsert } = vi.hoisted(() => ({ calendarUpsert: vi.fn() }))
-
-vi.mock('../lib/db.js', () => ({
-  prisma: { calendarConfig: { upsert: calendarUpsert } },
+const { restFindUnique, restUpsert } = vi.hoisted(() => ({
+  restFindUnique: vi.fn(),
+  restUpsert: vi.fn(),
 }))
+
+// 刻意不提供 calendarConfig：route 若還去寫舊表，會在這裡直接 TypeError
+vi.mock('../lib/db.js', () => {
+  const tx = { restDaysConfig: { findUnique: restFindUnique, upsert: restUpsert } }
+  return { prisma: { ...tx, $transaction: async (cb: (t: typeof tx) => unknown) => cb(tx) } }
+})
 
 import calendarRouter, { findAbnormalMonths, MAX_WEEKDAY_HOLIDAYS_PER_MONTH } from '../routes/calendar.js'
 
@@ -52,10 +57,14 @@ function app() {
   return a
 }
 
-beforeEach(() => { calendarUpsert.mockReset() })
+beforeEach(() => {
+  restFindUnique.mockReset()
+  restUpsert.mockReset()
+  restFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: [] })
+})
 
 describe('POST /api/calendar/import-government', () => {
-  it('正常的日曆照常匯入', async () => {
+  it('正常的日曆併進休息日清單，回傳完整清單', async () => {
     const file = await buildCalendar(2026, [
       { month: 2, extraFilled: [16, 17, 18, 19, 20, 27] }, // 春節連假，單月 6 個平日
       { month: 10, extraFilled: [9, 26] },
@@ -65,13 +74,30 @@ describe('POST /api/calendar/import-government', () => {
       .post('/api/calendar/import-government')
       .attach('file', file, '115年辦公日曆表.xlsx')
 
+    const expected = [
+      '2026/02/16', '2026/02/17', '2026/02/18', '2026/02/19', '2026/02/20', '2026/02/27',
+      '2026/10/09', '2026/10/26',
+    ]
     expect(res.status).toBe(200)
-    expect(res.body.ok).toBe(true)
-    expect(calendarUpsert).toHaveBeenCalledTimes(1)
-    expect(calendarUpsert.mock.calls[0][0].update.nonWeekendHolidays).toEqual([
-      '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-27',
-      '2026-10-09', '2026-10-26',
-    ])
+    expect(res.body).toMatchObject({ ok: true, year: 2026, detected: 8, added: 8, skipped: 0, specificDates: expected })
+    expect(restUpsert).toHaveBeenCalledWith({
+      where: { id: 1 },
+      create: { id: 1, weekends: true, specificDates: expected },
+      update: { weekends: true, specificDates: expected },
+    })
+  })
+
+  // 只新增不刪除：公司自訂休假與其他年度的日期都要留著
+  it('既有的日期保留，重複的略過', async () => {
+    restFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: ['2025/12/25', '2026/10/09', '2026/11/20'] })
+    const file = await buildCalendar(2026, [{ month: 10, extraFilled: [9, 26] }])
+
+    const res = await request(app())
+      .post('/api/calendar/import-government')
+      .attach('file', file, '115年辦公日曆表.xlsx')
+
+    expect(res.body).toMatchObject({ ok: true, detected: 2, added: 1, skipped: 1 })
+    expect(res.body.specificDates).toEqual(['2025/12/25', '2026/10/09', '2026/10/26', '2026/11/20'])
   })
 
   // 2026-04-27 實際發生過：10 月的平日格被判成假日色，整月週一到週四都成了假日，
@@ -88,7 +114,12 @@ describe('POST /api/calendar/import-government', () => {
     expect(res.body.ok).toBe(false)
     expect(res.body.message).toContain('2026-10')
     expect(res.body.message).toContain('18')
-    expect(calendarUpsert).not.toHaveBeenCalled()
+    expect(restUpsert).not.toHaveBeenCalled()
+  })
+
+  it('舊的 GET /non-weekend-holidays 已移除', async () => {
+    const res = await request(app()).get('/api/calendar/non-weekend-holidays?year=2026')
+    expect(res.status).toBe(404)
   })
 })
 
