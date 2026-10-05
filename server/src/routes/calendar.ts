@@ -3,32 +3,14 @@ import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import ExcelJS from 'exceljs'
 import { prisma } from '../lib/db.js'
-import { normalizeRestDatesForWrite } from '../lib/holidays.js'
+import { appendAudit } from '../lib/storage.js'
+import { requireAuth, requireSuperAdmin } from '../middleware/requireAuth.js'
+import { updateRestDates, InvalidStoredHolidaysError } from '../lib/restDaysStore.js'
 
 const router = Router()
+// 匯入會改全平台的假日清單（VSMS、VTMS、MCP 共用），只限系統管理員；畫面上這塊本來就標「SA」
+router.use(requireAuth, requireSuperAdmin)
 
-/** 既有的休息日清單有不合法的項目：不能默默丟掉（會把管理員的資料吃掉），整份拒絕。 */
-class InvalidStoredHolidaysError extends Error {
-  constructor(readonly bad: string[]) {
-    super(`休息日清單有格式不合的日期：${bad.join('、')}`)
-  }
-}
-
-/** 讀出 rest_days_config.specificDates 並正規化成 YYYY/MM/DD；缺列、壞 JSON、非陣列都拋錯，不退化成空清單。 */
-function readStoredRestDates(raw: unknown): string[] {
-  let arr: unknown = raw
-  if (typeof raw === 'string') {
-    try {
-      arr = JSON.parse(raw) as unknown
-    } catch (err) {
-      throw new Error(`rest_days_config.specificDates 不是合法的 JSON：${(err as Error).message}`, { cause: err })
-    }
-  }
-  if (!Array.isArray(arr)) throw new Error('rest_days_config.specificDates 不是陣列')
-  const norm = normalizeRestDatesForWrite(arr)
-  if (!norm.ok) throw new InvalidStoredHolidaysError(norm.bad)
-  return norm.dates
-}
 const upload = multer({ storage: multer.memoryStorage() })
 
 const CN_MONTH: Record<string, number> = {
@@ -186,28 +168,23 @@ router.post(
       // 公司休假與其他年度的日期都要留著；匯入錯的日期由管理員在同一個畫面刪除。
       // 不再寫 calendar_config（2026-10-05 停用，見 specs/2026-10-05-unified-holiday-list-design.md）。
       const incoming = parsed.nonWeekendHolidays.map(d => d.replace(/-/g, '/'))
-      const merged = await prisma.$transaction(async tx => {
-        const row = await tx.restDaysConfig.findUnique({ where: { id: 1 } })
-        // 缺列代表資料被動過，不能當成「沒有假日」；格式與 readHolidays 一致
-        if (!row) throw new Error('rest_days_config 沒有 id=1 的列')
-        const existing = new Set(readStoredRestDates(row.specificDates))
-        const added = [...new Set(incoming)].filter(d => !existing.has(d))
-        const specificDates = [...existing, ...added].sort()
-        await tx.restDaysConfig.upsert({
-          where: { id: 1 },
-          create: { id: 1, weekends: true, specificDates },
-          update: { weekends: true, specificDates },
-        })
-        return { added: added.length, specificDates }
-      })
+      const { before, after } = await updateRestDates(dates => [...dates, ...incoming])
+      const added = after.length - before.length
+
+      // multer 把檔名當 latin1 解，中文會變亂碼（2026-04 存進 calendar_config 的檔名就是）
+      const fileName = Buffer.from(f.originalname, 'latin1').toString('utf8')
+      const username = req.session.username ?? 'unknown'
+      const dbUser = await prisma.user.findUnique({ where: { username } })
+      await appendAudit(username, dbUser?.displayName ?? username, 'UPDATE_SETTINGS', 'restDays',
+        [`匯入 ${fileName}`, `${parsed.year} 年`, `新增 ${added} 筆`])
 
       return res.json({
         ok: true,
         year: parsed.year,
         detected: incoming.length,
-        added: merged.added,
-        skipped: incoming.length - merged.added,
-        specificDates: merged.specificDates,
+        added,
+        skipped: incoming.length - added,
+        specificDates: after,
       })
     } catch (e: unknown) {
       if (e instanceof InvalidStoredHolidaysError) {

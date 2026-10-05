@@ -1,19 +1,28 @@
 // server/src/__tests__/calendarImportRoute.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
+import type { Request, Response, NextFunction } from 'express'
 import request from 'supertest'
 import ExcelJS from 'exceljs'
 
-const { restFindUnique, restUpsert } = vi.hoisted(() => ({
+const { restFindUnique, restUpsert, auditSpy } = vi.hoisted(() => ({
   restFindUnique: vi.fn(),
   restUpsert: vi.fn(),
+  auditSpy: vi.fn(),
 }))
 
 // 刻意不提供 calendarConfig：route 若還去寫舊表，會在這裡直接 TypeError
 vi.mock('../lib/db.js', () => {
   const tx = { restDaysConfig: { findUnique: restFindUnique, upsert: restUpsert } }
-  return { prisma: { ...tx, $transaction: async (cb: (t: typeof tx) => unknown) => cb(tx) } }
+  return {
+    prisma: {
+      ...tx,
+      $transaction: async (cb: (t: typeof tx) => unknown) => cb(tx),
+      user: { findUnique: async () => ({ username: 'boss', displayName: 'Boss' }) },
+    },
+  }
 })
+vi.mock('../lib/storage.js', () => ({ appendAudit: auditSpy }))
 
 import calendarRouter, { findAbnormalMonths, MAX_WEEKDAY_HOLIDAYS_PER_MONTH } from '../routes/calendar.js'
 
@@ -51,8 +60,13 @@ async function buildCalendar(year: number, months: { month: number; extraFilled:
   return Buffer.from(await wb.xlsx.writeBuffer())
 }
 
-function app() {
+function app(role: string | null = 'super_admin') {
   const a = express()
+  a.use((req: Request, _res: Response, next: NextFunction) => {
+    if (role) req.session = { sessionId: 's1', username: 'boss', role } as unknown as Request['session']
+    else req.session = {} as unknown as Request['session']
+    next()
+  })
   a.use('/api/calendar', calendarRouter)
   return a
 }
@@ -60,6 +74,7 @@ function app() {
 beforeEach(() => {
   restFindUnique.mockReset()
   restUpsert.mockReset()
+  auditSpy.mockReset()
   restFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: [] })
 })
 
@@ -85,6 +100,9 @@ describe('POST /api/calendar/import-government', () => {
       create: { id: 1, weekends: true, specificDates: expected },
       update: { weekends: true, specificDates: expected },
     })
+    // multer 把檔名當 latin1 解；稽核要存轉回 UTF-8 的中文檔名
+    expect(auditSpy).toHaveBeenCalledWith('boss', 'Boss', 'UPDATE_SETTINGS', 'restDays',
+      ['匯入 115年辦公日曆表.xlsx', '2026 年', '新增 8 筆'])
   })
 
   // 只新增不刪除：公司自訂休假與其他年度的日期都要留著
@@ -186,6 +204,36 @@ describe('POST /api/calendar/import-government', () => {
     expect(res.body.message).toContain('2026-10')
     expect(res.body.message).toContain('18')
     expect(restUpsert).not.toHaveBeenCalled()
+    expect(auditSpy).not.toHaveBeenCalled()
+  })
+
+  it('未登入 401，不寫入', async () => {
+    const file = await buildCalendar(2026, [{ month: 10, extraFilled: [9, 26] }])
+    const res = await request(app(null))
+      .post('/api/calendar/import-government')
+      .attach('file', file, '115年辦公日曆表.xlsx')
+
+    expect(res.status).toBe(401)
+    expect(restUpsert).not.toHaveBeenCalled()
+  })
+
+  it('部級主管（admin）403：匯入只限系統管理員', async () => {
+    const file = await buildCalendar(2026, [{ month: 10, extraFilled: [9, 26] }])
+    const res = await request(app('admin'))
+      .post('/api/calendar/import-government')
+      .attach('file', file, '115年辦公日曆表.xlsx')
+
+    expect(res.status).toBe(403)
+    expect(restUpsert).not.toHaveBeenCalled()
+  })
+
+  it('沒有新增任何日期也記一筆匯入稽核', async () => {
+    restFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: ['2026/10/09', '2026/10/26'] })
+    const file = await buildCalendar(2026, [{ month: 10, extraFilled: [9, 26] }])
+
+    await request(app()).post('/api/calendar/import-government').attach('file', file, 'a.xlsx')
+
+    expect(auditSpy).toHaveBeenCalledWith('boss', 'Boss', 'UPDATE_SETTINGS', 'restDays', ['匯入 a.xlsx', '2026 年', '新增 0 筆'])
   })
 
   it('舊的 GET /non-weekend-holidays 已移除', async () => {
