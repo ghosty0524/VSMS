@@ -128,7 +128,7 @@ export const DASHBOARD_JS = `
   function isRestDay(d) {
     var cfg = OPTIONS.restDays || { weekends: true, specificDates: [] };
     var wd = d.getDay();
-    if (cfg.weekends && (wd === 0 || wd === 6)) return true;
+    if (wd === 0 || wd === 6) return true;
     var key = d.getFullYear()+'/'+pad2(d.getMonth()+1)+'/'+pad2(d.getDate());
     var dates = cfg.specificDates || [];
     for (var i = 0; i < dates.length; i++) { if (dates[i] === key) return true; }

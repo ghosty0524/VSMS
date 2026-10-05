@@ -25,12 +25,9 @@ export function RestDaysManager() {
   return (
     <div>
       <h3 className="text-sm font-semibold text-gray-700 mb-3">休息日設定</h3>
-      <label className="flex items-center gap-2 mb-4 cursor-pointer text-sm">
-        <input type="checkbox" checked={config.weekends}
-          onChange={e => update({ weekends: e.target.checked })}
-          className="w-4 h-4 rounded border-gray-300 text-blue-600" />
-        <span>星期六、日設為休息日</span>
-      </label>
+      <p className="text-xs text-gray-500 mb-4">
+        週六、週日固定休息。下方清單供 VSMS、VTMS、MCP 共用，新增或刪除立即全平台生效。
+      </p>
       <p className="text-xs font-medium text-gray-600 mb-2">特定休息日（例：國定假日）</p>
       <div className="flex gap-2 mb-3">
         <DatePicker selected={newDate} onChange={(d: Date | null) => setNewDate(d)}

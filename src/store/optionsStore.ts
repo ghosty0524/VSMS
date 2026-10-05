@@ -9,6 +9,8 @@ interface OptionsState {
   options: OptionsMap
   init: () => Promise<void>
   setRestDays: (config: RestDaysConfig) => Promise<void>
+  /** 只更新 store、不 PUT：伺服器已經寫好（例如政府日曆匯入），用它的回應同步畫面 */
+  applyRestDays: (config: RestDaysConfig) => void
   addCategory: (value: string) => Promise<void>
   updateCategory: (id: string, label: string) => Promise<void>
   toggleCategory: (id: string, isActive: boolean) => Promise<void>
@@ -61,6 +63,10 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
   setRestDays: async (config) => {
     const next = { ...get().options, restDays: config }
     set({ options: await persistOptions(next) })
+  },
+
+  applyRestDays: (config) => {
+    set({ options: { ...get().options, restDays: config } })
   },
 
   addCategory: async (value) => {

@@ -2,12 +2,6 @@ import { withBase } from '../../lib/basePath';
 import React, { useState, useRef } from 'react'
 import { UploadCloud, FileSpreadsheet, CheckCircle2, XCircle } from 'lucide-react'
 import { useOptionsStore } from '../../store/optionsStore'
-import type { RestDaysConfig } from '../../types'
-
-function toYmd(iso: string): string {
-  // 將 server 回傳的 YYYY-MM-DD 轉成 RestDaysManager 用的 YYYY/MM/DD
-  return iso.replace(/-/g, '/')
-}
 
 type ImportResult = {
   ok: boolean
@@ -19,7 +13,7 @@ type ImportResult = {
 }
 
 export default function CalendarImport() {
-  const { options, setRestDays } = useOptionsStore()
+  const { applyRestDays } = useOptionsStore()
   const [file, setFile]         = useState<File | null>(null)
   const [result, setResult]     = useState<ImportResult | null>(null)
   const [loading, setLoading]   = useState(false)
@@ -41,7 +35,6 @@ export default function CalendarImport() {
     setLoading(true)
     setResult(null)
     try {
-      // 1. 上傳至 server 解析
       const fd = new FormData()
       fd.append('file', file)
       const resp = await fetch(withBase('/api/calendar/import-government'), {
@@ -55,27 +48,16 @@ export default function CalendarImport() {
         return
       }
 
-      // 2. 取得完整清單（sample 只有 12 筆，需再打一次 GET 取全部）
-      const year: number = json.year
-      const getResp = await fetch(withBase(`/api/calendar/non-weekend-holidays?year=${year}`))
-      const getData = await getResp.json()
-      const holidays: string[] = getData.nonWeekendHolidays ?? []
-
-      // 3. 轉成 YYYY/MM/DD 並 merge 進 optionsStore
-      const config: RestDaysConfig = options.restDays ?? { weekends: true, specificDates: [] }
-      const existing = new Set(config.specificDates)
-      const toAdd    = holidays.map(toYmd).filter(d => !existing.has(d))
-      const skipped  = holidays.length - toAdd.length
-
-      const merged = [...config.specificDates, ...toAdd].sort()
-      await setRestDays({ ...config, specificDates: merged })
+      // 後端已在同一個交易裡併進特定休息日；這裡只同步 store，不能再 PUT——
+      // store 若留著舊清單，設定頁下一次整份存檔會把剛匯入的日期蓋掉。
+      applyRestDays({ weekends: true, specificDates: json.specificDates })
 
       setResult({
         ok:                     true,
-        year,
-        nonWeekendHolidayCount: holidays.length,
-        added:                  toAdd.length,
-        skipped,
+        year:                   json.year,
+        nonWeekendHolidayCount: json.detected,
+        added:                  json.added,
+        skipped:                json.skipped,
       })
     } catch (e: unknown) {
       setResult({ ok: false, message: e instanceof Error ? e.message : '上傳失敗' })
@@ -155,7 +137,7 @@ export default function CalendarImport() {
                 已存在略過 <strong>{result.skipped}</strong> 筆。
               </div>
               <div className="text-green-600 text-xs">
-                ✓ 已同步至下方「特定休息日」清單，可逐筆刪除。
+                ✓ 已併入下方「特定休息日」清單（VSMS、VTMS、MCP 共用），可逐筆刪除。
               </div>
             </>
           ) : (
