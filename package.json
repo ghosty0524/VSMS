@@ -4,10 +4,11 @@
     "version": "1.0.0",
     "type": "module",
     "scripts": {
+        "build": "vite build && tsc -p server/tsconfig.json",
+        "check:releases": "tsx ../../vportal/scripts/check-releases.ts --system vsms --repo .",
         "dev": "concurrently -n client,server -c cyan,green \"vite\" \"tsx watch server/src/index.ts\"",
         "dev:client": "vite",
         "dev:server": "tsx watch server/src/index.ts",
-        "build": "vite build && tsc -p server/tsconfig.json",
         "start": "node server/dist/src/index.js",
         "preview": "vite preview",
         "test": "vitest run",
