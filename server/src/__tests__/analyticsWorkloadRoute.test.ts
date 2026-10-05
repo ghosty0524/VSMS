@@ -25,16 +25,6 @@ vi.mock('../middleware/requireAuth.js', () => ({
   requireSuperAdmin: (_req: Request, _res: Response, next: NextFunction) => next(),
 }))
 
-const { readHolidays, uncoveredYearNote } = vi.hoisted(() => ({
-  readHolidays: vi.fn(),
-  uncoveredYearNote: vi.fn((year: number) => `行事曆未涵蓋 ${year} 年，工作日僅排除週六日、未排除國定假日`),
-}))
-
-vi.mock('../lib/holidays.js', () => ({
-  readHolidays,
-  uncoveredYearNote,
-}))
-
 import analyticsRouter from '../routes/analytics.js'
 
 function app() {
@@ -52,7 +42,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   scheduleFindMany.mockResolvedValue([])
   restDaysFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: [] })
-  readHolidays.mockResolvedValue({ dates: [], years: new Set() })
   categoryFindMany.mockResolvedValue([])
 })
 
@@ -129,7 +118,7 @@ describe('GET /api/analytics/workload 計算', () => {
   })
 
   it('休息日清單有該年度時套用例假日，否則每個年份只留一則提醒', async () => {
-    readHolidays.mockResolvedValue({ dates: ['2026-07-06'], years: new Set([2026]) })
+    restDaysFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: ['2026/07/06'] })
     const ok = await request(app()).get('/api/analytics/workload?from=2026-07')
     expect(ok.body.workdays).toBe(22)
     expect(ok.body.notes).toEqual([])
@@ -139,7 +128,7 @@ describe('GET /api/analytics/workload 計算', () => {
   })
 
   it('休息日設定列不存在時回 500，不當成沒有假日', async () => {
-    readHolidays.mockRejectedValue(new Error('rest_days_config not found'))
+    restDaysFindUnique.mockResolvedValue(null)
     const res = await request(app()).get('/api/analytics/workload?from=2026-07')
     expect(res.status).toBe(500)
   })
