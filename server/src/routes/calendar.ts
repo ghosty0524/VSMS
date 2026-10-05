@@ -27,6 +27,27 @@ function getFillArgb(cell: ExcelJS.Cell): string | null {
   return null
 }
 
+/**
+ * 單月非週末假日的合理上限。台灣最長的春節連假落在同一個月，也只有 6～7 個平日。
+ *
+ * 解析是靠「出現最多次的填色」判定假日，原檔的填色只要和預期不同就會整片誤判，
+ * 而且不會報錯：2026-04-27 匯入的 115 年日曆把 10 月週一到週四全當成假日，
+ * VTMS 的通知因此停跑、工作日誌提醒追問錯的日期，到 10 月才被發現。
+ */
+export const MAX_WEEKDAY_HOLIDAYS_PER_MONTH = 8
+
+export function findAbnormalMonths(isoDates: string[]): { month: string; count: number }[] {
+  const byMonth = new Map<string, number>()
+  for (const d of isoDates) {
+    const month = d.slice(0, 7)
+    byMonth.set(month, (byMonth.get(month) ?? 0) + 1)
+  }
+  return [...byMonth.entries()]
+    .filter(([, count]) => count > MAX_WEEKDAY_HOLIDAYS_PER_MONTH)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, count]) => ({ month, count }))
+}
+
 async function parseGovernmentCalendar(rawBuffer: Buffer) {
   const wb = new ExcelJS.Workbook()
   const ab = rawBuffer.buffer.slice(
@@ -123,6 +144,19 @@ router.post(
       if (!f) return res.status(400).json({ message: '缺少上傳檔案（file）' })
 
       const parsed = await parseGovernmentCalendar(f.buffer)
+
+      // 寫入前擋：這份清單同時是 VTMS 通知排程與負載圖的工作日來源，寫錯的代價
+      // 遠大於請管理員確認檔案後重傳。回 ok:false 前端也就不會併進特定休息日。
+      const abnormal = findAbnormalMonths(parsed.nonWeekendHolidays)
+      if (abnormal.length > 0) {
+        const detail = abnormal.map(a => `${a.month} 有 ${a.count} 個平日被判為放假`).join('、')
+        return res.status(422).json({
+          ok: false,
+          message:
+            `解析結果不合理：${detail}（單月上限 ${MAX_WEEKDAY_HOLIDAYS_PER_MONTH} 天）。` +
+            '可能是檔案的填色與政府原檔不同，請確認檔案後再匯入。現有行事曆未變更。',
+        })
+      }
 
       await prisma.calendarConfig.upsert({
         where: { id: 1 },
