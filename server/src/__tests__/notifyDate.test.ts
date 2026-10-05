@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { computeSendDate, isRestDay, addDays, addWorkdays, daysBetween, recentWorkdaysStart } from '../lib/notifyDate.js'
 
-const weekendsOnly = { weekends: true, specificDates: [] as string[] }
-const noRest = { weekends: false, specificDates: [] as string[] }
+// 週六日一律是休息日（2026-10-05 起拿掉開關，規格 2026-10-05-unified-holiday-list-design）
+const none = { specificDates: [] as string[] }
 
 describe('addDays', () => {
   it('moves forward and backward across month boundaries', () => {
@@ -30,60 +30,48 @@ describe('daysBetween', () => {
 describe('addWorkdays', () => {
   it('skips the weekend when counting forward three working days', () => {
     // 2026/09/25 是週五 → 09/26(六)、09/27(日) 不計，09/28(一)=1、09/29(二)=2、09/30(三)=3
-    expect(addWorkdays('2026/09/25', 3, weekendsOnly)).toBe('2026/09/30')
+    expect(addWorkdays('2026/09/25', 3, none)).toBe('2026/09/30')
   })
 
   it('skips listed specific dates as well as weekends', () => {
     // 09/28(一) 被列為特休 → 不計；跳到 09/29(二)=1、09/30(三)=2、10/01(四)=3
-    const settings = { weekends: true, specificDates: ['2026/09/28'] }
-    expect(addWorkdays('2026/09/25', 3, settings)).toBe('2026/10/01')
-  })
-
-  it('counts every calendar day when nothing is a rest day', () => {
-    expect(addWorkdays('2026/09/25', 3, noRest)).toBe('2026/09/28')
+    expect(addWorkdays('2026/09/25', 3, { specificDates: ['2026/09/28'] })).toBe('2026/10/01')
   })
 
   it('returns the same date when n is 0', () => {
-    expect(addWorkdays('2026/09/25', 0, weekendsOnly)).toBe('2026/09/25')
+    expect(addWorkdays('2026/09/25', 0, none)).toBe('2026/09/25')
   })
 })
 
 describe('recentWorkdaysStart', () => {
   it('counts today as the first working day and walks back over the weekend', () => {
     // 2026/09/23 是週三：23(三)=1、22(二)=2、21(一)=3、20(日)／19(六) 不計、18(五)=4、17(四)=5
-    expect(recentWorkdaysStart('2026/09/23', 5, weekendsOnly)).toBe('2026/09/17')
+    expect(recentWorkdaysStart('2026/09/23', 5, none)).toBe('2026/09/17')
   })
 
   it('skips listed specific dates as well as weekends', () => {
     // 09/22 特休 → 23=1、21=2、18=3、17=4、16=5
-    expect(recentWorkdaysStart('2026/09/23', 5, { weekends: true, specificDates: ['2026/09/22'] })).toBe('2026/09/16')
+    expect(recentWorkdaysStart('2026/09/23', 5, { specificDates: ['2026/09/22'] })).toBe('2026/09/16')
   })
 
   it('does not count today when today is a rest day', () => {
     // 2026/09/27 是週日：25(五)=1、24=2、23=3、22=4、21=5
-    expect(recentWorkdaysStart('2026/09/27', 5, weekendsOnly)).toBe('2026/09/21')
-  })
-
-  it('is plain calendar days when nothing is a rest day', () => {
-    expect(recentWorkdaysStart('2026/09/23', 5, noRest)).toBe('2026/09/19')
+    expect(recentWorkdaysStart('2026/09/27', 5, none)).toBe('2026/09/21')
   })
 
   it('returns today for n <= 0', () => {
-    expect(recentWorkdaysStart('2026/09/23', 0, weekendsOnly)).toBe('2026/09/23')
+    expect(recentWorkdaysStart('2026/09/23', 0, none)).toBe('2026/09/23')
   })
 })
 
 describe('isRestDay', () => {
-  it('treats Saturday and Sunday as rest days when weekends is on', () => {
-    expect(isRestDay('2026/08/22', weekendsOnly)).toBe(true)  // 週六
-    expect(isRestDay('2026/08/23', weekendsOnly)).toBe(true)  // 週日
-    expect(isRestDay('2026/08/21', weekendsOnly)).toBe(false) // 週五
+  it('always treats Saturday and Sunday as rest days', () => {
+    expect(isRestDay('2026/08/22', none)).toBe(true)  // 週六
+    expect(isRestDay('2026/08/23', none)).toBe(true)  // 週日
+    expect(isRestDay('2026/08/21', none)).toBe(false) // 週五
   })
-  it('ignores weekends when the flag is off', () => {
-    expect(isRestDay('2026/08/22', noRest)).toBe(false)
-  })
-  it('treats a listed specific date as a rest day regardless of the weekend flag', () => {
-    expect(isRestDay('2026/08/21', { weekends: false, specificDates: ['2026/08/21'] })).toBe(true)
+  it('treats a listed specific date as a rest day', () => {
+    expect(isRestDay('2026/08/21', { specificDates: ['2026/08/21'] })).toBe(true)
   })
 })
 
@@ -91,38 +79,29 @@ describe('computeSendDate', () => {
   it('counts back three working days, skipping the weekend entirely', () => {
     // 2026/08/24 是週一。往前數三個工作天：08/21(五)、08/20(四)、08/19(三)。
     // 舊的日曆天算法會停在 08/21 —— 兩者差兩天，這是本規則的關鍵差異。
-    expect(computeSendDate('2026/08/24', 3, weekendsOnly)).toBe('2026/08/19')
+    expect(computeSendDate('2026/08/24', 3, none)).toBe('2026/08/19')
   })
 
   it('does not count rest days towards the lead', () => {
     // 2026/08/26 是週三 → 08/25(二)、08/24(一)、[08/23 日、08/22 六 不計]、08/21(五)
-    expect(computeSendDate('2026/08/26', 3, weekendsOnly)).toBe('2026/08/21')
+    expect(computeSendDate('2026/08/26', 3, none)).toBe('2026/08/21')
   })
 
   it('skips a consecutive holiday block without consuming the lead', () => {
     // 08/25(二)、08/24(一) 之後撞上 08/23 日、08/22 六、08/21、08/20 兩個特定
     // 休息日，第三個工作天要一路數到 08/19(三)
-    const settings = { weekends: true, specificDates: ['2026/08/20', '2026/08/21'] }
-    expect(computeSendDate('2026/08/26', 3, settings)).toBe('2026/08/19')
-  })
-
-  it('counts every day when nothing is a rest day', () => {
-    // 沒有休息日時，工作天與日曆天等價
-    expect(computeSendDate('2026/08/31', 3, noRest)).toBe('2026/08/28')
+    expect(computeSendDate('2026/08/26', 3, { specificDates: ['2026/08/20', '2026/08/21'] })).toBe('2026/08/19')
   })
 
   it('returns the start date itself when leadDays is not positive', () => {
     // 防呆：leadDays 是管理者可編輯的欄位，0 或負值不能讓迴圈失控
-    expect(computeSendDate('2026/08/26', 0, weekendsOnly)).toBe('2026/08/26')
-    expect(computeSendDate('2026/08/26', -5, weekendsOnly)).toBe('2026/08/26')
-  })
-
-  it('does not step back at all when weekends are not rest days', () => {
-    expect(computeSendDate('2026/08/26', 3, noRest)).toBe('2026/08/23')
+    expect(computeSendDate('2026/08/26', 0, none)).toBe('2026/08/26')
+    expect(computeSendDate('2026/08/26', -5, none)).toBe('2026/08/26')
   })
 
   it('crosses a year boundary', () => {
-    expect(computeSendDate('2027/01/04', 3, noRest)).toBe('2027/01/01')
+    // 2027/01/04 是週一 → 01/01(五)=1、12/31(四)=2、12/30(三)=3
+    expect(computeSendDate('2027/01/04', 3, none)).toBe('2026/12/30')
   })
 
   it('returns null when every candidate day within the cap is a rest day', () => {
@@ -130,6 +109,6 @@ describe('computeSendDate', () => {
     const dates: string[] = []
     let d = '2026/08/23'
     for (let i = 0; i < 40; i++) { dates.push(d); d = addDays(d, -1) }
-    expect(computeSendDate('2026/08/26', 3, { weekends: true, specificDates: dates })).toBeNull()
+    expect(computeSendDate('2026/08/26', 3, { specificDates: dates })).toBeNull()
   })
 })

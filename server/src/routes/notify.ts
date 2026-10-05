@@ -328,7 +328,6 @@ router.post('/preview', async (req, res) => {
   // 真正讀取管理者設定的休息日，不可硬編：預覽如果忽略了休息日設定，
   // 顯示出來的寄信日會和 runner 實際寄出的日子對不上，比沒有預覽更糟。
   const sendDate = computeSendDate(schedule.startDate, leadDays, {
-    weekends: restDays?.weekends ?? true,
     specificDates: (restDays?.specificDates as string[]) ?? [],
   })
   // 與 runner 現在的算法一致：以「今天」為基準，而不是 sendDate —— 收件人

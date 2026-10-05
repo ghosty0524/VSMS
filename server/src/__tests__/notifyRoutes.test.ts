@@ -351,13 +351,13 @@ describe('POST /api/notify/preview — 休息日設定與 daysUntilStart', () =>
   it('sendDate 反映 specificDates 假日造成的往前挪；daysUntilStart 以今天而非 sendDate 為基準', async () => {
     const state = makeDefaultState()
     // 固定日期而非用「今天」推算 sendDate，避免測試結果隨執行日期的星期幾而
-    // 飄動：2031/03/10 是週一，往前推 5 天的 2031/03/05 是週三（非週末），
+    // 飄動：2031/03/10 是週一，2031/03/05 是週三，落在往前數 5 個工作天的範圍內，
     // 只有在 restDaysConfig.specificDates 真的被讀取時才會往前多挪一天。
     const startDate = '2031/03/10'
     const leadDays = 5
     const naiveSendDate = addDays(startDate, -leadDays) // 2031/03/05，週三
     state.config = { ...state.config, leadDays, mailDomain: 'example.com' }
-    state.restDays = { id: 1, weekends: false, specificDates: [naiveSendDate] }
+    state.restDays = { id: 1, weekends: true, specificDates: [naiveSendDate] }
     state.rules = [{
       id: DEFAULT_NOTIFY_RULE_ID, testUnit: null, enabled: true,
       subjectTemplate: '距開始還有 {{daysUntilStart}} 天',
@@ -375,12 +375,10 @@ describe('POST /api/notify/preview — 休息日設定與 daysUntilStart', () =>
 
     expect(res.status).toBe(200)
 
-    const expectedSendDate = computeSendDate(startDate, leadDays, {
-      weekends: false, specificDates: [naiveSendDate],
-    })
+    const expectedSendDate = computeSendDate(startDate, leadDays, { specificDates: [naiveSendDate] })
     // 前提檢查：確定這個 fixture 真的會造成往前挪一天，不然下面的斷言測不出
     // 「忽略 specificDates」的回歸。
-    expect(expectedSendDate).not.toBe(naiveSendDate)
+    expect(expectedSendDate).not.toBe(computeSendDate(startDate, leadDays, { specificDates: [] }))
     expect(res.body.sendDate).toBe(expectedSendDate)
 
     // 用真正的 daysBetween(今天, startDate) 算期望值（跟路由內部算法相同的
@@ -859,10 +857,12 @@ describe('GET /api/notify/logs — 只顯示最近五個工作日', () => {
 
   it('sendDate 在窗外、也沒有近期處理過的列不回傳；回應帶 windowStart', async () => {
     const state = makeDefaultState()
-    state.restDays = { id: 1, weekends: false, specificDates: [] } // 沒有休息日 → 窗＝最近 5 個日曆天（含今天）
+    state.restDays = { id: 1, weekends: true, specificDates: [] }
+    // 週末固定休息，窗起日隨今天星期幾變動，所以用同一支函式算邊界
+    const windowStart = recentWorkdaysStart(today, 5, { specificDates: [] })
     state.logs = [
-      log({ id: 'in', sendDate: addDays(today, -4), updatedAt: longAgo }),
-      log({ id: 'out', sendDate: addDays(today, -5), updatedAt: longAgo }),
+      log({ id: 'in', sendDate: windowStart, updatedAt: longAgo }),
+      log({ id: 'out', sendDate: addDays(windowStart, -1), updatedAt: longAgo }),
     ]
     currentPrisma = makeFakePrisma(state)
     const app = await buildAdminApp()
@@ -870,7 +870,7 @@ describe('GET /api/notify/logs — 只顯示最近五個工作日', () => {
     const res = await request(app).get('/api/notify/logs')
 
     expect(res.status).toBe(200)
-    expect(res.body.windowStart).toBe(addDays(today, -4))
+    expect(res.body.windowStart).toBe(windowStart)
     expect(res.body.windowWorkdays).toBe(5)
     expect(res.body.logs.map((l: { id: string }) => l.id)).toEqual(['in'])
   })
@@ -894,6 +894,6 @@ describe('GET /api/notify/logs — 只顯示最近五個工作日', () => {
 
     const res = await request(app).get('/api/notify/logs')
 
-    expect(res.body.windowStart).toBe(recentWorkdaysStart(today, 5, { weekends: true, specificDates: [] }))
+    expect(res.body.windowStart).toBe(recentWorkdaysStart(today, 5, { specificDates: [] }))
   })
 })

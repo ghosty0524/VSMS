@@ -44,7 +44,7 @@ function makeStore(overrides: Partial<{
   const store: NotifyStore = {
     loadConfig: async () => overrides.config !== undefined ? overrides.config
       : { enabled: true, systemUrl: 'https://vsms.local:3001', leadDays: 3, catchUpDays: 3, mailDomain: 'example.com' },
-    loadRestDays: async () => ({ weekends: true, specificDates: [] }),
+    loadRestDays: async () => ({ specificDates: [] }),
     loadRules: async () => overrides.rules ?? [defaultRule],
     loadFallbackRecipients: async () => overrides.fallback ?? ['fallback@example.com'],
     loadAccountNames: async () => overrides.accounts ?? [],
@@ -275,7 +275,7 @@ describe('runDailyNotify', () => {
           dates.push(`${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}`)
           d.setUTCDate(d.getUTCDate() - 1)
         }
-        return { weekends: true, specificDates: dates }
+        return { specificDates: dates }
       },
     }
     const { deliverer, sent } = makeDeliverer()

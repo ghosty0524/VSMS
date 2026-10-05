@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import { summaryFor } from '../lib/summary.js'
 
-const weekendsOnly = { weekends: true, specificDates: [] as string[] }
+const weekendsOnly = { specificDates: [] as string[] }
 
 // today = 2026/09/22（週二）。本週 = 週一 09/21 ～ 週日 09/27。
 // 三個工作天內開始 = addWorkdays('2026/09/22', 3, weekendsOnly) = 09/25(五)，

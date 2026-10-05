@@ -1,6 +1,5 @@
 export interface RestDaySettings {
-  weekends: boolean
-  /** YYYY/MM/DD */
+  /** YYYY/MM/DD。週六日不必列，一律是休息日（全平台共用的休息日清單，見 lib/holidays.ts） */
   specificDates: string[]
 }
 
@@ -65,10 +64,8 @@ export function recentWorkdaysStart(today: string, n: number, settings: RestDayS
 }
 
 export function isRestDay(ymd: string, settings: RestDaySettings): boolean {
-  if (settings.weekends) {
-    const dow = toUtc(ymd).getUTCDay()
-    if (dow === 0 || dow === 6) return true
-  }
+  const dow = toUtc(ymd).getUTCDay()
+  if (dow === 0 || dow === 6) return true
   return settings.specificDates.includes(ymd)
 }
 

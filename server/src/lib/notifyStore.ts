@@ -20,10 +20,7 @@ export const prismaNotifyStore: NotifyStore = {
 
   async loadRestDays(): Promise<RestDaySettings> {
     const row = await prisma.restDaysConfig.findUnique({ where: { id: 1 } })
-    return {
-      weekends: row?.weekends ?? true,
-      specificDates: (row?.specificDates as string[]) ?? [],
-    }
+    return { specificDates: (row?.specificDates as string[]) ?? [] }
   },
 
   async loadRules(): Promise<NotifyRuleRow[]> {
