@@ -49,7 +49,7 @@ export function normalizeHolidayDates(raw: unknown): HolidayList {
   const set = new Set<string>()
   for (const v of arr) {
     const iso = typeof v === 'string' ? toIsoHoliday(v) : null
-    // 單筆手誤不該讓整份清單失效：略過並留下紀錄，寫入端（options PUT）擋新的錯誤資料
+    // 單筆手誤不該讓整份清單失效：略過並留下紀錄，寫入端（lib/restDaysStore.ts 的 updateRestDates，單筆 API 與匯入共用）擋新的錯誤資料
     if (iso) set.add(iso)
     else console.warn('[holidays] 略過格式不合的休息日：', JSON.stringify(v))
   }

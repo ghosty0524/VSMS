@@ -41,6 +41,7 @@ function makeTxHandle(state: FakeState) {
       },
     },
     category: {
+      findMany: async () => state.categories,
       deleteMany: async () => { state.categories = [] },
       createMany: async ({ data }: { data: unknown[] }) => { state.categories.push(...data) },
     },
@@ -48,7 +49,10 @@ function makeTxHandle(state: FakeState) {
       findMany: async ({ select }: { select?: { testEngineer?: boolean } } = {}) =>
         state.schedules.map(s => (select?.testEngineer ? { testEngineer: s.testEngineer } : s)),
     },
+    // PUT 結尾用 readOptions() 回吐資料庫狀態（休息日不再取 body），所以讀取端也要有
+    device: { findMany: async () => [] },
     restDaysConfig: {
+      findUnique: async () => state.restDays,
       upsert: async ({ update }: { update: { weekends: boolean; specificDates: string[] } }) => {
         state.restDays = { ...state.restDays, ...update }
         return state.restDays

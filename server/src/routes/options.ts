@@ -1,10 +1,12 @@
 // server/src/routes/options.ts
-import { Router } from 'express'
+import { Router, type Request, type Response } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../lib/db.js'
 import { appendAudit } from '../lib/storage.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import { normalizeRestDatesForWrite } from '../lib/holidays.js'
+import { requireAdmin } from '../middleware/requireAdmin.js'
+import { toIsoHoliday } from '../lib/holidays.js'
+import { updateRestDates, InvalidStoredHolidaysError } from '../lib/restDaysStore.js'
 import type { OptionsMap } from '../types.js'
 import {
   toCategoryResponse, toCategoryCreateData,
@@ -101,28 +103,16 @@ async function putOptionsVauth(body: OptionsMap): Promise<void> {
         })
       }
     }
-
-    await tx.restDaysConfig.upsert({
-      where: { id: 1 },
-      create: { id: 1, weekends: body.restDays.weekends, specificDates: body.restDays.specificDates },
-      update: { weekends: body.restDays.weekends, specificDates: body.restDays.specificDates },
-    })
   })
 }
 
 // PUT /api/options — full atomic replacement（vauth 下改為只 patch 顏色／label／排序）
-router.put('/', async (req, res) => {
+router.put('/', requireAdmin, async (req, res) => {
   const username = req.session.username ?? 'unknown'
   const body = req.body as OptionsMap
 
-  // 特定休息日是全平台唯一的假日清單（VTMS 通知、負載圖、MCP 都讀它），寫進去前先驗。
-  // 週六日一律休息，weekends 只為相容保留，固定寫 true。
-  const restDates = normalizeRestDatesForWrite(body.restDays?.specificDates)
-  if (!restDates.ok) {
-    res.status(400).json({ ok: false, message: `特定休息日格式不正確：${restDates.bad.join('、')}（請用 YYYY/MM/DD）` })
-    return
-  }
-  body.restDays = { weekends: true, specificDates: restDates.dates }
+  // body.restDays 一律忽略：休息日只能透過 /rest-days 單筆寫入。設定頁會把載入時的舊快照
+  // 整份送回來，照寫就會把別人剛改的日期蓋掉（規格 2026-10-05-rest-days-hardening）。
 
   const bodyEngineerValues = body.testUnits.flatMap(u => u.engineers.map(e => e.value))
 
@@ -192,20 +182,6 @@ router.put('/', async (req, res) => {
           },
         })
       }
-
-      // Upsert restDaysConfig singleton
-      await tx.restDaysConfig.upsert({
-        where: { id: 1 },
-        create: {
-          id: 1,
-          weekends: body.restDays.weekends,
-          specificDates: body.restDays.specificDates,
-        },
-        update: {
-          weekends: body.restDays.weekends,
-          specificDates: body.restDays.specificDates,
-        },
-      })
     })
   } catch (err) {
     if (err instanceof EngineerInUseError) {
@@ -222,7 +198,48 @@ router.put('/', async (req, res) => {
   const dbUser = await prisma.user.findUnique({ where: { username } })
   await appendAudit(username, dbUser?.displayName ?? username, 'UPDATE_SETTINGS', 'options', [])
 
-  res.json(body)
+  // 休息日回資料庫的值，不是 body 的舊快照：前端用回應覆蓋 store，舊分頁存一次就同步了
+  res.json({ ...body, restDays: (await readOptions()).restDays })
+})
+
+// ── 休息日：單筆寫入（Admin / Super Admin），回傳寫入後的完整清單 ─────────
+async function auditRestDays(req: Request, fields: string[]): Promise<void> {
+  const username = req.session.username ?? 'unknown'
+  const dbUser = await prisma.user.findUnique({ where: { username } })
+  await appendAudit(username, dbUser?.displayName ?? username, 'UPDATE_SETTINGS', 'restDays', fields)
+}
+
+async function changeRestDay(req: Request, res: Response, rawDate: unknown, op: 'add' | 'remove'): Promise<void> {
+  const iso = typeof rawDate === 'string' ? toIsoHoliday(rawDate) : null
+  if (!iso) {
+    res.status(400).json({ ok: false, message: '日期格式不正確（請用 YYYY/MM/DD）' })
+    return
+  }
+  const date = iso.replace(/-/g, '/')
+  try {
+    const { before, after } = await updateRestDates(dates =>
+      op === 'add' ? [...dates, date] : dates.filter(d => d !== date))
+    if (after.length !== before.length) {
+      await auditRestDays(req, [`${op === 'add' ? '新增' : '刪除'} ${date}`])
+    }
+    res.json({ weekends: true, specificDates: after })
+  } catch (err) {
+    if (err instanceof InvalidStoredHolidaysError) {
+      res.status(422).json({ ok: false, message: `${err.message}。這些日期只可能是直接改資料庫寫進去的，請由系統管理員修正資料庫。` })
+      return
+    }
+    throw err
+  }
+}
+
+// POST /api/options/rest-days — body { date: 'YYYY/MM/DD' | 'YYYY-MM-DD' }
+router.post('/rest-days', requireAdmin, async (req, res) => {
+  await changeRestDay(req, res, (req.body as { date?: unknown } | undefined)?.date, 'add')
+})
+
+// DELETE /api/options/rest-days/:date — 路徑用 YYYY-MM-DD（不能有斜線）
+router.delete('/rest-days/:date', requireAdmin, async (req, res) => {
+  await changeRestDay(req, res, String(req.params.date), 'remove')
 })
 
 // POST /api/options/devices — Admin / Super Admin only
