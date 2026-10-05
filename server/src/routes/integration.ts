@@ -8,6 +8,7 @@ import { completedAtPatch } from '../lib/completedAt.js';
 import { normalizeStatsMode } from './optionsMapping.js';
 import { todayTaipei } from '../lib/today.js';
 import { recordChange, recordChanges, syncActor, type RecordChangeInput } from '../lib/changeHistory.js';
+import { readHolidays, uncoveredYearNote } from '../lib/holidays.js';
 
 const router = Router();
 
@@ -302,15 +303,11 @@ router.get('/workload-analysis', requireApiKey, async (req, res) => {
   if (testUnit) where.testUnit = testUnit;
   const schedules = await prisma.schedule.findMany({ where });
 
-  // 例假日（非週末）取自政府行事曆匯入；年度不符時僅排除週六日並註明
+  // 例假日（非週末）取自全平台唯一的休息日清單；該年度沒有任何日期時僅排除週六日並註明
   const limitations: string[] = [];
-  let holidays: string[] = [];
-  const calendar = await prisma.calendarConfig.findUnique({ where: { id: 1 } });
-  if (calendar && calendar.year === year) {
-    holidays = (calendar.nonWeekendHolidays as string[]) ?? [];
-  } else {
-    limitations.push(`行事曆未涵蓋 ${year} 年，工作日僅排除週六日、未排除國定假日`);
-  }
+  const holidayList = await readHolidays();
+  const holidays = holidayList.dates;
+  if (!holidayList.years.has(year)) limitations.push(uncoveredYearNote(year));
 
   // overtime=Name1=8,Name2=4.5（來源：Work IQ，由 Agent 轉入）
   let overtime: Record<string, number> | undefined;

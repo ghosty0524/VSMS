@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/requireAuth.js'
 import { analyzeWorkload, type WorkloadResult } from '../lib/workload.js'
 import { monthsBetween, mergeMonthlyWorkloads, countSchedulesByEngineer } from '../lib/workloadRange.js'
 import { normalizeStatsMode } from '../lib/statsMode.js'
+import { readHolidays, uncoveredYearNote } from '../lib/holidays.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -72,20 +73,17 @@ router.get('/workload', async (req, res) => {
     categoryRows.map(c => [c.value, normalizeStatsMode(c.statsMode)]),
   )
 
-  // 例假日（非週末）取自政府行事曆匯入，只存一個年度；年度不符的月份僅排除週六日並提醒
-  const calendar = await prisma.calendarConfig.findUnique({ where: { id: 1 } })
+  // 例假日（非週末）取自全平台唯一的休息日清單；某年度清單裡沒有任何日期＝未匯入，提醒一次
+  const holidayList = await readHolidays()
   const notes: string[] = []
   const notedYears = new Set<number>()
   const monthly: WorkloadResult[] = months.map(month => {
     const year = Number(month.slice(0, 4))
-    let holidays: string[] = []
-    if (calendar && calendar.year === year) {
-      holidays = (calendar.nonWeekendHolidays as string[]) ?? []
-    } else if (!notedYears.has(year)) {
+    if (!holidayList.years.has(year) && !notedYears.has(year)) {
       notedYears.add(year)
-      notes.push(`行事曆未涵蓋 ${year} 年，工作日僅排除週六日、未排除國定假日`)
+      notes.push(uncoveredYearNote(year))
     }
-    return analyzeWorkload({ month, schedules, holidays, statsModes })
+    return analyzeWorkload({ month, schedules, holidays: holidayList.dates, statsModes })
   })
 
   const merged = mergeMonthlyWorkloads(monthly)

@@ -6,16 +6,16 @@ import express from 'express'
 import type { Request, Response, NextFunction } from 'express'
 import request from 'supertest'
 
-const { scheduleFindMany, calendarFindUnique, categoryFindMany } = vi.hoisted(() => ({
+const { scheduleFindMany, restDaysFindUnique, categoryFindMany } = vi.hoisted(() => ({
   scheduleFindMany: vi.fn(),
-  calendarFindUnique: vi.fn(),
+  restDaysFindUnique: vi.fn(),
   categoryFindMany: vi.fn(),
 }))
 
 vi.mock('../lib/db.js', () => ({
   prisma: {
     schedule: { findMany: scheduleFindMany },
-    calendarConfig: { findUnique: calendarFindUnique },
+    restDaysConfig: { findUnique: restDaysFindUnique },
     category: { findMany: categoryFindMany },
   },
 }))
@@ -23,6 +23,16 @@ vi.mock('../middleware/requireAuth.js', () => ({
   requireAuth: (_req: Request, _res: Response, next: NextFunction) => next(),
   applyHeaderAuth: () => true,
   requireSuperAdmin: (_req: Request, _res: Response, next: NextFunction) => next(),
+}))
+
+const { readHolidays, uncoveredYearNote } = vi.hoisted(() => ({
+  readHolidays: vi.fn(),
+  uncoveredYearNote: vi.fn((year: number) => `行事曆未涵蓋 ${year} 年，工作日僅排除週六日、未排除國定假日`),
+}))
+
+vi.mock('../lib/holidays.js', () => ({
+  readHolidays,
+  uncoveredYearNote,
 }))
 
 import analyticsRouter from '../routes/analytics.js'
@@ -41,7 +51,8 @@ const alice = {
 beforeEach(() => {
   vi.clearAllMocks()
   scheduleFindMany.mockResolvedValue([])
-  calendarFindUnique.mockResolvedValue(null)
+  restDaysFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: [] })
+  readHolidays.mockResolvedValue({ dates: [], years: new Set() })
   categoryFindMany.mockResolvedValue([])
 })
 
@@ -117,14 +128,20 @@ describe('GET /api/analytics/workload 計算', () => {
     expect(where).not.toHaveProperty('testEngineer')
   })
 
-  it('行事曆年度相符時套用例假日，否則每個年份只留一則提醒', async () => {
-    calendarFindUnique.mockResolvedValue({ id: 1, year: 2026, nonWeekendHolidays: ['2026-07-06'] })
+  it('休息日清單有該年度時套用例假日，否則每個年份只留一則提醒', async () => {
+    readHolidays.mockResolvedValue({ dates: ['2026-07-06'], years: new Set([2026]) })
     const ok = await request(app()).get('/api/analytics/workload?from=2026-07')
     expect(ok.body.workdays).toBe(22)
     expect(ok.body.notes).toEqual([])
 
     const miss = await request(app()).get('/api/analytics/workload?from=2027-01&to=2027-02')
     expect(miss.body.notes).toEqual(['行事曆未涵蓋 2027 年，工作日僅排除週六日、未排除國定假日'])
+  })
+
+  it('休息日設定列不存在時回 500，不當成沒有假日', async () => {
+    readHolidays.mockRejectedValue(new Error('rest_days_config not found'))
+    const res = await request(app()).get('/api/analytics/workload?from=2026-07')
+    expect(res.status).toBe(500)
   })
 
   it('statsMode 為 excluded 的類別不進負載也不算筆數', async () => {
