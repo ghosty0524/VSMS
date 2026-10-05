@@ -3,8 +3,32 @@ import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import ExcelJS from 'exceljs'
 import { prisma } from '../lib/db.js'
+import { normalizeRestDatesForWrite } from '../lib/holidays.js'
 
 const router = Router()
+
+/** 既有的休息日清單有不合法的項目：不能默默丟掉（會把管理員的資料吃掉），整份拒絕。 */
+class InvalidStoredHolidaysError extends Error {
+  constructor(readonly bad: string[]) {
+    super(`休息日清單有格式不合的日期：${bad.join('、')}`)
+  }
+}
+
+/** 讀出 rest_days_config.specificDates 並正規化成 YYYY/MM/DD；缺列、壞 JSON、非陣列都拋錯，不退化成空清單。 */
+function readStoredRestDates(raw: unknown): string[] {
+  let arr: unknown = raw
+  if (typeof raw === 'string') {
+    try {
+      arr = JSON.parse(raw) as unknown
+    } catch (err) {
+      throw new Error(`rest_days_config.specificDates 不是合法的 JSON：${(err as Error).message}`, { cause: err })
+    }
+  }
+  if (!Array.isArray(arr)) throw new Error('rest_days_config.specificDates 不是陣列')
+  const norm = normalizeRestDatesForWrite(arr)
+  if (!norm.ok) throw new InvalidStoredHolidaysError(norm.bad)
+  return norm.dates
+}
 const upload = multer({ storage: multer.memoryStorage() })
 
 const CN_MONTH: Record<string, number> = {
@@ -164,8 +188,10 @@ router.post(
       const incoming = parsed.nonWeekendHolidays.map(d => d.replace(/-/g, '/'))
       const merged = await prisma.$transaction(async tx => {
         const row = await tx.restDaysConfig.findUnique({ where: { id: 1 } })
-        const existing = new Set((row?.specificDates as string[] | undefined) ?? [])
-        const added = incoming.filter(d => !existing.has(d))
+        // 缺列代表資料被動過，不能當成「沒有假日」；格式與 readHolidays 一致
+        if (!row) throw new Error('rest_days_config 沒有 id=1 的列')
+        const existing = new Set(readStoredRestDates(row.specificDates))
+        const added = [...new Set(incoming)].filter(d => !existing.has(d))
         const specificDates = [...existing, ...added].sort()
         await tx.restDaysConfig.upsert({
           where: { id: 1 },
@@ -184,6 +210,12 @@ router.post(
         specificDates: merged.specificDates,
       })
     } catch (e: unknown) {
+      if (e instanceof InvalidStoredHolidaysError) {
+        return res.status(422).json({
+          ok: false,
+          message: `${e.message}。請先到設定頁修正「特定休息日」清單再匯入。現有清單未變更。`,
+        })
+      }
       const msg = e instanceof Error ? e.message : '匯入失敗'
       return res.status(500).json({ ok: false, message: msg })
     }

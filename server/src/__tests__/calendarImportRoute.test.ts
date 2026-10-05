@@ -100,6 +100,77 @@ describe('POST /api/calendar/import-government', () => {
     expect(res.body.specificDates).toEqual(['2025/12/25', '2026/10/09', '2026/10/26', '2026/11/20'])
   })
 
+  // 規格：讀清單一律走共用的正規化。既有的 '2026-10-09'（短橫線）要和匯入的 '2026/10/09' 視為同一天
+  it('既有清單是短橫線格式時，先正規化再去重', async () => {
+    restFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: ['2026-10-09'] })
+    const file = await buildCalendar(2026, [{ month: 10, extraFilled: [9, 26] }])
+
+    const res = await request(app())
+      .post('/api/calendar/import-government')
+      .attach('file', file, '115年辦公日曆表.xlsx')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ ok: true, detected: 2, added: 1, skipped: 1 })
+    expect(res.body.specificDates).toEqual(['2026/10/09', '2026/10/26'])
+    expect(restUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: { weekends: true, specificDates: ['2026/10/09', '2026/10/26'] },
+    }))
+  })
+
+  it('既有清單存成 JSON 字串時照樣解析，不會被拆成單一字元', async () => {
+    restFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: '["2026/11/20"]' })
+    const file = await buildCalendar(2026, [{ month: 10, extraFilled: [9, 26] }])
+
+    const res = await request(app())
+      .post('/api/calendar/import-government')
+      .attach('file', file, '115年辦公日曆表.xlsx')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ ok: true, added: 2, skipped: 0 })
+    expect(res.body.specificDates).toEqual(['2026/10/09', '2026/10/26', '2026/11/20'])
+  })
+
+  it('既有清單有不合法的日期時拒絕匯入（422），不默默丟掉、不寫入', async () => {
+    restFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: ['2025/12/25', '2026/02/30'] })
+    const file = await buildCalendar(2026, [{ month: 10, extraFilled: [9, 26] }])
+
+    const res = await request(app())
+      .post('/api/calendar/import-government')
+      .attach('file', file, '115年辦公日曆表.xlsx')
+
+    expect(res.status).toBe(422)
+    expect(res.body.ok).toBe(false)
+    expect(res.body.message).toContain('2026/02/30')
+    expect(res.body.message).toContain('特定休息日')
+    expect(restUpsert).not.toHaveBeenCalled()
+  })
+
+  it('id=1 那列不存在時匯入失敗（500），不當成空清單', async () => {
+    restFindUnique.mockResolvedValue(null)
+    const file = await buildCalendar(2026, [{ month: 10, extraFilled: [9, 26] }])
+
+    const res = await request(app())
+      .post('/api/calendar/import-government')
+      .attach('file', file, '115年辦公日曆表.xlsx')
+
+    expect(res.status).toBe(500)
+    expect(res.body.ok).toBe(false)
+    expect(restUpsert).not.toHaveBeenCalled()
+  })
+
+  it('既有清單是無法解析的 JSON 字串時匯入失敗（500），不寫入', async () => {
+    restFindUnique.mockResolvedValue({ id: 1, weekends: true, specificDates: '{oops' })
+    const file = await buildCalendar(2026, [{ month: 10, extraFilled: [9, 26] }])
+
+    const res = await request(app())
+      .post('/api/calendar/import-government')
+      .attach('file', file, '115年辦公日曆表.xlsx')
+
+    expect(res.status).toBe(500)
+    expect(res.body.ok).toBe(false)
+    expect(restUpsert).not.toHaveBeenCalled()
+  })
+
   // 2026-04-27 實際發生過：10 月的平日格被判成假日色，整月週一到週四都成了假日，
   // VTMS 通知因此停跑、日誌提醒追問錯的日期。這種結果寧可擋下，也不能寫進去。
   it('某個月平日假日多得不合理時整份拒絕，現有設定不動', async () => {
