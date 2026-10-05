@@ -29,7 +29,8 @@ export function toIsoHoliday(value: string): string | null {
   return `${y}-${mo}-${d}`
 }
 
-export function normalizeHolidayDates(raw: unknown): HolidayList {
+/** 欄位原始值：mysql2／Prisma 可能回已解析的陣列或 JSON 字串。解析失敗或不是陣列都拋錯。 */
+export function parseHolidayJson(raw: unknown): unknown[] {
   let arr: unknown = raw
   if (typeof raw === 'string') {
     try {
@@ -39,6 +40,11 @@ export function normalizeHolidayDates(raw: unknown): HolidayList {
     }
   }
   if (!Array.isArray(arr)) throw new Error('rest_days_config.specificDates 不是陣列')
+  return arr
+}
+
+export function normalizeHolidayDates(raw: unknown): HolidayList {
+  const arr = parseHolidayJson(raw)
 
   const set = new Set<string>()
   for (const v of arr) {
