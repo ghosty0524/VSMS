@@ -226,24 +226,27 @@ describe('Topbar：使用者選單', () => {
     expect(within(menu).getByText(label)).toBeInTheDocument()
   })
 
-  it('vauth 非訪客：「修改密碼」連到入口頁 /change-password，「登出」在分隔線之後', async () => {
+  it('vauth 非訪客：「使用說明」在最前、「修改密碼」連到入口頁 /change-password，「登出」在分隔線之後', async () => {
     login('admin')
     const user = userEvent.setup()
     render(<Topbar />)
     const menu = await openUserMenu(user)
     const items = within(menu).getAllByRole('menuitem')
-    expect(items.map(i => i.textContent)).toEqual(['修改密碼', '登出'])
-    expect(items[0]).toHaveAttribute('href', '/change-password')
-    expect(within(menu).getByRole('separator').nextElementSibling).toBe(items[1])
+    expect(items.map(i => i.textContent)).toEqual(['使用說明', '修改密碼', '登出'])
+    expect(items[1]).toHaveAttribute('href', '/change-password')
+    expect(within(menu).getAllByRole('separator')).toHaveLength(1)
+    expect(within(menu).getByRole('separator').nextElementSibling).toBe(items[2])
   })
 
-  it('vauth 訪客：沒有「修改密碼」，也沒有多餘的分隔線', async () => {
+  it('vauth 訪客：沒有「修改密碼」，只有「使用說明」與分隔線後的「登出」', async () => {
     login('guest', 'vauth', '訪客')
     const user = userEvent.setup()
     render(<Topbar />)
     const menu = await openUserMenu(user)
-    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['登出'])
-    expect(within(menu).queryByRole('separator')).toBeNull()
+    const items = within(menu).getAllByRole('menuitem')
+    expect(items.map(i => i.textContent)).toEqual(['使用說明', '登出'])
+    expect(within(menu).getAllByRole('separator')).toHaveLength(1)
+    expect(within(menu).getByRole('separator').nextElementSibling).toBe(items[1])
   })
 
   it('local 模式：沒有「修改密碼」（維持現狀）', async () => {
@@ -251,7 +254,7 @@ describe('Topbar：使用者選單', () => {
     const user = userEvent.setup()
     render(<Topbar />)
     const menu = await openUserMenu(user)
-    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['登出'])
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['使用說明', '登出'])
   })
 
   it('「登出」呼叫既有的 authStore.logout', async () => {
@@ -271,13 +274,15 @@ describe('Topbar：下拉的鍵盤與關閉行為', () => {
     render(<Topbar />)
     const trigger = screen.getByRole('button', { name: '使用者選單' })
     const menu = await openUserMenu(user)
-    const [pw, out] = within(menu).getAllByRole('menuitem')
+    const [guide, pw, out] = within(menu).getAllByRole('menuitem')
 
+    expect(guide).toHaveFocus()
+    await user.keyboard('{ArrowDown}')
     expect(pw).toHaveFocus()
     await user.keyboard('{ArrowDown}')
     expect(out).toHaveFocus()
     await user.keyboard('{ArrowDown}')
-    expect(pw).toHaveFocus()
+    expect(guide).toHaveFocus()
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('menu')).toBeNull()
     expect(trigger).toHaveFocus()
