@@ -176,8 +176,22 @@ describe('PUT /api/options under AUTH_PROVIDER=vauth', () => {
     expect(hw.label).toBe('硬體課')
     expect(hw.sortOrder).toBe(5)
     expect(fake.state.categories).toHaveLength(1)
-    expect(fake.state.restDays).toMatchObject({ weekends: false, specificDates: ['2026-10-10'] })
+    // 寫入時正規化成 YYYY/MM/DD，週末開關固定 true（規格 2026-10-05-unified-holiday-list-design）
+    expect(fake.state.restDays).toMatchObject({ weekends: true, specificDates: ['2026/10/10'] })
     expect(fake.state.audits).toHaveLength(1)
+  })
+
+  it('特定休息日有不合法的日期時整份拒絕，資料庫不動', async () => {
+    process.env.AUTH_PROVIDER = 'vauth'
+    const fake = makeFakePrisma()
+    currentPrisma = fake.prisma
+    const res = await request(await buildApp()).put('/api/options')
+      .send({ ...staleBody, restDays: { weekends: true, specificDates: ['2026/02/27', '2026/02/30'] } })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toContain('2026/02/30')
+    expect(fake.state.restDays).toEqual({ id: 1, weekends: true, specificDates: [] })
+    expect(fake.state.audits).toHaveLength(0)
   })
 
   it('回應是重新讀出的資料庫狀態，不是原樣回吐 body（前端才會重新同步）', async () => {

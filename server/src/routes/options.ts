@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../lib/db.js'
 import { appendAudit } from '../lib/storage.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { normalizeRestDatesForWrite } from '../lib/holidays.js'
 import type { OptionsMap } from '../types.js'
 import {
   toCategoryResponse, toCategoryCreateData,
@@ -113,6 +114,16 @@ async function putOptionsVauth(body: OptionsMap): Promise<void> {
 router.put('/', async (req, res) => {
   const username = req.session.username ?? 'unknown'
   const body = req.body as OptionsMap
+
+  // 特定休息日是全平台唯一的假日清單（VTMS 通知、負載圖、MCP 都讀它），寫進去前先驗。
+  // 週六日一律休息，weekends 只為相容保留，固定寫 true。
+  const restDates = normalizeRestDatesForWrite(body.restDays?.specificDates)
+  if (!restDates.ok) {
+    res.status(400).json({ ok: false, message: `特定休息日格式不正確：${restDates.bad.join('、')}（請用 YYYY/MM/DD）` })
+    return
+  }
+  body.restDays = { weekends: true, specificDates: restDates.dates }
+
   const bodyEngineerValues = body.testUnits.flatMap(u => u.engineers.map(e => e.value))
 
   if (process.env.AUTH_PROVIDER === 'vauth') {
