@@ -26,7 +26,7 @@ class EngineerInUseError extends Error {
   }
 }
 
-/** GET /api/options 的回應；vauth 分支的 PUT 也用它回吐「資料庫實際長什麼樣」。 */
+/** GET /api/options 的回應；兩個分支（local／vauth）的 PUT 也用它回吐「資料庫實際長什麼樣」。 */
 async function readOptions(): Promise<OptionsMap> {
   const [categories, testUnits, restDays, devices] = await Promise.all([
     prisma.category.findMany({ orderBy: { sortOrder: 'asc' } }),
@@ -64,7 +64,8 @@ router.get('/', async (_req, res) => {
  *
  * 因此 vauth 下只 patch 前端唯一還握有權責的欄位（color／label／sortOrder），
  * 而且只 patch 對得上的列：body 有而 DB 沒有的一律忽略（不建），DB 有而 body
- * 沒有的原樣留著（不刪）。categories 與 restDaysConfig 不屬於組織模型，照舊。
+ * 沒有的原樣留著（不刪）。categories 不屬於組織模型，照舊全刪重建；
+ * restDaysConfig 不在這裡寫，休息日一律走 updateRestDates。
  */
 async function putOptionsVauth(body: OptionsMap): Promise<void> {
   await prisma.$transaction(async (tx) => {

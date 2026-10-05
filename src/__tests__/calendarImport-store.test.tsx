@@ -43,19 +43,22 @@ describe('CalendarImport', () => {
 
   it('sessionStorage 有 session token 時，上傳要帶 X-Vsms-Session', async () => {
     sessionStorage.setItem('vsms-session-token', 'tok-123')
-    const fetchMock = vi.fn(async (..._args: unknown[]) => new Response(JSON.stringify({
-      ok: true, year: 2026, detected: 0, added: 0, skipped: 0, specificDates: ['2026/01/01'],
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const fetchMock = vi.fn(async (..._args: unknown[]) => new Response(JSON.stringify({
+        ok: true, year: 2026, detected: 0, added: 0, skipped: 0, specificDates: ['2026/01/01'],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      vi.stubGlobal('fetch', fetchMock)
 
-    const { container } = render(<CalendarImport />)
-    await userEvent.upload(container.querySelector('input[type="file"]') as HTMLInputElement, new File(['x'], 'a.xlsx'))
-    await userEvent.click(screen.getByRole('button', { name: /匯入/ }))
-    await screen.findByText('匯入成功（2026 年）')
+      const { container } = render(<CalendarImport />)
+      await userEvent.upload(container.querySelector('input[type="file"]') as HTMLInputElement, new File(['x'], 'a.xlsx'))
+      await userEvent.click(screen.getByRole('button', { name: /匯入/ }))
+      await screen.findByText('匯入成功（2026 年）')
 
-    const init = fetchMock.mock.calls[0][1] as RequestInit
-    expect((init.headers as Record<string, string>)['X-Vsms-Session']).toBe('tok-123')
-    expect(init.credentials).toBe('include')
-    sessionStorage.removeItem('vsms-session-token')
+      const init = fetchMock.mock.calls[0][1] as RequestInit
+      expect((init.headers as Record<string, string>)['X-Vsms-Session']).toBe('tok-123')
+      expect(init.credentials).toBe('include')
+    } finally {
+      sessionStorage.removeItem('vsms-session-token')
+    }
   })
 })

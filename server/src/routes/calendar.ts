@@ -190,7 +190,7 @@ router.post(
       if (e instanceof InvalidStoredHolidaysError) {
         return res.status(422).json({
           ok: false,
-          message: `${e.message}。請先到設定頁修正「特定休息日」清單再匯入。現有清單未變更。`,
+          message: `${e.message}。這些日期只可能是直接改資料庫寫進去的，請由系統管理員修正資料庫後再匯入。現有清單未變更。`,
         })
       }
       const msg = e instanceof Error ? e.message : '匯入失敗'

@@ -52,8 +52,7 @@ export default function CalendarImport() {
         return
       }
 
-      // 後端已在同一個交易裡併進特定休息日；這裡只同步 store，不能再 PUT——
-      // store 若留著舊清單，設定頁下一次整份存檔會把剛匯入的日期蓋掉。
+      // 後端已在同一個交易裡併進特定休息日；這裡只用回應同步 store，不需要再 PUT。
       applyRestDays({ weekends: true, specificDates: json.specificDates })
 
       setResult({

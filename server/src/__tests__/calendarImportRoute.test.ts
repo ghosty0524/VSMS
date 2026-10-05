@@ -159,7 +159,7 @@ describe('POST /api/calendar/import-government', () => {
     expect(res.status).toBe(422)
     expect(res.body.ok).toBe(false)
     expect(res.body.message).toContain('2026/02/30')
-    expect(res.body.message).toContain('特定休息日')
+    expect(res.body.message).toContain('系統管理員')
     expect(restUpsert).not.toHaveBeenCalled()
   })
 
