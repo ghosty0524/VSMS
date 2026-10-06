@@ -33,6 +33,16 @@ export const FALLBACK_APPS: readonly TopbarApp[] = [
   { code: 'lrms', name: 'LRMS', description: '可靠度管理：送測、MTBF、規範、ISO 17025、設備', url: '/lrms/', sortOrder: 3, showInTopbar: true },
 ]
 
+/**
+ * 訪客的頂欄清單（2026-10-06）：只列訪客進得去的系統。入口頁要登入、VTMS 沒有訪客模式，都不列。
+ * 訪客沒有 SSO，讀 /portal/apps 一定是 401，所以用固定清單、不打 vauth。
+ * 別的系統要帶 ?guest=1：訪客狀態存在各系統自己的 cookie（vsms.sid／lrms_sessionid），
+ * 只寫 /lrms/ 的話，對方還沒有訪客 session 就會被導去入口頁登入。
+ */
+export const GUEST_APPS: readonly TopbarApp[] = FALLBACK_APPS
+  .filter(a => a.code === 'vsms' || a.code === 'lrms')
+  .map(a => (a.code === CURRENT_APP_CODE ? a : { ...a, url: `${a.url}?guest=1` }))
+
 export const PORTAL_HOME_LABEL = '入口頁首頁'
 export const PORTAL_HOME_URL = '/'
 /** 並排連結最前面固定的「入口頁」（2026-09-29 使用者回饋：一鍵回入口頁）；三系統同一項，不受 showInTopbar 影響。 */

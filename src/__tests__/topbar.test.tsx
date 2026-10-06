@@ -129,6 +129,23 @@ describe('Topbar：產品切換與並排連結', () => {
     await flush()
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('訪客：並排連結與下拉都只有 VSMS、LRMS（沒有入口頁、VTMS），LRMS 帶 ?guest=1', async () => {
+    login('guest', 'vauth', '訪客')
+    const user = userEvent.setup()
+    render(<Topbar />)
+    const nav = screen.getByRole('navigation', { name: '系統' })
+    const links = within(nav).getAllByRole('link')
+    expect(links.map(l => l.textContent)).toEqual(['VSMS', 'LRMS'])
+    expect(links.map(l => l.getAttribute('href'))).toEqual(['/vsms/', '/lrms/?guest=1'])
+    expect(links[0]).toHaveAttribute('aria-current', 'page')
+
+    const items = within(await openSwitcher(user)).getAllByRole('menuitem')
+    expect(items.map(i => i.getAttribute('href'))).toEqual(['/vsms/', '/lrms/?guest=1'])
+    expect(screen.queryByText('入口頁首頁')).toBeNull()
+    await flush()
+    expect(calls(APPS_URL)).toBe(0)
+  })
 })
 
 describe('Topbar：通知鈴鐺', () => {
@@ -187,7 +204,6 @@ describe('Topbar：通知鈴鐺', () => {
   it('訪客：不讀未讀數，也不顯示鈴鐺', async () => {
     login('guest', 'vauth', '訪客')
     render(<Topbar />)
-    await waitFor(() => expect(calls(APPS_URL)).toBe(1))
     await flush()
     expect(calls(INBOX_URL)).toBe(0)
     expect(screen.queryByRole('link', { name: '通知' })).toBeNull()

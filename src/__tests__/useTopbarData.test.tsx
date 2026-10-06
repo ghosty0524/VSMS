@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { useTopbarData } from '../components/layout/useTopbarData'
-import { FALLBACK_APPS } from '../lib/topbarData'
+import { FALLBACK_APPS, GUEST_APPS } from '../lib/topbarData'
 
 const APPS_URL = '/portal/apps'
 const INBOX_URL = '/notify/inbox?limit=1'
@@ -63,11 +63,11 @@ describe('useTopbarData', () => {
     expect(result.current.unreadCount).toBeNull()
   })
 
-  it('訪客：仍讀系統清單，但不讀未讀數', async () => {
+  it('訪客：系統清單用固定的訪客清單（不讀 /portal/apps，訪客讀了也是 401），也不讀未讀數', async () => {
     const { result } = renderHook(() => useTopbarData({ vauth: true, guest: true }))
-    await waitFor(() => expect(result.current.apps?.length).toBe(2))
+    expect(result.current.apps).toBe(GUEST_APPS)
     await flush()
-    expect(calls(APPS_URL)).toBe(1)
+    expect(calls(APPS_URL)).toBe(0)
     expect(calls(INBOX_URL)).toBe(0)
     expect(result.current.unreadCount).toBeNull()
   })

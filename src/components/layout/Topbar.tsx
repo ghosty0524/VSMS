@@ -49,8 +49,9 @@ export function Topbar() {
 
   // 下拉：入口頁首頁固定第一項，接著列出所有啟用中的系統（不看 showInTopbar）。
   // vauth 讀取中（apps 為 null）先用內建清單。
+  // 訪客進不了入口頁（要登入），兩處都不列入口頁；系統清單由 useTopbarData 給訪客清單（2026-10-06）。
   const switcherItems: MenuItem[] = [
-    { key: '__portal-home', label: PORTAL_HOME_LABEL, href: PORTAL_HOME_URL },
+    ...(guest ? [] : [{ key: '__portal-home', label: PORTAL_HOME_LABEL, href: PORTAL_HOME_URL }]),
     ...(apps ?? FALLBACK_APPS).map(a => ({
       key: a.code,
       label: a.name,
@@ -61,7 +62,7 @@ export function Topbar() {
   ]
   // 並排連結：「入口頁」固定第一項（2026-09-29，一鍵回入口頁），接著只列 showInTopbar 的系統。
   // 系統清單讀取中只畫入口頁，免得內建清單閃一下又被換掉。
-  const inlineApps = [PORTAL_HOME_LINK, ...(apps ?? []).filter(a => a.showInTopbar)]
+  const inlineApps = [...(guest ? [] : [PORTAL_HOME_LINK]), ...(apps ?? []).filter(a => a.showInTopbar)]
 
   const badge = formatUnreadBadge(unreadCount)
 
