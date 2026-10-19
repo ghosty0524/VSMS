@@ -11,6 +11,8 @@ interface OptionsState {
   /** 新增／刪除一個休息日：伺服器單筆寫入並回傳完整清單（規格 2026-10-05-rest-days-hardening） */
   addRestDay: (date: string) => Promise<void>
   removeRestDay: (date: string) => Promise<void>
+  /** 年度日曆一次儲存多天：一個請求、一筆交易，回傳完整清單 */
+  batchRestDays: (add: string[], remove: string[]) => Promise<void>
   /** 只更新 store、不 PUT：伺服器已經寫好（例如政府日曆匯入），用它的回應同步畫面 */
   applyRestDays: (config: RestDaysConfig) => void
   addCategory: (value: string) => Promise<void>
@@ -68,6 +70,10 @@ export const useOptionsStore = create<OptionsState>()((set, get) => ({
 
   removeRestDay: async (date) => {
     get().applyRestDays(await api.removeRestDay(date))
+  },
+
+  batchRestDays: async (add, remove) => {
+    get().applyRestDays(await api.batchRestDays(add, remove))
   },
 
   applyRestDays: (config) => {

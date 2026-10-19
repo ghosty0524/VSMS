@@ -139,3 +139,65 @@ describe('PUT /api/options 權限', () => {
     expect(upsert).not.toHaveBeenCalled()
   })
 })
+
+describe('POST /api/options/rest-days/batch', () => {
+  it('一次新增與刪除多筆、只寫一次、稽核只列實際變動', async () => {
+    state.stored = ['2026/10/26', '2026/12/25']
+    const res = await request(app('admin')).post('/api/options/rest-days/batch')
+      .send({ add: ['2026/10/09', '2026-11-02', '2026/10/26'], remove: ['2026/12/25', '2026/12/31'] })
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ weekends: true, specificDates: ['2026/10/09', '2026/10/26', '2026/11/02'] })
+    expect(upsert).toHaveBeenCalledTimes(1)
+    expect(auditSpy).toHaveBeenCalledTimes(1)
+    expect(auditSpy).toHaveBeenCalledWith('boss', 'Boss', 'UPDATE_SETTINGS', 'restDays',
+      ['新增 2026/10/09', '新增 2026/11/02', '刪除 2026/12/25'])
+  })
+
+  it('沒有實際變動：200、不寫入、不記稽核', async () => {
+    const res = await request(app('admin')).post('/api/options/rest-days/batch')
+      .send({ add: ['2026/10/26'], remove: ['2026/10/09'] })
+
+    expect(res.status).toBe(200)
+    expect(res.body.specificDates).toEqual(['2026/10/26'])
+    expect(upsert).not.toHaveBeenCalled()
+    expect(auditSpy).not.toHaveBeenCalled()
+  })
+
+  it('任一日期不合法：整批 400、不寫入', async () => {
+    const res = await request(app('admin')).post('/api/options/rest-days/batch')
+      .send({ add: ['2026/10/09', '2026/02/30'], remove: [] })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toContain('2026/02/30')
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
+  it('同一天同時在新增與刪除：400', async () => {
+    const res = await request(app('admin')).post('/api/options/rest-days/batch')
+      .send({ add: ['2026/10/09'], remove: ['2026-10-09'] })
+
+    expect(res.status).toBe(400)
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
+  it('格式不是陣列或兩邊都空：400', async () => {
+    expect((await request(app('admin')).post('/api/options/rest-days/batch').send({ add: '2026/10/09' })).status).toBe(400)
+    expect((await request(app('admin')).post('/api/options/rest-days/batch').send({ add: [], remove: [] })).status).toBe(400)
+  })
+
+  it('既有清單有不合法的日期：422、不寫入', async () => {
+    state.stored = ['2026/13/01']
+    const res = await request(app('admin')).post('/api/options/rest-days/batch').send({ add: ['2026/10/09'] })
+
+    expect(res.status).toBe(422)
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
+  it('測試人員（user）403', async () => {
+    const res = await request(app('user')).post('/api/options/rest-days/batch').send({ add: ['2026/10/09'] })
+
+    expect(res.status).toBe(403)
+    expect(upsert).not.toHaveBeenCalled()
+  })
+})

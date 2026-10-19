@@ -238,6 +238,55 @@ router.post('/rest-days', requireAdmin, async (req, res) => {
   await changeRestDay(req, res, (req.body as { date?: unknown } | undefined)?.date, 'add')
 })
 
+// POST /api/options/rest-days/batch — body { add: string[], remove: string[] }
+// 年度日曆一次點選多天後一併儲存：同一筆交易、只記一筆稽核；任一日期不合法整批 400。
+const MAX_BATCH = 400
+router.post('/rest-days/batch', requireAdmin, async (req, res) => {
+  const body = (req.body ?? {}) as { add?: unknown; remove?: unknown }
+  const rawAdd = body.add ?? []
+  const rawRemove = body.remove ?? []
+  if (!Array.isArray(rawAdd) || !Array.isArray(rawRemove) || rawAdd.length + rawRemove.length === 0
+    || rawAdd.length + rawRemove.length > MAX_BATCH) {
+    res.status(400).json({ ok: false, message: `add／remove 必須是日期陣列，合計 1～${MAX_BATCH} 筆` })
+    return
+  }
+  const bad: string[] = []
+  const toSlash = (list: unknown[]): string[] => list.flatMap(v => {
+    const iso = typeof v === 'string' ? toIsoHoliday(v) : null
+    if (!iso) { bad.push(String(v)); return [] }
+    return [iso.replace(/-/g, '/')]
+  })
+  const add = new Set(toSlash(rawAdd))
+  const remove = new Set(toSlash(rawRemove))
+  if (bad.length > 0) {
+    res.status(400).json({ ok: false, message: `日期格式不正確（請用 YYYY/MM/DD）：${bad.join('、')}` })
+    return
+  }
+  const both = [...add].filter(d => remove.has(d))
+  if (both.length > 0) {
+    res.status(400).json({ ok: false, message: `同一天不能同時新增又刪除：${both.join('、')}` })
+    return
+  }
+  try {
+    const { before, after } = await updateRestDates(dates =>
+      [...dates.filter(d => !remove.has(d)), ...add])
+    const beforeSet = new Set(before)
+    const afterSet = new Set(after)
+    const changes = [
+      ...after.filter(d => !beforeSet.has(d)).map(d => `新增 ${d}`),
+      ...before.filter(d => !afterSet.has(d)).map(d => `刪除 ${d}`),
+    ]
+    if (changes.length > 0) await auditRestDays(req, changes)
+    res.json({ weekends: true, specificDates: after })
+  } catch (err) {
+    if (err instanceof InvalidStoredHolidaysError) {
+      res.status(422).json({ ok: false, message: `${err.message}。這些日期只可能是直接改資料庫寫進去的，請由系統管理員修正資料庫。` })
+      return
+    }
+    throw err
+  }
+})
+
 // DELETE /api/options/rest-days/:date — 路徑用 YYYY-MM-DD（不能有斜線）
 router.delete('/rest-days/:date', requireAdmin, async (req, res) => {
   await changeRestDay(req, res, String(req.params.date), 'remove')

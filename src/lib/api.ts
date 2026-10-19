@@ -122,6 +122,9 @@ export const api = {
     req<RestDaysConfig>('POST', '/options/rest-days', { date }),
   removeRestDay: (date: string) =>
     req<RestDaysConfig>('DELETE', `/options/rest-days/${date.replace(/\//g, '-')}`),
+  // 年度日曆一次儲存多天：同一筆交易，任一日期不合法整批拒絕
+  batchRestDays: (add: string[], remove: string[]) =>
+    req<RestDaysConfig>('POST', '/options/rest-days/batch', { add, remove }),
 
   // ── Users（Super Admin only）──────────────────────────
   getUsers: () =>
